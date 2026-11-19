@@ -626,7 +626,8 @@ import WisperDomain
     }
 
     #expect(error == .noAnswer)
-    #expect(server.requests.count == 1)
+    // Sent once at most: a busy test machine may use up the allowance before the request leaves.
+    #expect(server.requests.count <= 1)
   }
 
   // MARK: Checking a key

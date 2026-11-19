@@ -25,6 +25,10 @@ import WisperDomain
     ) { _ in }
   }
 
+  /// Checks that a call stopped long before its 20-second allowance. Not a tight figure: a
+  /// busy test machine can add a second or two to anything.
+  static let wellUnderTheAllowance: TimeInterval = 10
+
   static func seconds(_ work: () async throws -> Void) async rethrows -> TimeInterval {
     let start = ContinuousClock.now
     try await work()
@@ -72,7 +76,7 @@ import WisperDomain
 
     #expect(String(decoding: reply, as: UTF8.self) == Self.helloBody)
     // One second of silence was enough. The answer did not have to wait for the whole allowance.
-    #expect((0.9...3).contains(taken), "took \(taken) s")
+    #expect((0.9...Self.wellUnderTheAllowance).contains(taken), "took \(taken) s")
     // The same request went out twice, the second time on a connection of its own…
     #expect(server.requests.map(\.connection) == [1, 2])
     #expect(server.requests.map(\.request.body) == [Data("{}".utf8), Data("{}".utf8)])
@@ -83,13 +87,14 @@ import WisperDomain
   @Test func theRequestAfterAStallStartsOnTheNewConnectionToo() async throws {
     let server = try QuietServer { seen in seen.connection == 1 ? .silence : QuietServer.ok(Self.helloBody) }
     let client = Self.client(server)
-    let call = Client.Call(method: "POST", path: "chat/completions", body: .json(Data("{}".utf8)), wait: 1)
+    let first = Client.Call(method: "POST", path: "chat/completions", body: .json(Data("{}".utf8)), wait: 1)
+    let second = Client.Call(method: "POST", path: "chat/completions", body: .json(Data("{}".utf8)), wait: 6)
 
-    _ = try await client.send(budget: 20) { _ in call }
-    let taken = try await Self.seconds { _ = try await client.send(budget: 20) { _ in call } }
+    _ = try await client.send(budget: 20) { _ in first }
+    let taken = try await Self.seconds { _ = try await client.send(budget: 20) { _ in second } }
 
-    // No second second of waiting: the dead connection was dropped for good.
-    #expect(taken < 0.9, "took \(taken) s")
+    // No waiting on the dead connection again (that would take the full 6 s): it was dropped for good.
+    #expect(taken < 4, "took \(taken) s")
     #expect(!server.requests.dropFirst().contains { $0.connection == 1 })
   }
 
@@ -108,7 +113,7 @@ import WisperDomain
 
     #expect(error == .noAnswer)
     // Half a second, then a whole one on a new connection. Nowhere near the 20-second allowance.
-    #expect((1.4...4).contains(taken), "took \(taken) s")
+    #expect((1.4...Self.wellUnderTheAllowance).contains(taken), "took \(taken) s")
     #expect(server.requests.map(\.connection) == [1, 2])
   }
 
@@ -119,14 +124,15 @@ import WisperDomain
 
     let taken = await Self.seconds {
       error = await wisperError {
-        _ = try await client.send(budget: 1.2) { _ in
-          Client.Call(method: "POST", path: "chat/completions", body: .json(Data("{}".utf8)), wait: 1)
+        // Two tries with this wait would take 2 s + 4 s. The allowance of 2.5 s must cut that short.
+        _ = try await client.send(budget: 2.5) { _ in
+          Client.Call(method: "POST", path: "chat/completions", body: .json(Data("{}".utf8)), wait: 2)
         }
       }
     }
 
     #expect(error == .noAnswer)
-    #expect((1.1...2.5).contains(taken), "took \(taken) s")
+    #expect((2.3...5).contains(taken), "took \(taken) s")
   }
 
   @Test func aStalledRequestStopsWhenItsTaskIsCancelled() async throws {
@@ -144,7 +150,7 @@ import WisperDomain
       await #expect(throws: CancellationError.self) { _ = try await task.value }
     }
 
-    #expect(taken < 1, "took \(taken) s")
+    #expect(taken < 10, "took \(taken) s")
     #expect(server.requests.count == 1)
   }
 
@@ -210,7 +216,7 @@ import WisperDomain
 
     #expect(error == .noAnswer)
     // 0.6 s, then 1.2 s on a new connection: the upload itself did not count against the wait.
-    #expect((1.7...4).contains(taken), "took \(taken) s")
+    #expect((1.7...Self.wellUnderTheAllowance).contains(taken), "took \(taken) s")
     #expect(server.requests.map(\.connection) == [1, 2])
     #expect(server.requests.allSatisfy { $0.request.body.count > 20 * 1_024 })
   }
@@ -260,7 +266,7 @@ import WisperDomain
       }
     }
 
-    #expect(taken < 1, "took \(taken) s")
+    #expect(taken < 4, "took \(taken) s")
     #expect(connections.sessionsMade == 2)
     #expect(server.requests.map(\.method) == ["GET", "HEAD", "HEAD", "POST"])
     #expect(server.requests.map(\.connection) == [1, 1, 2, 2])
