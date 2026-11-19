@@ -60,26 +60,35 @@ public enum MacSnapshots {
   private static var partCases: [SnapshotCase] {
     [
       SnapshotCase("mac-shortcuts", canvas: .custom(width: 720, height: 560)) {
-        PartMock { ShortcutsEditor(showsGlobeHint: true) }
+        PartMock { ShortcutsEditor(globeHint: .conflict(.showEmoji)) }
+      },
+      SnapshotCase("mac-shortcuts-fn-fixed", canvas: .custom(width: 720, height: 560)) {
+        PartMock { ShortcutsEditor(globeHint: .nothing, globeUndo: .showEmoji) }
+      },
+      SnapshotCase("mac-shortcuts-fn-after-login", canvas: .custom(width: 720, height: 600)) {
+        PartMock { ShortcutsEditor(globeHint: .afterLogin, globeUndo: .changeInputSource) }
+      },
+      SnapshotCase("mac-shortcuts-fn-failed", canvas: .custom(width: 720, height: 580)) {
+        PartMock { ShortcutsEditor(globeHint: .failed(.showEmoji)) }
       },
       SnapshotCase("mac-shortcuts-recording", canvas: .custom(width: 720, height: 500)) {
         PartMock {
           ShortcutsEditor(
-            showsGlobeHint: false,
+            globeHint: .nothing,
             recording: .handsFree,
             problem: (.pasteLast, ShortcutProblem.reserved(by: "pasting").message)
           )
         }
       },
       SnapshotCase("mac-practice", canvas: .custom(width: 720, height: 400)) {
-        PartMock(padding: 0) { PracticeStep(showsGlobeHint: false) }
+        PartMock(padding: 0) { PracticeStep(globeHint: .nothing) }
       },
       SnapshotCase(
         "mac-practice-missing",
         canvas: .custom(width: 720, height: 640),
         model: { .demo(onboarded: false, hasAPIKey: false, permissions: [.microphone: .granted]) }
       ) {
-        PartMock(padding: 0) { PracticeStep(showsGlobeHint: true) }
+        PartMock(padding: 0) { PracticeStep(globeHint: .conflict(.showEmoji)) }
       },
       SnapshotCase("mac-menu", canvas: .custom(width: 640, height: 380)) {
         PartMock { MenuMock() }
@@ -112,12 +121,38 @@ public enum MacSnapshots {
       ),
       ("Meeting, pill hidden", PillState(look: .hidden, meetingSince: meeting)),
       ("Copied", PillState(look: .notice("Copied to the clipboard", canFix: false, isProblem: false))),
+      (
+        "A question",
+        PillState(
+          look: .question(
+            MacControls.globeKeyQuestion(for: .showEmoji),
+            yes: "Fix it",
+            no: "Not now"
+          )
+        )
+      ),
+      (
+        "Hands-free in a long meeting",
+        PillState(look: .recording(mode: .dictation, handsFree: true), meetingSince: meeting)
+      ),
+      ("Being dragged", PillState(look: .hint(keys: ["fn"]), meetingSince: nil, isGrabbed: true)),
     ]
-    return [
-      SnapshotCase("mac-pill", canvas: .custom(width: 1100, height: 760)) {
-        PillSheet(states: states, now: meeting.addingTimeInterval(247))
+    let now = meeting.addingTimeInterval(247)
+    // The bottom edge keeps the old name, so it can be laid beside the picture from before.
+    var cases = PillEdge.allCases.map { edge in
+      SnapshotCase(
+        edge == .bottom ? "mac-pill" : "mac-pill-\(edge.rawValue)",
+        canvas: .custom(width: 1100, height: edge.isSide ? 1500 : 1060)
+      ) {
+        PillSheet(edge: edge, states: states, now: now, longMeeting: meeting.addingTimeInterval(3729))
       }
-    ]
+    }
+    cases.append(
+      SnapshotCase("mac-pill-corners", canvas: .custom(width: 1100, height: 620)) {
+        PillCorners(now: now, since: meeting)
+      }
+    )
+    return cases
   }
 }
 
@@ -200,36 +235,121 @@ private struct MenuMock: View {
   }
 }
 
-/// Every look of the pill, side by side on something like a desktop.
+/// Every look of the pill against one screen edge. Each cell stands for a piece of a
+/// screen, with a line where that screen's edge is.
 private struct PillSheet: View {
+  let edge: PillEdge
   let states: [(String, PillState)]
   let now: Date
+  /// The clock for the "long meeting" cell: more than an hour in.
+  let longMeeting: Date
 
   var body: some View {
-    let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 3)
-    LazyVGrid(columns: columns, spacing: 0) {
-      ForEach(Array(states.enumerated()), id: \.offset) { _, entry in
-        VStack(spacing: Wisper.Space.s) {
-          PillBody(state: entry.1, previewLevel: 0.7, previewNow: now)
-            .frame(height: 92, alignment: .bottom)
-            .environment(\.colorScheme, .light)
-          Text(entry.0)
-            .wisperText(.caption, color: .white.opacity(0.85))
+    let columns = Array(repeating: GridItem(.flexible(), spacing: Wisper.Space.l), count: 3)
+    VStack(alignment: .leading, spacing: Wisper.Space.m) {
+      Text("The pill on the \(edge.rawValue) edge")
+        .wisperText(.bodyStrong, color: .white)
+      LazyVGrid(columns: columns, spacing: Wisper.Space.l) {
+        ForEach(Array(states.enumerated()), id: \.offset) { _, entry in
+          VStack(spacing: Wisper.Space.s) {
+            ScreenPiece(edge: edge, height: edge.isSide ? 190 : 116) {
+              PillBody(
+                state: entry.1,
+                edge: edge,
+                previewLevel: 0.7,
+                previewNow: entry.0.contains("long") ? longMeeting : now
+              )
+            }
+            Text(entry.0)
+              .wisperText(.caption, color: .white.opacity(0.85))
+          }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Wisper.Space.m)
       }
     }
     .padding(Wisper.Space.l)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background {
-      // Stands in for whatever app is behind the pill.
-      LinearGradient(
-        colors: [SwiftUI.Color(hex: 0x5B7C99), SwiftUI.Color(hex: 0x8E7AA8), SwiftUI.Color(hex: 0xD9A27E)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      )
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .background { Desktop() }
+  }
+}
+
+/// The pill close to the corners of a screen: what opens from it must stay on the screen.
+private struct PillCorners: View {
+  let now: Date
+  let since: Date
+
+  var body: some View {
+    let hint = PillState(look: .hint(keys: ["fn"]), meetingSince: nil, shortcutsPaused: true)
+    let failure = PillState(
+      look: .notice(WisperError.network("timed out").localizedDescription, canFix: false),
+      meetingSince: nil
+    )
+    let busy = PillState(look: .recording(mode: .dictation, handsFree: true), meetingSince: since)
+    let size = CGSize(width: 500, height: 250)
+    let spots: [(PillEdge, CGPoint, PillState)] = [
+      (.bottom, CGPoint(x: 28, y: size.height), hint),
+      (.top, CGPoint(x: size.width - 28, y: 0), failure),
+      (.left, CGPoint(x: 0, y: 28), busy),
+      (.right, CGPoint(x: size.width, y: size.height - 28), hint),
+    ]
+    VStack(alignment: .leading, spacing: Wisper.Space.m) {
+      Text("The pill near a corner: everything stays on the screen")
+        .wisperText(.bodyStrong, color: .white)
+      LazyVGrid(columns: Array(repeating: GridItem(.fixed(size.width), spacing: Wisper.Space.l), count: 2)) {
+        ForEach(Array(spots.enumerated()), id: \.offset) { _, spot in
+          ScreenPiece(edge: spot.0, height: size.height, allEdges: true) {
+            PillBody(state: spot.2, edge: spot.0, foot: spot.1, previewLevel: 0.7, previewNow: now)
+          }
+        }
+      }
     }
+    .padding(Wisper.Space.l)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .background { Desktop() }
+  }
+}
+
+/// A piece of a screen with the pill on it. The light line is the edge of the screen.
+private struct ScreenPiece<Content: View>: View {
+  let edge: PillEdge
+  let height: CGFloat
+  /// The piece is a whole small screen: all four sides are edges.
+  var allEdges = false
+  @ViewBuilder var content: Content
+
+  var body: some View {
+    content
+      .frame(maxWidth: .infinity)
+      .frame(height: height)
+      .environment(\.colorScheme, .light)
+      .background(.white.opacity(0.06))
+      .overlay {
+        if allEdges { Rectangle().strokeBorder(.white.opacity(0.7), lineWidth: 1) }
+      }
+      .overlay(alignment: alignment) {
+        Rectangle()
+          .fill(.white.opacity(0.7))
+          .frame(width: edge.isSide ? 1 : nil, height: edge.isSide ? nil : 1)
+      }
+  }
+
+  private var alignment: Alignment {
+    switch edge {
+    case .bottom: .bottom
+    case .top: .top
+    case .left: .leading
+    case .right: .trailing
+    }
+  }
+}
+
+/// Stands in for whatever app is behind the pill.
+private struct Desktop: View {
+  var body: some View {
+    LinearGradient(
+      colors: [SwiftUI.Color(hex: 0x5B7C99), SwiftUI.Color(hex: 0x8E7AA8), SwiftUI.Color(hex: 0xD9A27E)],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
   }
 }
 

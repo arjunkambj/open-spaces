@@ -329,7 +329,6 @@ import WisperDomain
 
   @Test(arguments: [
     (URLError.Code.notConnectedToInternet, "you are offline"),
-    (.timedOut, "the request timed out"),
     (.cannotFindHost, "the server was not found"),
     (.cannotConnectToHost, "the server did not answer"),
     (.networkConnectionLost, "the connection was lost"),
@@ -473,7 +472,7 @@ import WisperDomain
     Server.Answer.error(500, "The server had an error."),
     .error(503, "Overloaded.", code: "server_is_overloaded"),
     .reply(status: 502, body: "Bad gateway"), .error(429, "Rate limit reached for requests."),
-    .fail(.networkConnectionLost), .fail(.timedOut), .fail(.notConnectedToInternet),
+    .fail(.networkConnectionLost), .fail(.notConnectedToInternet),
   ])
   func triesAgainAfterAPassingFailure(failure: Server.Answer) async throws {
     let server = Server(failure, failure, Self.hello)
@@ -622,12 +621,13 @@ import WisperDomain
 
     let error = await wisperError {
       _ = try await server.client().send(budget: 0.05) { _ in
-        Client.Call(method: "GET", path: "models", idle: 60)
+        Client.Call(method: "GET", path: "models", wait: 60)
       }
     }
 
-    #expect(error == .network("the request timed out"))
-    #expect(server.requests.count == 1)
+    #expect(error == .noAnswer)
+    // Sent once at most: a busy test machine may use up the allowance before the request leaves.
+    #expect(server.requests.count <= 1)
   }
 
   // MARK: Checking a key
@@ -644,7 +644,8 @@ import WisperDomain
     #expect(request.url.absoluteString == "https://api.openai.com/v1/models")
     #expect(request.header("Authorization") == "Bearer sk-new")
     #expect(request.body.isEmpty)
-    #expect(request.timeout == 15)
+    // The whole check: two short tries at most.
+    #expect(request.timeout == 20)
   }
 
   @Test func reportsAKeyTheServerTurnsDown() async throws {

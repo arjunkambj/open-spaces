@@ -16,6 +16,7 @@ Open Wisper is an open-source voice dictation and meeting-notes app for macOS an
 apps/macos        macOS app (SwiftPM; scripts/bundle makes the .app)
 apps/ios          iOS app, keyboard and widget extensions: thin Xcode targets (XcodeGen project.yml)
 apps/ios/Phone    WisperPhone, WisperKeyboard, WisperLive   nearly all iOS code; a package that builds on a Mac
+apps/web          the website whisper.0xhoney.com (Astro + Tailwind, static; on Cloudflare)
 packages/domain   WisperDomain   models, the seams (protocols), in-memory fakes, APIServer, LinkTicket
 packages/store    WisperStore    FileLibrary, KeychainSecretStore
 packages/ai       WisperAI       OpenAI adapters
@@ -62,6 +63,7 @@ pnpm check              # lint + build + test, everything
 pnpm test               # tests only
 pnpm format             # format all Swift in place
 pnpm mac                # build, bundle and open the macOS app
+pnpm web                # the website on 127.0.0.1:4321; web:build builds it, web:deploy puts it on Cloudflare
 
 # One package:
 cd packages/engine && ../../scripts/swiftw build && ../../scripts/swiftw test
@@ -73,6 +75,8 @@ cd packages/ui && ../../scripts/swiftw run wisper-snapshots <folder>            
 cd apps/ios/Phone && ../../../scripts/swiftw run wisper-phone-snapshots <folder>  # iPhone screens
 "apps/macos/build/Open Wisper.app/Contents/MacOS/OpenWisper" --snapshots <folder> # Mac screens
 ```
+
+The website is the one part that is not Swift. Its words are all in `apps/web/src/content.ts`; say only what the README says is true. It sends no JavaScript and loads nothing from other sites: keep it so. `apps/web/README.md` has the rest.
 
 The Mac app also starts with `--demo`: made-up data, no microphone, Keychain, shortcuts or network.
 

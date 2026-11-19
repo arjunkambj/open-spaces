@@ -317,6 +317,7 @@ public final class PhoneSession {
         secrets: secrets,
         capture: SystemAudioCapture(),
         transcriber: openAI.transcriber,
+        liveTranscriber: openAI.liveTranscriber,
         languageModel: openAI.languageModel,
         target: ClipboardTextTarget(clipboard: device.clipboard),
         permissions: PhonePermissions(openSettings: device.openSettings),

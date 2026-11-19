@@ -1,0 +1,54 @@
+---
+import { agents, links } from "../content";
+---
+
+<section id="agents" class="bg-stone-100 dark:bg-stone-900">
+  <div class="mx-auto grid w-full max-w-6xl gap-12 px-5 py-20 sm:px-8 sm:py-28 lg:grid-cols-[5fr_6fr] lg:gap-16">
+    <div>
+      <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{agents.title}</h2>
+      <p class="mt-4 text-lg text-pretty text-stone-600 dark:text-stone-300">{agents.lead}</p>
+      <p class="mt-4 text-pretty text-stone-600 dark:text-stone-300">{agents.mcp}</p>
+
+      <h3 class="mt-10 font-semibold">{agents.limitsTitle}</h3>
+      <ul class="mt-3 space-y-2 text-stone-600 dark:text-stone-300">
+        {
+          agents.limits.map((limit) => (
+            <li class="flex gap-3">
+              <span class="bg-pine dark:bg-pine-bright mt-[0.6em] size-1.5 shrink-0 rounded-full" aria-hidden="true" />
+              {limit}
+            </li>
+          ))
+        }
+      </ul>
+      <p class="mt-4 text-sm text-pretty text-stone-600 dark:text-stone-400">{agents.caution}</p>
+      <p class="mt-8"><a href={links.agentGuide} class="link">{agents.guideLink}</a></p>
+    </div>
+
+    <div class="min-w-0">
+      <p class="text-sm font-medium text-stone-600 dark:text-stone-300">{agents.setupLabel}</p>
+      <pre class="mt-3 rounded-xl bg-stone-900 p-5 font-mono text-[13px] leading-6 break-words whitespace-pre-wrap text-stone-100 ring-1 ring-white/10 sm:text-sm dark:bg-stone-950"><span class="text-stone-400 select-none" aria-hidden="true">$ </span><code>{agents.command}</code></pre>
+      <p class="mt-3 text-sm text-pretty text-stone-600 dark:text-stone-400">{agents.otherTools}</p>
+
+      <table class="mt-10 w-full text-left">
+        <thead>
+          <tr class="text-sm text-stone-600 dark:text-stone-300">
+            <th scope="col" class="pb-3 font-medium">{agents.examplesLabel}</th>
+            <th scope="col" class="pb-3 pl-4 text-right font-medium whitespace-nowrap">{agents.toolLabel}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            agents.examples.map((example) => (
+              <tr class="border-t border-stone-900/10 align-top dark:border-white/10">
+                <td class="py-3.5 text-pretty">“{example.ask}”</td>
+                <td class="py-3.5 pl-4 text-right">
+                  <code class="font-mono text-[13px] text-stone-600 dark:text-stone-300">{example.tool}</code>
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

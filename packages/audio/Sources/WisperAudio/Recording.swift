@@ -10,11 +10,17 @@ import WisperDomain
 final class Recording: CaptureSession, @unchecked Sendable {
   let levels: AsyncStream<Float>
   let chunks: AsyncStream<AudioChunk>
+  let frames: AsyncStream<AudioFrames>
+
+  /// How many runs of live sound may wait for their reader: a few minutes' worth. Past that
+  /// the newest are dropped, so a reader that has stopped reading cannot use up the memory.
+  static let mostFramesWaiting = 4_000
 
   private enum Phase { case recording, ending, ended }
 
   private let levelContinuation: AsyncStream<Float>.Continuation
   private let chunkContinuation: AsyncStream<AudioChunk>.Continuation
+  private let frameContinuation: AsyncStream<AudioFrames>.Continuation
   /// The writer queue: resampling, encoding and file work all happen here.
   private let queue = DispatchQueue(
     label: "openwisper.audio.writer",
@@ -63,16 +69,26 @@ final class Recording: CaptureSession, @unchecked Sendable {
       bufferingPolicy: .bufferingNewest(64)
     )
     (chunks, chunkContinuation) = AsyncStream.makeStream(of: AudioChunk.self)
+    (frames, frameContinuation) = AsyncStream.makeStream(
+      of: AudioFrames.self,
+      bufferingPolicy: .bufferingOldest(Recording.mostFramesWaiting)
+    )
     let metered: AudioTrack = tracks.contains(.microphone) ? .microphone : .system
+    // Live sound is the file's sound, which only holds when there is one file.
+    let handsOver = request.liveFrames && request.chunkSeconds == nil
+    if !handsOver { frameContinuation.finish() }
     for track in tracks {
       let chunks = chunkContinuation
+      let frames = frameContinuation
       writers[track] = TrackWriter(
         track: track,
         directory: request.directory,
         origin: origin,
         chunkSeconds: request.chunkSeconds,
         emit: { chunks.yield($0) },
-        report: track == metered ? { [weak self] in self?.pace($0) } : nil
+        report: track == metered ? { [weak self] in self?.pace($0) } : nil,
+        live: track == metered && handsOver
+          ? { frames.yield(AudioFrames(samples: $0, sampleRate: Encoding.sampleRate)) } : nil
       )
     }
   }
@@ -82,6 +98,7 @@ final class Recording: CaptureSession, @unchecked Sendable {
     for source in sources { source.stop() }
     for writer in writers.values { writer.discard() }
     levelContinuation.finish()
+    frameContinuation.finish()
     chunkContinuation.finish()
     for waiter in waiters { waiter.resume() }
   }
@@ -150,6 +167,8 @@ final class Recording: CaptureSession, @unchecked Sendable {
     for level in pendingLevels { levelContinuation.yield(level) }
     pendingLevels = []
     levelContinuation.finish()
+    // Before the files: whoever waits for the last file has all of the live sound by then.
+    frameContinuation.finish()
     chunkContinuation.finish()
     let waiting = waiters
     waiters = []

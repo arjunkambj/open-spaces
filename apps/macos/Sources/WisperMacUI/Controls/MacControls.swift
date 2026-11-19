@@ -35,6 +35,9 @@ import WisperMac
 ///   after a few seconds.
 /// - Shortcuts follow the settings on their own, also when another program
 ///   changes them, and come back by themselves once Accessibility is granted.
+/// - While fn is part of a shortcut and macOS also reacts to that key (the
+///   emoji picker), the controls ask once, after a dictation, whether to switch
+///   that off (`globeKey`). They never ask again, whatever the answer.
 @MainActor
 @Observable
 public final class MacControls {
@@ -50,17 +53,37 @@ public final class MacControls {
       case hub
       /// Open System Settings at Login Items.
       case loginItems
+      /// Stop macOS reacting to the fn (Globe) key.
+      case globeKey
+      /// Open System Settings at Keyboard.
+      case keyboardSettings
+    }
+
+    /// The words on the two buttons of a notice that asks something.
+    public struct Answers: Equatable, Sendable {
+      /// Does the notice's `fix`.
+      public var yes: String
+      /// Only takes the notice away.
+      public var no: String
+
+      public init(yes: String, no: String) {
+        self.yes = yes
+        self.no = no
+      }
     }
 
     public var message: String
     public var fix: Fix?
     /// False for a message that is only news ("Copied to the clipboard") and not something gone wrong.
     public var isProblem: Bool
+    /// Set for a notice that asks something. It then shows two buttons instead of being one.
+    public var answers: Answers?
 
-    public init(message: String, fix: Fix? = nil, isProblem: Bool = true) {
+    public init(message: String, fix: Fix? = nil, isProblem: Bool = true, answers: Answers? = nil) {
       self.message = message
       self.fix = fix
       self.isProblem = isProblem
+      self.answers = answers
     }
   }
 
@@ -87,12 +110,18 @@ public final class MacControls {
   @ObservationIgnored public var open: @MainActor (Destination) -> Void = { _ in }
   /// The shortcut monitor, for the shortcut recorder to pause. `nil` when shortcuts are off (the demo).
   @ObservationIgnored public let monitor: ShortcutMonitor?
+  /// What macOS does on the fn (Globe) key, and the way to switch that off.
+  @ObservationIgnored public let globeKey: GlobeKeySetting
+  /// Where the user dragged the pill.
+  @ObservationIgnored public let pillSpots: PillSpots
 
   @ObservationIgnored private let model: AppModel
   /// Plays a sound. Only called for sounds that should really be heard.
   @ObservationIgnored private let sound: @MainActor (SoundCue) -> Void
   @ObservationIgnored private let revealDelay: Duration
   @ObservationIgnored private let noticeTime: Duration
+  /// How long a notice that asks something stays up: long enough to read it and decide.
+  @ObservationIgnored var questionTime: Duration = .seconds(20)
   /// How long a held key waits for the last dictation before a notice says why nothing is recorded yet.
   @ObservationIgnored var busyNoticeDelay: Duration = .milliseconds(600)
 
@@ -119,14 +148,25 @@ public final class MacControls {
   /// - sounds: plays the start, stop and error sounds, or `nil` for silence.
   /// - revealDelay: how long push to talk waits before it looks and sounds like a recording.
   /// - noticeTime: how long a notice stays up.
+  /// - globeKey: the Mac's fn-key setting. The default reads nothing and changes nothing.
+  /// - pillSpots: where the pill was dragged to. The default remembers nothing.
   public convenience init(
     model: AppModel,
     monitor: ShortcutMonitor? = nil,
     sounds: SoundPlayer? = nil,
     revealDelay: Duration = .milliseconds(150),
-    noticeTime: Duration = .seconds(5)
+    noticeTime: Duration = .seconds(5),
+    globeKey: GlobeKeySetting? = nil,
+    pillSpots: PillSpots? = nil
   ) {
-    self.init(model: model, monitor: monitor, revealDelay: revealDelay, noticeTime: noticeTime) { cue in
+    self.init(
+      model: model,
+      monitor: monitor,
+      revealDelay: revealDelay,
+      noticeTime: noticeTime,
+      globeKey: globeKey,
+      pillSpots: pillSpots
+    ) { cue in
       sounds?.play(cue)
     }
   }
@@ -137,6 +177,8 @@ public final class MacControls {
     monitor: ShortcutMonitor? = nil,
     revealDelay: Duration,
     noticeTime: Duration,
+    globeKey: GlobeKeySetting? = nil,
+    pillSpots: PillSpots? = nil,
     sound: @escaping @MainActor (SoundCue) -> Void
   ) {
     self.model = model
@@ -144,6 +186,8 @@ public final class MacControls {
     self.sound = sound
     self.revealDelay = revealDelay
     self.noticeTime = noticeTime
+    self.globeKey = globeKey ?? GlobeKeySetting()
+    self.pillSpots = pillSpots ?? PillSpots()
     watches.append(
       Watch({ [model] in model.dictation.phase }) { [weak self] phase in self?.phaseChanged(to: phase) }
     )
@@ -162,6 +206,12 @@ public final class MacControls {
         monitor?.setShortcuts(shortcuts)
       }
     )
+    globeKey.refresh()
+    watches.append(
+      Watch({ [model, globeKey] in Self.holdsBackGlobeKey(model.settings.shortcuts, globeKey.systemUse) }) {
+        [weak monitor] holdsBack in monitor?.holdsBackGlobeKey = holdsBack
+      }
+    )
     needsAccessibility = !monitor.start()
     upkeep = Task { [weak self] in
       while !Task.isCancelled {
@@ -170,7 +220,26 @@ public final class MacControls {
         // Starting is a no-op while running, and never shows a system prompt.
         let missing = !monitor.start()
         if missing != self.needsAccessibility { self.needsAccessibility = missing }
+        // The person may change what macOS does on fn in System Settings at any time.
+        if GlobeKey.isUsed(by: self.model.settings.shortcuts) { self.globeKey.refresh() }
       }
+    }
+  }
+
+  /// Whether the key press macOS makes up for a lone tap of fn is kept from the system.
+  ///
+  /// Yes while fn is part of a shortcut: that tap is then meant for Open Wisper, and what
+  /// it would open (the emoji picker) only gets in the way. No when the user chose "Change
+  /// Input Source" or "Start Dictation" for the key themselves: they may rely on that, so
+  /// it keeps working until they say otherwise (the fix is offered instead).
+  nonisolated static func holdsBackGlobeKey(
+    _ shortcuts: [ShortcutAction: KeyCombo],
+    _ use: GlobeKey.SystemUse
+  ) -> Bool {
+    guard GlobeKey.isUsed(by: shortcuts) else { return false }
+    switch use {
+    case .nothing, .showEmoji, .systemDefault: return true
+    case .changeInputSource, .startDictation: return false
     }
   }
 
@@ -349,6 +418,9 @@ public final class MacControls {
       guard let self, self.run == run else { return }
       self.isWrappingUp = false
       self.resume()
+      // A dictation has just been written: the moment the emoji picker would have been in the
+      // way. Never after a press that was thrown away (fn + arrow), which must leave no trace.
+      self.askAboutGlobeKey()
     }
   }
 
@@ -443,6 +515,68 @@ public final class MacControls {
     // Every message about the key or the server address, for OpenAI or a custom server, ends
     // by pointing at Settings ("…in Settings."), so that is where a click goes.
     return message.contains(" in Settings") ? .settings : nil
+  }
+
+  // MARK: - The fn (Globe) key
+
+  /// Asks, once ever, whether to stop macOS reacting to the fn key. Only while fn is part
+  /// of a shortcut and macOS is set to do something on it, and never over another notice.
+  private func askAboutGlobeKey() {
+    guard notice == nil, model.dictation.phase == .idle, model.settings.isOnboarded else { return }
+    globeKey.refresh()
+    guard globeKey.shouldAsk(for: model.settings.shortcuts) else { return }
+    globeKey.markAsked()
+    show(
+      Notice(
+        message: Self.globeKeyQuestion(for: globeKey.systemUse),
+        fix: .globeKey,
+        isProblem: false,
+        answers: Notice.Answers(yes: "Fix it", no: "Not now")
+      ),
+      for: questionTime
+    )
+  }
+
+  /// Sets the Mac's fn key to do nothing and says how that went.
+  public func fixGlobeKey() {
+    switch globeKey.fix() {
+    case .now:
+      show(Notice(message: "Done. macOS now leaves the fn key to Open Wisper.", isProblem: false))
+    case .afterLogin:
+      show(
+        Notice(
+          message: "Saved. It takes effect after you log out of your Mac and back in.",
+          isProblem: false
+        )
+      )
+    case .failed:
+      show(
+        Notice(
+          message:
+            "macOS did not take the change. Set “Press 🌐 key to” to “Do Nothing” in Keyboard settings.",
+          fix: .keyboardSettings
+        )
+      )
+    }
+  }
+
+  /// The one-time question, in words that fit what macOS does on the key.
+  nonisolated static func globeKeyQuestion(for use: GlobeKey.SystemUse) -> String {
+    switch use {
+    case .changeInputSource: "macOS also switches the keyboard language when you press fn. Stop that?"
+    case .startDictation: "macOS also starts its own dictation when you press fn. Stop that?"
+    case .nothing, .showEmoji, .systemDefault:
+      "macOS can also open the emoji picker when you press fn. Stop that?"
+    }
+  }
+
+  /// What the button that makes the fix says, for what macOS does on the key.
+  public nonisolated static func globeKeyFixTitle(for use: GlobeKey.SystemUse) -> String {
+    switch use {
+    case .changeInputSource: "Stop macOS switching language on fn"
+    case .startDictation: "Stop macOS dictation on fn"
+    case .nothing, .showEmoji, .systemDefault: "Stop macOS opening the emoji picker"
+    }
   }
 
   // MARK: - Meetings
@@ -540,6 +674,8 @@ public final class MacControls {
     case .settings: open(.settings)
     case .hub: open(.hub)
     case .loginItems: LaunchAtLogin.openSettings()
+    case .globeKey: fixGlobeKey()
+    case .keyboardSettings: GlobeKey.openSettings()
     case .permission(let permission): requestPermission(permission)
     case nil: break
     }
@@ -571,11 +707,12 @@ public final class MacControls {
     show(Notice(message: "Copied to the clipboard", isProblem: false))
   }
 
-  private func show(_ notice: Notice) {
+  /// - time: how long it stays up; `nil` is the usual `noticeTime`.
+  private func show(_ notice: Notice, for time: Duration? = nil) {
     self.notice = notice
     noticeTimer?.cancel()
     noticeTimer = Task { [weak self, noticeTime] in
-      try? await Task.sleep(for: noticeTime)
+      try? await Task.sleep(for: time ?? noticeTime)
       guard !Task.isCancelled else { return }
       self?.dismissNotice()
     }

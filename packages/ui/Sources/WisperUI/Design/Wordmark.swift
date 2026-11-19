@@ -1,30 +1,88 @@
 import SwiftUI
 
-/// The Open Wisper mark: five rounded bars rising like a spoken word. Drawn in code.
+/// The Open Wisper mark: a sound wave that is also a small "w", in front of a text cursor.
+/// What you say, written where you are typing. Drawn in code; the app icon
+/// (`scripts/make-icon.swift`) draws the same mark.
 public struct WisperGlyph: View {
   private let size: CGFloat
   private let tint: SwiftUI.Color
+  private let cursorTint: SwiftUI.Color
 
-  /// - size: the height of the mark, in points.
+  /// - size: the height of the mark, in points. The mark is about a third wider than it is tall.
+  /// - tint: the colour of the whole mark.
   public init(size: CGFloat = 20, tint: SwiftUI.Color = Wisper.Color.textPrimary) {
-    self.size = size
-    self.tint = tint
+    self.init(size: size, tint: tint, cursorTint: tint)
   }
 
-  /// The height of each bar as a share of the mark's height.
-  private static let bars: [CGFloat] = [0.38, 0.72, 1, 0.56, 0.3]
+  /// The mark with its cursor in a colour of its own, as the logo has it.
+  init(size: CGFloat, tint: SwiftUI.Color, cursorTint: SwiftUI.Color) {
+    self.size = size
+    self.tint = tint
+    self.cursorTint = cursorTint
+  }
 
   public var body: some View {
-    let barWidth = size * 0.13
-    HStack(alignment: .center, spacing: size * 0.09) {
-      ForEach(Array(Self.bars.enumerated()), id: \.offset) { _, share in
-        Capsule()
-          .fill(tint)
-          .frame(width: barWidth, height: size * share)
-      }
+    ZStack {
+      WisperMarkWave()
+        .stroke(
+          tint,
+          style: StrokeStyle(lineWidth: size * WisperMark.stroke, lineCap: .round, lineJoin: .round)
+        )
+      WisperMarkCursor().fill(cursorTint)
     }
-    .frame(height: size)
+    .frame(width: size * WisperMark.width, height: size)
     .accessibilityHidden(true)
+  }
+}
+
+/// The sizes of the mark, as shares of its height. The cursor is as tall as the mark.
+private enum WisperMark {
+  /// The thickness of the wave.
+  static let stroke: CGFloat = 0.135
+  /// How far the wave moves sideways from one turn to the next.
+  static let step: CGFloat = 0.22
+  /// How far it moves up or down between turns.
+  static let rise: CGFloat = 0.58
+  /// How round its turns are.
+  static let corner: CGFloat = 0.09
+  /// How far the wave sits below the middle of the cursor, the way a small letter does in a line of text.
+  static let drop: CGFloat = 0.03
+  /// The space between the wave and the cursor.
+  static let gap: CGFloat = 0.15
+  static let cursor: CGFloat = 0.12
+  static let width: CGFloat = 4 * step + stroke + gap + cursor
+}
+
+/// The wave: down, up, down, up. Two dips, so it is also a "w". Stroked by the caller.
+/// A plain path, so it is not flipped where text runs right to left.
+private struct WisperMarkWave: Shape {
+  func path(in rect: CGRect) -> Path {
+    let size = rect.height
+    let left = rect.minX + size * WisperMark.stroke / 2
+    let top = rect.midY + size * (WisperMark.drop - WisperMark.rise / 2)
+    let bottom = rect.midY + size * (WisperMark.drop + WisperMark.rise / 2)
+    let step = size * WisperMark.step
+    let turns = (0...4).map { index in
+      CGPoint(x: left + CGFloat(index) * step, y: index.isMultiple(of: 2) ? top : bottom)
+    }
+    var path = Path()
+    path.move(to: turns[0])
+    for index in 1..<4 {
+      path.addArc(tangent1End: turns[index], tangent2End: turns[index + 1], radius: size * WisperMark.corner)
+    }
+    path.addLine(to: turns[4])
+    return path
+  }
+}
+
+/// The text cursor at the right of the mark.
+private struct WisperMarkCursor: Shape {
+  func path(in rect: CGRect) -> Path {
+    let width = rect.height * WisperMark.cursor
+    return Path(
+      roundedRect: CGRect(x: rect.maxX - width, y: rect.minY, width: width, height: rect.height),
+      cornerRadius: width / 2
+    )
   }
 }
 
@@ -38,10 +96,10 @@ public struct Wordmark: View {
   }
 
   public var body: some View {
-    HStack(spacing: size * 0.4) {
-      WisperGlyph(size: size)
+    HStack(spacing: size * 0.42) {
+      WisperGlyph(size: size, tint: Wisper.Color.textPrimary, cursorTint: Wisper.Color.accent)
       Text("Open Wisper")
-        // Rounded letters, to go with the rounded bars of the mark. The one place they are used.
+        // Rounded letters, to go with the rounded line of the mark. The one place they are used.
         .font(.system(size: size * 0.9, weight: .semibold, design: .rounded))
         .tracking(-size * 0.015)
         .foregroundStyle(Wisper.Color.textPrimary)

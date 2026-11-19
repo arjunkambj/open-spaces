@@ -9,7 +9,7 @@ import WisperDomain
 struct Client: Sendable {
   private let secrets: any SecretStore
   private let address: @Sendable () async throws -> String?
-  private let session: URLSession
+  private let connections: Connections
   private let pause: @Sendable (TimeInterval) async throws -> Void
   private let memory = Memory()
 
@@ -17,12 +17,12 @@ struct Client: Sendable {
   init(
     secrets: any SecretStore,
     address: @escaping @Sendable () async throws -> String?,
-    session: URLSession,
+    connections: Connections,
     pause: @escaping @Sendable (TimeInterval) async throws -> Void
   ) {
     self.secrets = secrets
     self.address = address
-    self.session = session
+    self.connections = connections
     self.pause = pause
   }
 
@@ -34,14 +34,26 @@ struct Client: Sendable {
     /// Endpoint under the API folder, e.g. `chat/completions`.
     var path: String
     var body: Body = .none
-    /// Longest silence allowed on the connection, in seconds.
-    var idle: TimeInterval
+    /// How long the server may take to answer once the request has been sent, in seconds, on
+    /// the first try. A try that follows one without an answer waits twice as long: a
+    /// connection that has gone dead is given up quickly, and a server that is only slow
+    /// today still gets its time.
+    var wait: TimeInterval
+    /// The longest the sending itself may stand still, in seconds: no connection yet, or no
+    /// more of the body going out.
+    var stall: TimeInterval = Client.longestStall
 
     enum Body: Sendable {
       case none
       case json(Data)
       /// A body already written to a file. The client deletes the file once it has been sent.
       case file(URL, contentType: String)
+
+      /// Whether there is anything to send besides the request line.
+      var isSent: Bool {
+        if case .none = self { return false }
+        return true
+      }
     }
   }
 
@@ -74,7 +86,7 @@ struct Client: Sendable {
       var leftOut = await memory.refused(in: scope).intersection(optional)
       while true {
         do {
-          let data = try await deliver(try await build(leftOut), to: server)
+          let data = try await deliver(try await build(leftOut), to: server, within: budget)
           await memory.remember(leftOut, in: scope)
           return data
         } catch let refusal as Refusal {
@@ -94,6 +106,65 @@ struct Client: Sendable {
   /// Whether requests go to OpenAI itself rather than to a server the user set.
   func usesOpenAI() async -> Bool {
     (try? await server())?.isOpenAI ?? false
+  }
+
+  /// Gets a working connection to the server ready, so the request that follows starts at once.
+  ///
+  /// Sends one small question that carries no key, no audio and no text, and only when a real
+  /// request could go out: with an address that cannot be used, or with no key for OpenAI,
+  /// nothing is sent. Never throws: when it does not work out, the request itself will say why.
+  func prepare() async {
+    guard let server = try? await resolve(.stored),
+      var parts = URLComponents(url: server.root, resolvingAgainstBaseURL: true)
+    else { return }
+    parts.path += "/models"
+    guard let url = parts.url else { return }
+    await connections.warm { session, probe in
+      await Client.reaches(url, on: session, within: probe == .check ? Client.checkTime : Client.openTime)
+    }
+  }
+
+  /// A WebSocket to `path` under the API folder of the server the settings name, not yet
+  /// started. It carries that server's key, and only that server's. It follows no redirect
+  /// to another host.
+  ///
+  /// - Throws: `WisperError`, before anything is sent, when a request could not be sent
+  ///   either: the address cannot be used, or there is no key for OpenAI.
+  func socket(path: String, query: [URLQueryItem]) async throws -> URLSessionWebSocketTask {
+    let server = try await resolve(.stored)
+    guard var parts = URLComponents(url: server.root, resolvingAgainstBaseURL: true) else {
+      throw WisperError.network("the server address is not valid")
+    }
+    parts.path += "/" + path
+    parts.scheme = parts.scheme?.lowercased() == "http" ? "ws" : "wss"
+    parts.queryItems = (parts.queryItems ?? []) + query
+    guard let url = parts.url else { throw WisperError.network("the server address is not valid") }
+    var request = URLRequest(url: url)
+    request.timeoutInterval = 10
+    request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+    request.httpShouldHandleCookies = false
+    if let key = server.key { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+    let task = connections.current().webSocketTask(with: request)
+    task.delegate = SameHostRedirects()
+    return task
+  }
+
+  /// How long a connection that was in use gets to show it is still alive. One that works
+  /// answers in well under a second.
+  static let checkTime: TimeInterval = 2.5
+  /// How long opening a first connection may take. Measured on a VPN: two seconds, now and then.
+  static let openTime: TimeInterval = 8
+
+  /// Whether the server gave any answer at all to a question about `url`. What it answered
+  /// does not matter ("not allowed" comes over a working connection too).
+  private static func reaches(_ url: URL, on session: URLSession, within seconds: TimeInterval) async -> Bool
+  {
+    var request = URLRequest(url: url)
+    request.httpMethod = "HEAD"
+    request.timeoutInterval = seconds
+    request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+    request.httpShouldHandleCookies = false
+    return (try? await session.data(for: request, delegate: SameHostRedirects())) != nil
   }
 
   // MARK: Where and who
@@ -155,49 +226,104 @@ struct Client: Sendable {
   /// A wait the server asks for that is longer than this is not worth it: someone is waiting for their text.
   static let longestWait: TimeInterval = 10
 
-  private func deliver(_ call: Call, to server: Server) async throws -> Data {
+  /// The longest the sending of a request may stand still, unless a call says otherwise. Long
+  /// enough to open a connection on a poor network.
+  static let longestStall: TimeInterval = 8
+  /// How many tries may end without an answer. After the second, the person is told: they are waiting.
+  static let silentTries = 2
+
+  private func deliver(_ call: Call, to server: Server, within budget: TimeInterval) async throws -> Data {
     defer {
       if case .file(let url, _) = call.body { try? FileManager.default.removeItem(at: url) }
     }
-    let request = try request(for: call, on: server)
+    var request = try request(for: call, on: server)
+    // The system's own timer is only a backstop behind the limits kept here.
+    request.timeoutInterval = budget
     var attempt = 1
+    var silent = 0
     while true {
       try Task.checkCancellation()
+      // A check of the connection that began when the key went down gets to finish: when it
+      // finds the connection dead, this request goes out on a fresh one from the start.
+      await connections.settled()
+      let session = connections.current()
+      let wait = call.wait * pow(2, Double(silent))
       let failure: Failure
       do {
-        let (data, response) = try await perform(request, body: call.body)
+        let (data, response) = try await perform(
+          request,
+          body: call.body,
+          on: session,
+          limits: Watch(wait: wait, stall: call.stall, hasBody: call.body.isSent)
+        )
         guard let http = response as? HTTPURLResponse else {
           throw WisperError.invalidResponse("the server did not answer over HTTP")
         }
+        // Any answer, good or bad, came over a connection that works.
+        connections.used(session)
         if (200..<300).contains(http.statusCode) { return data }
         failure = Failure(status: http.statusCode, response: http, body: data)
       } catch let error as URLError {
-        if error.code == .cancelled || Task.isCancelled { throw CancellationError() }
+        if Task.isCancelled || error.code == .cancelled { throw CancellationError() }
         failure = Failure(error)
+        // Whatever went wrong, it went wrong on this session's connections. The next try, and
+        // every later request, starts on new ones, so a dead connection is never used twice.
+        connections.renew(after: session)
+        if error.code == .timedOut {
+          silent += 1
+          guard silent < Client.silentTries, attempt < Client.attempts else {
+            throw WisperError.noAnswer
+          }
+          // No pause: the waiting has been done already.
+          attempt += 1
+          continue
+        }
       }
       guard failure.transient, attempt < Client.attempts else { throw failure.error }
       // Wait 0.5 s, then 1 s, unless the server says how long.
-      let wait = failure.retryAfter ?? 0.5 * pow(2, Double(attempt - 1))
-      guard wait <= Client.longestWait else { throw failure.error }
-      try await pause(wait)
+      let pauseFor = failure.retryAfter ?? 0.5 * pow(2, Double(attempt - 1))
+      guard pauseFor <= Client.longestWait else { throw failure.error }
+      try await pause(pauseFor)
       attempt += 1
     }
   }
 
-  private func perform(_ request: URLRequest, body: Call.Body) async throws -> (Data, URLResponse) {
-    let guide = SameHostRedirects()
-    do {
-      switch body {
-      case .none: return try await session.data(for: request, delegate: guide)
-      case .json(let data): return try await session.upload(for: request, from: data, delegate: guide)
-      case .file(let url, _): return try await session.upload(for: request, fromFile: url, delegate: guide)
+  /// Sends the request once. Throws `URLError(.timedOut)` when `limits` says it took too long.
+  private func perform(
+    _ request: URLRequest,
+    body: Call.Body,
+    on session: URLSession,
+    limits watch: Watch
+  ) async throws -> (Data, URLResponse) {
+    try await withThrowingTaskGroup(of: (Data, URLResponse)?.self) { group in
+      group.addTask {
+        do {
+          switch body {
+          case .none: return try await session.data(for: request, delegate: watch)
+          case .json(let data): return try await session.upload(for: request, from: data, delegate: watch)
+          case .file(let url, _):
+            return try await session.upload(for: request, fromFile: url, delegate: watch)
+          }
+        } catch let error as URLError {
+          throw error
+        } catch is CancellationError {
+          throw URLError(.cancelled)
+        } catch {
+          throw URLError(.unknown)
+        }
       }
-    } catch let error as URLError {
-      throw error
-    } catch is CancellationError {
-      throw CancellationError()
-    } catch {
-      throw URLError(.unknown)
+      group.addTask {
+        try await watch.expire()
+        return nil
+      }
+      // Leaving stops whichever of the two is still running: the request, or the clock.
+      defer { group.cancelAll() }
+      do {
+        guard let first = try await group.next(), let answer = first else { throw URLError(.timedOut) }
+        return answer
+      } catch is CancellationError {
+        throw URLError(.cancelled)
+      }
     }
   }
 
@@ -209,7 +335,6 @@ struct Client: Sendable {
     guard let url = parts.url else { throw WisperError.network("the server address is not valid") }
     var request = URLRequest(url: url)
     request.httpMethod = call.method
-    request.timeoutInterval = call.idle
     // Never answer from a cache (a cached "OK" would make a bad key look good), and keep no cookies.
     request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
     request.httpShouldHandleCookies = false
@@ -246,8 +371,81 @@ private final class SameHostRedirects: NSObject, URLSessionTaskDelegate {
 
   static func staysWithTheServer(from: URL, to: URL) -> Bool {
     guard let host = from.host, let next = to.host, APIServer.sameHost(host, next) else { return false }
-    let downgraded = from.scheme?.lowercased() == "https" && to.scheme?.lowercased() != "https"
+    let secure: Set<String> = ["https", "wss"]
+    let downgraded =
+      secure.contains(from.scheme?.lowercased() ?? "") && !secure.contains(to.scheme?.lowercased() ?? "")
     return !downgraded
+  }
+}
+
+// MARK: - Giving up on one try
+
+/// Follows one try of a request, and says when it has taken too long.
+///
+/// Two different silences are told apart. While the request is still going out, only a
+/// standstill counts (`stall`): a long recording on a slow connection is fine as long as it
+/// keeps moving. Once all of it has gone out, the server has `wait` seconds to answer.
+///
+/// It is also the request's guide for redirects, with the same rule as `SameHostRedirects`.
+///
+/// `@unchecked Sendable`: the mutable properties are read and written while holding `lock`.
+private final class Watch: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+  private let wait: TimeInterval
+  private let stall: TimeInterval
+  private let lock = NSLock()
+  private var lastProgress = ContinuousClock.now
+  private var sent: Bool
+
+  /// - Parameter hasBody: Whether the request has a body to send. One without is waiting for
+  ///   its answer from the start.
+  init(wait: TimeInterval, stall: TimeInterval, hasBody: Bool) {
+    self.wait = wait
+    self.stall = stall
+    sent = !hasBody
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    willPerformHTTPRedirection response: HTTPURLResponse,
+    newRequest request: URLRequest
+  ) async -> URLRequest? {
+    guard let from = task.originalRequest?.url, let to = request.url,
+      SameHostRedirects.staysWithTheServer(from: from, to: to)
+    else { return nil }
+    return request
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didSendBodyData bytesSent: Int64,
+    totalBytesSent: Int64,
+    totalBytesExpectedToSend: Int64
+  ) {
+    lock.withLock {
+      lastProgress = .now
+      if totalBytesExpectedToSend > 0, totalBytesSent >= totalBytesExpectedToSend { sent = true }
+    }
+  }
+
+  /// Returns when the try has run out of time. Throws only when its task is cancelled.
+  func expire() async throws {
+    while true {
+      let (deadline, fixed) = lock.withLock {
+        // While sending is not known to be over, the longer of the two limits holds: should
+        // its end go unreported, the server still gets its full time to answer.
+        (lastProgress + .seconds(sent ? wait : max(stall, wait)), sent)
+      }
+      let now = ContinuousClock.now
+      if now >= deadline { return }
+      // While the request is going out the limit moves with it, so it is looked at again
+      // every moment. Once everything is sent, it stays where it is.
+      try await Task.sleep(
+        until: fixed ? deadline : min(deadline, now + .milliseconds(100)),
+        clock: .continuous
+      )
+    }
   }
 }
 
@@ -264,7 +462,7 @@ private struct Failure {
     let reason: String
     switch error.code {
     case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff: reason = "you are offline"
-    case .timedOut: reason = "the request timed out"
+    case .timedOut: reason = ""
     case .cannotFindHost, .dnsLookupFailed: reason = "the server was not found"
     case .cannotConnectToHost: reason = "the server did not answer"
     case .networkConnectionLost: reason = "the connection was lost"
@@ -275,7 +473,7 @@ private struct Failure {
     case .badURL, .unsupportedURL: reason = "the server address is not valid"
     default: reason = "the connection failed"
     }
-    self.error = WisperError.network(reason)
+    self.error = error.code == .timedOut ? WisperError.noAnswer : WisperError.network(reason)
     switch error.code {
     case .notConnectedToInternet, .timedOut, .cannotFindHost, .dnsLookupFailed, .cannotConnectToHost,
       .networkConnectionLost, .resourceUnavailable, .badServerResponse:
@@ -406,7 +604,7 @@ private actor Memory {
   }
 }
 
-/// Runs `work`, and gives up with a "timed out" error when it takes longer than `seconds`.
+/// Runs `work`, and gives up with a "no answer" error when it takes longer than `seconds`.
 private func withDeadline<T: Sendable>(
   _ seconds: TimeInterval,
   _ work: @escaping @Sendable () async throws -> T
@@ -415,7 +613,7 @@ private func withDeadline<T: Sendable>(
     group.addTask { try await work() }
     group.addTask {
       try await Task.sleep(for: .seconds(seconds))
-      throw WisperError.network("the request timed out")
+      throw WisperError.noAnswer
     }
     defer { group.cancelAll() }
     guard let first = try await group.next() else { throw CancellationError() }

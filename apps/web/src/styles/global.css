@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/*
+  The look follows the app (packages/ui): warm "stone" greys, one accent used sparingly
+  (the app's pine green), the system font, few boxes. Dark mode follows the system.
+*/
+@theme {
+  --color-pine: #1f6a4d;
+  --color-pine-bright: #79d2a8;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-rounded: ui-rounded, "SF Pro Rounded", var(--font-sans);
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --animate-wave: wave 1.2s ease-in-out infinite;
+
+  @keyframes wave {
+    0%,
+    100% {
+      transform: scaleY(0.3);
+    }
+    50% {
+      transform: scaleY(1);
+    }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    @apply scroll-pt-20 bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  :focus-visible {
+    @apply outline-pine dark:outline-pine-bright rounded-sm outline-2 outline-offset-2;
+  }
+
+  ::selection {
+    @apply bg-pine/20 dark:bg-pine-bright/30;
+  }
+}
+
+@layer components {
+  /* A link inside running text. */
+  .link {
+    @apply text-pine dark:text-pine-bright font-medium underline decoration-current/40 underline-offset-4 hover:decoration-current;
+  }
+
+  /* The one primary button: near-black on light, near-white on dark, like the app's. */
+  .button {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 font-medium text-white transition-colors hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white;
+  }
+
+  /* A key on the keyboard. */
+  .key {
+    @apply inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-stone-200 px-1.5 text-[13px] font-medium text-stone-800 dark:bg-stone-800 dark:text-stone-200;
+  }
+
+  /* The frame around a picture of the app window. */
+  .window {
+    @apply overflow-hidden rounded-xl bg-stone-50 shadow-2xl ring-1 shadow-stone-900/10 ring-stone-900/10 dark:bg-stone-900 dark:shadow-black/40 dark:ring-white/10;
+  }
+
+  /* The bars of the live waveform. Each bar has its own height and its own beat. */
+  .wave > span {
+    @apply block w-[3px] rounded-full bg-white motion-safe:animate-wave;
+  }
+  .wave > span:nth-child(4n + 1) {
+    @apply h-2 [animation-delay:-0.9s];
+  }
+  .wave > span:nth-child(4n + 2) {
+    @apply h-4 [animation-delay:-0.3s];
+  }
+  .wave > span:nth-child(4n + 3) {
+    @apply h-5 [animation-delay:-0.6s];
+  }
+  .wave > span:nth-child(4n + 4) {
+    @apply h-3 [animation-delay:-0.1s];
+  }
+}

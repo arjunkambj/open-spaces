@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 import WisperDomain
@@ -121,7 +122,11 @@ final class Server: @unchecked Sendable {
 
   /// The shared request code on its own, for the few things only it can show.
   func client(key: String? = "sk-test-key") -> Client {
-    Client(secrets: InMemorySecretStore(apiKey: key), address: { nil }, session: session) { _ in }
+    Client(
+      secrets: InMemorySecretStore(apiKey: key),
+      address: { nil },
+      connections: Connections(fixed: session)
+    ) { _ in }
   }
 }
 
@@ -174,7 +179,9 @@ final class LocalServer: @unchecked Sendable {
         let connection = accept(listener, nil, nil)
         guard connection >= 0 else { return }
         guard let self else {
+          // The server is gone, and this was its goodbye: see `Listening.stop`.
           close(connection)
+          close(listener)
           return
         }
         self.serve(connection)
@@ -182,7 +189,7 @@ final class LocalServer: @unchecked Sendable {
     }
   }
 
-  deinit { close(listener) }
+  deinit { Listening.stop(port: port) }
 
   var requests: [Request] { lock.withLock { seen } }
 
@@ -231,6 +238,31 @@ final class LocalServer: @unchecked Sendable {
       guard count > 0 else { return }
       sent += count
     }
+  }
+}
+
+/// How the small servers in this file shut down.
+///
+/// A socket is known by a number, and the system hands a closed socket's number to the next
+/// one opened, which in a test run is some other test's. So a socket is only ever closed by
+/// the thread that is using it. A server that goes away does not close its listening socket
+/// from outside: it knocks on its own door, and the thread waiting there finds the server
+/// gone and closes up itself.
+enum Listening {
+  static func stop(port: Int) {
+    let knock = socket(AF_INET, SOCK_STREAM, 0)
+    guard knock >= 0 else { return }
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = UInt16(port).bigEndian
+    address.sin_addr.s_addr = inet_addr("127.0.0.1")
+    _ = withUnsafePointer(to: &address) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+        connect(knock, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+      }
+    }
+    close(knock)
   }
 }
 
@@ -390,4 +422,374 @@ func wisperError(
     Issue.record("Expected a WisperError, got \(type(of: error)).", sourceLocation: sourceLocation)
   }
   return nil
+}
+
+/// A real web server on this machine (127.0.0.1 only) that keeps connections open and can
+/// fall silent on one, for what only real connections can show: a request that never gets an
+/// answer, and which connection its retry travels on.
+final class QuietServer: @unchecked Sendable {
+  enum Reply: Sendable {
+    /// The whole reply, head and body. The connection stays open for the next request.
+    case answer(String)
+    /// Says nothing and keeps the connection open, like a connection that has died quietly.
+    case silence
+  }
+
+  struct Seen: Sendable {
+    var request: LocalServer.Request
+    /// Which connection carried it: 1 for the first connection a request arrived on. (A
+    /// connection that was opened but never used has no number.)
+    var connection: Int
+    var method: String { request.line.split(separator: " ").first.map(String.init) ?? "" }
+  }
+
+  let port: Int
+  private let listener: Int32
+  private let lock = NSLock()
+  private var seen: [Seen] = []
+  private var used = 0
+  private let reply: @Sendable (Seen) -> Reply
+
+  init(_ reply: @escaping @Sendable (Seen) -> Reply) throws {
+    self.reply = reply
+    let listener = socket(AF_INET, SOCK_STREAM, 0)
+    guard listener >= 0 else { throw CocoaError(.fileReadUnknown) }
+    var yes: Int32 = 1
+    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_addr.s_addr = inet_addr("127.0.0.1")
+    let length = socklen_t(MemoryLayout<sockaddr_in>.size)
+    let bound = withUnsafePointer(to: &address) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(listener, $0, length) }
+    }
+    var named = sockaddr_in()
+    var namedLength = length
+    let asked = withUnsafeMutablePointer(to: &named) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(listener, $0, &namedLength) }
+    }
+    guard bound == 0, asked == 0, listen(listener, 16) == 0 else {
+      close(listener)
+      throw CocoaError(.fileReadUnknown)
+    }
+    self.listener = listener
+    port = Int(UInt16(bigEndian: named.sin_port))
+    Thread.detachNewThread { [weak self, listener] in
+      while true {
+        let connection = accept(listener, nil, nil)
+        guard connection >= 0 else { return }
+        guard let self else {
+          close(connection)
+          close(listener)
+          return
+        }
+        Thread.detachNewThread { [weak self] in self?.serve(connection) }
+      }
+    }
+  }
+
+  // Each connection is closed by the thread that serves it, when its client lets go.
+  deinit { Listening.stop(port: port) }
+
+  var address: String { "http://127.0.0.1:\(port)/v1" }
+  var requests: [Seen] { lock.withLock { seen } }
+  /// How many connections carried a request.
+  var connections: Int { lock.withLock { used } }
+
+  static func ok(_ body: String) -> Reply {
+    .answer(
+      "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\n\r\n" + body
+    )
+  }
+
+  /// "Who are you?", with no body: what a server says to a question that carries no key.
+  static let unauthorized = Reply.answer("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
+
+  private func serve(_ connection: Int32) {
+    defer { close(connection) }
+    var number: Int?
+    var received = Data()
+    var buffer = [UInt8](repeating: 0, count: 16 * 1_024)
+    let blank = Data("\r\n\r\n".utf8)
+    var silent = false
+    while true {
+      // One whole request, if it has arrived.
+      if !silent, let split = received.range(of: blank) {
+        let lines = String(decoding: received[..<split.lowerBound], as: UTF8.self).components(
+          separatedBy: "\r\n"
+        )
+        var headers: [String: String] = [:]
+        for line in lines.dropFirst() {
+          guard let colon = line.firstIndex(of: ":") else { continue }
+          headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(
+            in: .whitespaces
+          )
+        }
+        let length = Int(headers["content-length"] ?? "0") ?? 0
+        if received.distance(from: split.upperBound, to: received.endIndex) >= length {
+          let end = received.index(split.upperBound, offsetBy: length)
+          let request = LocalServer.Request(
+            line: lines.first ?? "",
+            headers: headers,
+            body: Data(received[split.upperBound..<end])
+          )
+          received = Data(received[end...])
+          let seen = lock.withLock { () -> Seen in
+            if number == nil {
+              used += 1
+              number = used
+            }
+            let seen = Seen(request: request, connection: number ?? 0)
+            self.seen.append(seen)
+            return seen
+          }
+          switch reply(seen) {
+          case .silence:
+            silent = true
+          case .answer(let text):
+            let bytes = Array(text.utf8)
+            var sent = 0
+            while sent < bytes.count {
+              let count = bytes[sent...].withUnsafeBytes { write(connection, $0.baseAddress, $0.count) }
+              guard count > 0 else { return }
+              sent += count
+            }
+          }
+          continue
+        }
+      }
+      let count = read(connection, &buffer, buffer.count)
+      guard count > 0 else { return }
+      received.append(buffer, count: count)
+    }
+  }
+}
+
+/// A real WebSocket server on this machine (127.0.0.1 only) that plays the part of the
+/// realtime API: it takes the handshake, then hands every message to `script`.
+final class SocketServer: @unchecked Sendable {
+  /// One client, as the script sees it.
+  final class Peer: @unchecked Sendable {
+    fileprivate let connection: Int32
+    fileprivate init(_ connection: Int32) { self.connection = connection }
+
+    /// Sends one text message.
+    func say(_ text: String) {
+      let payload = Array(text.utf8)
+      var frame: [UInt8] = [0x81]
+      if payload.count < 126 {
+        frame.append(UInt8(payload.count))
+      } else if payload.count < 65_536 {
+        frame += [126, UInt8(payload.count >> 8), UInt8(payload.count & 0xFF)]
+      } else {
+        frame.append(127)
+        for shift in stride(from: 56, through: 0, by: -8) {
+          frame.append(UInt8((payload.count >> shift) & 0xFF))
+        }
+      }
+      frame += payload
+      SocketServer.write(frame, to: connection)
+    }
+
+    /// Sends one event the way the API writes them.
+    func say(_ event: [String: Any]) {
+      say(String(decoding: (try? JSONSerialization.data(withJSONObject: event)) ?? Data(), as: UTF8.self))
+    }
+
+    /// Drops the connection without a goodbye.
+    func hangUp() { shutdown(connection, SHUT_RDWR) }
+  }
+
+  let port: Int
+  private let listener: Int32
+  private let lock = NSLock()
+  private var heads: [[String: String]] = []
+  private var lines: [String] = []
+  private var got: [String] = []
+  private let accepts: Bool
+  private let script: @Sendable (_ message: [String: Any], _ peer: Peer) -> Void
+
+  /// - Parameters:
+  ///   - accepts: Whether the handshake is taken. When not, the server answers "404".
+  ///   - script: Gets each message the client sends, read as JSON.
+  init(accepts: Bool = true, _ script: @escaping @Sendable (_ message: [String: Any], _ peer: Peer) -> Void)
+    throws
+  {
+    self.accepts = accepts
+    self.script = script
+    let listener = socket(AF_INET, SOCK_STREAM, 0)
+    guard listener >= 0 else { throw CocoaError(.fileReadUnknown) }
+    var yes: Int32 = 1
+    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_addr.s_addr = inet_addr("127.0.0.1")
+    let length = socklen_t(MemoryLayout<sockaddr_in>.size)
+    let bound = withUnsafePointer(to: &address) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(listener, $0, length) }
+    }
+    var named = sockaddr_in()
+    var namedLength = length
+    let asked = withUnsafeMutablePointer(to: &named) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(listener, $0, &namedLength) }
+    }
+    guard bound == 0, asked == 0, listen(listener, 16) == 0 else {
+      close(listener)
+      throw CocoaError(.fileReadUnknown)
+    }
+    self.listener = listener
+    port = Int(UInt16(bigEndian: named.sin_port))
+    Thread.detachNewThread { [weak self, listener] in
+      while true {
+        let connection = accept(listener, nil, nil)
+        guard connection >= 0 else { return }
+        guard let self else {
+          close(connection)
+          close(listener)
+          return
+        }
+        var noSignal: Int32 = 1
+        setsockopt(connection, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
+        Thread.detachNewThread { [weak self] in self?.serve(connection) }
+      }
+    }
+  }
+
+  // Each connection is closed by the thread that serves it.
+  deinit { Listening.stop(port: port) }
+
+  var address: String { "http://127.0.0.1:\(port)/v1" }
+  /// The headers of each handshake, names in lower case.
+  var handshakes: [[String: String]] { lock.withLock { heads } }
+  /// The first line of each handshake: `GET /v1/realtime?intent=transcription HTTP/1.1`.
+  var requestLines: [String] { lock.withLock { lines } }
+  /// Every message the clients sent, as text.
+  var messages: [String] { lock.withLock { got } }
+  /// The `type` of every message the clients sent.
+  var types: [String] { events.compactMap { $0["type"] as? String } }
+  var events: [[String: Any]] {
+    messages.compactMap { (try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [String: Any] }
+  }
+
+  /// All the sound the clients appended, decoded: 16-bit samples.
+  var sound: [Int16] {
+    var samples: [Int16] = []
+    for event in events where event["type"] as? String == "input_audio_buffer.append" {
+      guard let data = Data(base64Encoded: event["audio"] as? String ?? "") else { continue }
+      data.withUnsafeBytes { raw in
+        for index in stride(from: 0, to: raw.count - 1, by: 2) {
+          samples.append(Int16(littleEndian: raw.loadUnaligned(fromByteOffset: index, as: Int16.self)))
+        }
+      }
+    }
+    return samples
+  }
+
+  fileprivate static func write(_ bytes: [UInt8], to connection: Int32) {
+    var sent = 0
+    while sent < bytes.count {
+      let count = bytes[sent...].withUnsafeBytes { Darwin.write(connection, $0.baseAddress, $0.count) }
+      guard count > 0 else { return }
+      sent += count
+    }
+  }
+
+  private func serve(_ connection: Int32) {
+    defer { close(connection) }
+    var buffer = Data()
+    var chunk = [UInt8](repeating: 0, count: 64 * 1_024)
+    /// Reads until `buffer` holds `count` bytes. False when the client went away.
+    func fill(_ count: Int) -> Bool {
+      while buffer.count < count {
+        let got = read(connection, &chunk, chunk.count)
+        guard got > 0 else { return false }
+        buffer.append(chunk, count: got)
+      }
+      return true
+    }
+    func take(_ count: Int) -> [UInt8]? {
+      guard fill(count) else { return nil }
+      let bytes = [UInt8](buffer.prefix(count))
+      buffer = Data(buffer.dropFirst(count))
+      return bytes
+    }
+
+    // The handshake.
+    let blank = Data("\r\n\r\n".utf8)
+    while buffer.range(of: blank) == nil {
+      guard fill(buffer.count + 1) else { return }
+    }
+    guard let split = buffer.range(of: blank) else { return }
+    let head = String(decoding: buffer[..<split.lowerBound], as: UTF8.self).components(separatedBy: "\r\n")
+    buffer = Data(buffer[split.upperBound...])
+    var headers: [String: String] = [:]
+    for line in head.dropFirst() {
+      guard let colon = line.firstIndex(of: ":") else { continue }
+      headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(
+        in: .whitespaces
+      )
+    }
+    lock.withLock {
+      heads.append(headers)
+      lines.append(head.first ?? "")
+    }
+    guard accepts, let key = headers["sec-websocket-key"] else {
+      SocketServer.write(
+        Array("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".utf8),
+        to: connection
+      )
+      return
+    }
+    let accept = Data(Insecure.SHA1.hash(data: Data((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").utf8)))
+      .base64EncodedString()
+    let reply =
+      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+      + "Sec-WebSocket-Accept: \(accept)\r\n\r\n"
+    SocketServer.write(Array(reply.utf8), to: connection)
+
+    // Messages.
+    let peer = Peer(connection)
+    var message: [UInt8] = []
+    while true {
+      guard let start = take(2) else { return }
+      let last = start[0] & 0x80 != 0
+      let kind = start[0] & 0x0F
+      var length = Int(start[1] & 0x7F)
+      if length == 126 {
+        guard let more = take(2) else { return }
+        length = Int(more[0]) << 8 | Int(more[1])
+      } else if length == 127 {
+        guard let more = take(8) else { return }
+        length = more.reduce(0) { $0 << 8 | Int($1) }
+      }
+      var mask: [UInt8] = [0, 0, 0, 0]
+      if start[1] & 0x80 != 0 {
+        guard let key = take(4) else { return }
+        mask = key
+      }
+      guard var payload = take(length) else { return }
+      for index in payload.indices { payload[index] ^= mask[index % 4] }
+      switch kind {
+      case 0x8:
+        // Goodbye: say it back and leave.
+        SocketServer.write([0x88, 0x00], to: connection)
+        return
+      case 0x9:
+        SocketServer.write([0x8A, UInt8(min(payload.count, 125))] + payload.prefix(125), to: connection)
+      case 0x0, 0x1:
+        message += payload
+        guard last else { continue }
+        let text = String(decoding: message, as: UTF8.self)
+        message = []
+        lock.withLock { got.append(text) }
+        if let json = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] {
+          script(json, peer)
+        }
+      default:
+        continue
+      }
+    }
+  }
 }

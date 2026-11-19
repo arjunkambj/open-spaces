@@ -1,0 +1,45 @@
+---
+import { download, hero, links } from "../content";
+import homeDark from "../images/home-dark.png";
+import homeLight from "../images/home-light.png";
+import { latestRelease } from "../release";
+import AppPicture from "./AppPicture.astro";
+import DownloadButton from "./DownloadButton.astro";
+import Pill from "./Pill.astro";
+
+const { version } = await latestRelease();
+---
+
+<section id="download" class="mx-auto w-full max-w-6xl px-5 pt-16 sm:px-8 sm:pt-24">
+  <div class="mx-auto max-w-3xl text-center">
+    <p class="text-sm font-medium text-stone-600 dark:text-stone-400">{hero.status}</p>
+    <h1 class="mt-5 text-5xl font-semibold tracking-tight text-balance sm:text-6xl lg:text-7xl">{hero.headline}</h1>
+    <p class="mx-auto mt-6 max-w-2xl text-lg text-pretty text-stone-600 sm:text-xl dark:text-stone-300">{hero.lead}</p>
+    <div class="mt-9 flex flex-wrap items-center justify-center gap-x-6 gap-y-4">
+      <DownloadButton />
+      <a href={links.repo} class="link">{hero.github}</a>
+    </div>
+    <p class="mt-5 text-sm text-stone-600 dark:text-stone-400">
+      Version {version} · {download.requirements}
+    </p>
+    <p class="mx-auto mt-2 max-w-xl text-sm text-pretty text-stone-600 dark:text-stone-400">
+      {download.firstLaunch}{" "}<a href={links.install} class="link">{download.firstLaunchLink}</a>
+    </p>
+  </div>
+
+  <!-- A desk: the app window, and under it the pill, where it sits on a real screen. -->
+  <div class="mt-14 rounded-3xl bg-stone-200/70 px-3 pt-3 pb-5 sm:mt-20 sm:px-10 sm:pt-10 sm:pb-7 dark:bg-stone-900">
+    <div class="window">
+      <AppPicture
+        light={homeLight}
+        dark={homeDark}
+        alt={hero.pictureAlt}
+        sizes="(min-width: 1152px) 1008px, (min-width: 640px) calc(100vw - 144px), calc(100vw - 64px)"
+        first
+      />
+    </div>
+    <div class="mt-5 flex justify-center sm:mt-7">
+      <Pill label={hero.pillLabel} />
+    </div>
+  </div>
+</section>

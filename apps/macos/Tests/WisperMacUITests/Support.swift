@@ -34,6 +34,8 @@ struct Stage {
   /// - transcribeDelay: how long turning speech into text takes.
   /// - withMonitor: give the controls a shortcut monitor (not started), to see what they ask of it.
   /// - host: what the app offers the shared screens, such as a check for updates.
+  /// - globeKey: the fn-key setting the controls see; the default reads "Do Nothing".
+  /// - pillSpots: where the pill was dragged to; the default remembers nothing.
   init(
     host: HostActions = HostActions(),
     hasKey: Bool = true,
@@ -41,7 +43,9 @@ struct Stage {
     revealDelay: Duration = .zero,
     noticeTime: Duration = .seconds(60),
     transcribeDelay: Duration = .zero,
-    withMonitor: Bool = false
+    withMonitor: Bool = false,
+    globeKey: GlobeKeySetting? = nil,
+    pillSpots: PillSpots? = nil
   ) async {
     capture = FakeAudioCapture(failure: captureFailure)
     model = AppModel(
@@ -62,7 +66,14 @@ struct Stage {
     )
     await model.load()
     monitor = withMonitor ? ShortcutMonitor() : nil
-    controls = MacControls(model: model, monitor: monitor, revealDelay: revealDelay, noticeTime: noticeTime) {
+    controls = MacControls(
+      model: model,
+      monitor: monitor,
+      revealDelay: revealDelay,
+      noticeTime: noticeTime,
+      globeKey: globeKey,
+      pillSpots: pillSpots
+    ) {
       [heard] cue in heard.sounds.append(cue)
     }
     controls.open = { [opened] in opened.destinations.append($0) }
@@ -105,5 +116,41 @@ struct Stage {
 func settle(_ condition: @MainActor () -> Bool) async {
   for _ in 0..<400 where !condition() {
     try? await Task.sleep(for: .milliseconds(5))
+  }
+}
+
+/// Stands in for the Mac's fn (Globe) key setting. Nothing on the Mac is read or changed.
+final class FakeGlobeSystem: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stored: Int?
+  private var written: [Int] = []
+  private let outcome: GlobeKey.Outcome
+
+  /// - value: what "Press 🌐 key to" is set to (0 to 3), or `nil` for never chosen.
+  /// - outcome: how a change goes. A failed one leaves the value as it was.
+  init(value: Int?, outcome: GlobeKey.Outcome = .now) {
+    stored = value
+    self.outcome = outcome
+  }
+
+  /// Every value that was written, in order.
+  var writes: [Int] { lock.withLock { written } }
+
+  var value: Int? {
+    get { lock.withLock { stored } }
+    set { lock.withLock { stored = newValue } }
+  }
+
+  var system: GlobeKey.System {
+    GlobeKey.System(
+      read: { self.value },
+      write: { value in
+        self.lock.withLock {
+          self.written.append(value)
+          if self.outcome != .failed { self.stored = value }
+        }
+        return self.outcome
+      }
+    )
   }
 }

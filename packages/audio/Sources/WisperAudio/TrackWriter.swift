@@ -40,6 +40,7 @@ final class TrackWriter {
   private let slack: Int
   private let emit: (AudioChunk) -> Void
   private let report: ((Float) -> Void)?
+  private let live: (([Float]) -> Void)?
 
   private var resampler: Resampler?
   /// 16 kHz samples waiting for a full step.
@@ -67,19 +68,22 @@ final class TrackWriter {
   ///   - chunkSeconds: Wanted file length, or `nil` for one file.
   ///   - emit: Called with each finished file.
   ///   - report: Called with loudness about 20 times a second, when wanted.
+  ///   - live: Called with each run of samples as it goes into the file (16 kHz), when wanted.
   init(
     track: AudioTrack,
     directory: URL,
     origin: TimeInterval,
     chunkSeconds: TimeInterval?,
     emit: @escaping (AudioChunk) -> Void,
-    report: ((Float) -> Void)?
+    report: ((Float) -> Void)?,
+    live: (([Float]) -> Void)? = nil
   ) {
     self.track = track
     self.directory = directory
     self.origin = origin
     self.emit = emit
     self.report = report
+    self.live = live
     if let chunkSeconds, chunkSeconds > 0 {
       let wanted = max(Tuning.step, Int(chunkSeconds * Encoding.sampleRate))
       target = wanted
@@ -224,7 +228,11 @@ final class TrackWriter {
       openFile()
     }
     // The disk is full or the folder is gone: keep what was written so far.
-    if let open, !open.write(samples) { closeFile() }
+    if let open, !open.write(samples) {
+      closeFile()
+    } else if let live {
+      live(Array(samples))
+    }
   }
 
   private func openFile() {

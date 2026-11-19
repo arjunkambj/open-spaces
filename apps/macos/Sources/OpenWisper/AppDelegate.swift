@@ -50,7 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ) { [weak hub] in
       hub?.show()
     }
-    watches.append(Watch({ navigation.theme }) { theme in NSApp.appearance = theme.appearance })
+    // The theme is the main window's own. Menus and the system's dialogs keep the Mac's look.
+    watches.append(Watch({ navigation.theme }) { [weak hub] theme in hub?.setTheme(theme) })
     statusItem = StatusItem(model: parts.model, controls: parts.controls, updater: parts.updater)
     let pill = PillPanel(model: parts.model, controls: parts.controls)
     pill.show()

@@ -133,7 +133,7 @@ import WisperMac
     // It comes back for as long as something is going on.
     stage.controls.toggleHandsFree()
     await settle { !pointer.hotFrame.isEmpty }
-    #expect(pointer.hotFrame.height == 32)
+    #expect(pointer.hotFrame.height == 28)
     stage.controls.cancel()
     await settle { pointer.hotFrame.isEmpty }
     #expect(pointer.hotFrame.isEmpty)
@@ -279,7 +279,7 @@ import WisperMac
 
     let first = HubNavigation(defaults: defaults)
     #expect(first.section == .home)
-    #expect(first.theme == .system)
+    #expect(first.theme == .light, "Light until the person chooses, whatever the Mac is set to")
     first.section = .snippets
     first.theme = .dark
     first.sidebarHidden = true

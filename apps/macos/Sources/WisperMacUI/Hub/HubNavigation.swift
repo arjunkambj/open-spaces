@@ -6,7 +6,8 @@ import WisperDomain
 /// Settings is up, and the few choices about the window itself.
 ///
 /// The section, the sidebar and the theme are remembered between launches
-/// when the hub is given a `UserDefaults`.
+/// when the hub is given a `UserDefaults`. Until the user picks a theme, the
+/// app is light, whatever the Mac itself is set to.
 @MainActor
 @Observable
 public final class HubNavigation {
@@ -41,6 +42,9 @@ public final class HubNavigation {
   /// Light, dark, or whatever the Mac is set to.
   public enum Theme: String, CaseIterable, Sendable, Identifiable {
     case system, light, dark
+
+    /// The theme of an app whose user never chose one.
+    public static let initial = Theme.light
 
     public var id: String { rawValue }
 
@@ -98,7 +102,7 @@ public final class HubNavigation {
     self.defaults = defaults
     section = defaults?.string(forKey: Key.section).flatMap(Section.init(rawValue:)) ?? .home
     sidebarHidden = defaults?.bool(forKey: Key.sidebarHidden) ?? false
-    theme = defaults?.string(forKey: Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
+    theme = defaults?.string(forKey: Key.theme).flatMap(Theme.init(rawValue:)) ?? .initial
   }
 
   /// Goes to a section and closes Settings.

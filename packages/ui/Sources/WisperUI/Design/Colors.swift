@@ -64,26 +64,30 @@ struct ColorPair: Sendable, Equatable {
 
 extension Wisper {
   /// The raw values behind `Wisper.Color`. Tests check their contrast.
+  ///
+  /// The greys are the "stone" scale (a warm grey: 50 `FAFAF9`, 100 `F5F5F4`, 200 `E7E5E4`,
+  /// 300 `D6D3D1`, 400 `A8A29E`, 500 `78716C`, 600 `57534E`, 700 `44403C`, 800 `292524`,
+  /// 900 `1C1917`, 950 `0C0A09`). Keep new greys on that scale, or between two of its steps.
   enum Palette {
-    static let window = ColorPair(light: 0xF4F3F0, dark: 0x161513)
-    static let panel = ColorPair(light: 0xFBFAF8, dark: 0x1D1C19)
-    static let surface = ColorPair(light: 0xF3F2EE, dark: 0x262521)
-    static let surfaceHover = ColorPair(light: 0xEEECE7, dark: 0x2D2C27)
-    static let surfaceSelected = ColorPair(light: 0xE6E3DC, dark: 0x383632)
-    static let raised = ColorPair(light: 0xFFFFFF, dark: 0x2C2B27)
+    static let window = ColorPair(light: 0xF5F5F4, dark: 0x0C0A09)
+    static let panel = ColorPair(light: 0xFAFAF9, dark: 0x1C1917)
+    static let surface = ColorPair(light: 0xF5F5F4, dark: 0x292524)
+    static let surfaceHover = ColorPair(light: 0xEEEDEC, dark: 0x363230)
+    static let surfaceSelected = ColorPair(light: 0xE7E5E4, dark: 0x44403C)
+    static let raised = ColorPair(light: 0xFFFFFF, dark: 0x292524)
     static let border = ColorPair(
-      light: .init(hex: 0x1C1B19, alpha: 0.10),
-      dark: .init(hex: 0xF2F0EB, alpha: 0.10)
+      light: .init(hex: 0x1C1917, alpha: 0.10),
+      dark: .init(hex: 0xF5F5F4, alpha: 0.10)
     )
     static let borderStrong = ColorPair(
-      light: .init(hex: 0x1C1B19, alpha: 0.20),
-      dark: .init(hex: 0xF2F0EB, alpha: 0.22)
+      light: .init(hex: 0x1C1917, alpha: 0.20),
+      dark: .init(hex: 0xF5F5F4, alpha: 0.22)
     )
-    static let textPrimary = ColorPair(light: 0x1C1B19, dark: 0xF2F0EB)
-    static let textSecondary = ColorPair(light: 0x5C5952, dark: 0xB8B4AB)
-    static let textTertiary = ColorPair(light: 0x6E6A63, dark: 0x9C988F)
-    static let inverse = ColorPair(light: 0x1C1B19, dark: 0xF2F0EB)
-    static let onInverse = ColorPair(light: 0xFFFFFF, dark: 0x1C1B19)
+    static let textPrimary = ColorPair(light: 0x1C1917, dark: 0xF5F5F4)
+    static let textSecondary = ColorPair(light: 0x57534E, dark: 0xD6D3D1)
+    static let textTertiary = ColorPair(light: 0x6B6560, dark: 0xA8A29E)
+    static let inverse = ColorPair(light: 0x1C1917, dark: 0xF5F5F4)
+    static let onInverse = ColorPair(light: 0xFFFFFF, dark: 0x1C1917)
     static let accent = ColorPair(light: 0x1F6A4D, dark: 0x79D2A8)
     static let onAccent = ColorPair(light: 0xFFFFFF, dark: 0x0E2018)
     static let success = ColorPair(light: 0x236B37, dark: 0x82D694)
@@ -92,12 +96,12 @@ extension Wisper {
     static let onDanger = ColorPair(light: 0xFFFFFF, dark: 0x2B0D09)
     static let recording = ColorPair(light: 0xE0443E, dark: 0xFF5F57)
     static let scrim = ColorPair(
-      light: .init(hex: 0x1C1B19, alpha: 0.36),
+      light: .init(hex: 0x1C1917, alpha: 0.36),
       dark: .init(hex: 0x000000, alpha: 0.56)
     )
-    static let track = ColorPair(light: 0xD5D1C8, dark: 0x4B4943)
-    static let knob = ColorPair(light: 0xFFFFFF, dark: 0xE9E6DF)
-    static let segment = ColorPair(light: 0xFFFFFF, dark: 0x55524C)
+    static let track = ColorPair(light: 0xD6D3D1, dark: 0x57534E)
+    static let knob = ColorPair(light: 0xFFFFFF, dark: 0xE7E5E4)
+    static let segment = ColorPair(light: 0xFFFFFF, dark: 0x57534E)
   }
 
   /// Semantic colours. Each follows light and dark mode by itself.

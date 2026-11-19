@@ -96,6 +96,9 @@ extension WisperError {
       return "\(host) did not accept your API key. Check it in Settings."
     case .rateLimited:
       return "\(host) is limiting requests right now. Try again in a moment."
+    case .network(WisperError.noAnswerDetail):
+      return "\(host) did not answer in time, even on a second try. Check that the server is running"
+        + " and the address in Settings is right."
     case .network(let detail):
       return "Could not reach \(host). Check that the server is running and the address in Settings is right."
         + " (\(detail))"

@@ -20,6 +20,8 @@ public struct MenuEntry: Equatable, Sendable {
     /// Keep the resting pill out of sight for an hour, or bring it back.
     case hidePill
     case showPill
+    /// Put the pill back at the middle of the bottom edge.
+    case resetPillPosition
     case quit
   }
 
@@ -116,10 +118,16 @@ public enum MenuBarContent {
   ) -> [MenuEntry] {
     let settings = model.settings
     let isHidden = controls.pillHiddenUntil.map { $0 > Date() } ?? false
-    return [
+    var entries = [
       isHidden
         ? MenuEntry("Show the Pill Again", .action(.showPill))
-        : MenuEntry("Hide for an Hour", .action(.hidePill)),
+        : MenuEntry("Hide for an Hour", .action(.hidePill))
+    ]
+    // Only once it was moved: until then there is nothing to put back.
+    if controls.pillSpots.isMoved {
+      entries.append(MenuEntry("Reset Pill Position", .action(.resetPillPosition)))
+    }
+    return entries + [
       MenuEntry("Settings…", .action(.openSettings)),
       .separator,
       MenuEntry("Microphone", .submenu(microphoneEntries(microphones, chosen: settings.microphoneID))),
@@ -144,6 +152,7 @@ public enum MenuBarContent {
     case .pickMicrophone(let id): model.update { $0.microphoneID = id }
     case .hidePill: controls.hidePill(for: .seconds(3600))
     case .showPill: controls.hidePill(for: nil)
+    case .resetPillPosition: controls.pillSpots.reset()
     case .quit: NSApplication.shared.terminate(nil)
     }
   }

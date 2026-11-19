@@ -52,6 +52,8 @@ enum KeyInput: Sendable, Equatable {
 /// - A shortcut with a key fires on key down, ignores key repeat, and ends on
 ///   key up or when one of its modifiers lifts, whichever comes first.
 /// - Escape cancels while anything is held, or while `cancelsOnEscape` is on.
+/// - The Globe key's own key press (see `globeKeyCode`) is never "another key": it changes
+///   nothing that is held. It is kept from the system while `holdsBackGlobeKey` is on.
 struct ShortcutMatcher: Sendable {
   struct Output: Equatable, Sendable {
     var events: [ShortcutEvent] = []
@@ -63,9 +65,16 @@ struct ShortcutMatcher: Sendable {
   /// "the modifier was meant for that key", in seconds.
   static let slipWindow: TimeInterval = 1.0
 
+  /// The key press macOS makes up when fn (Globe) is pressed and let go with nothing else.
+  /// It comes besides the fn key's own modifier change, and it is what sets off the system's
+  /// Globe-key action (the emoji picker, the next keyboard language).
+  static let globeKeyCode: UInt16 = 179
+
   var shortcuts: [ShortcutAction: KeyCombo] = [:]
   /// Escape cancels even when no shortcut is held (hands-free dictation is running).
   var cancelsOnEscape = false
+  /// Keep the Globe key's own key press from the system, so its action does not run.
+  var holdsBackGlobeKey = false
 
   /// The modifier keys the matcher believes are held.
   private(set) var modifiers: Set<KeyCombo.Modifier> = []
@@ -99,6 +108,9 @@ struct ShortcutMatcher: Sendable {
     switch input {
     case .modifiers(let new):
       return Output(events: changeModifiers(to: new, at: time, mayFire: true))
+    case .keyDown(Self.globeKeyCode, _, _), .keyUp(Self.globeKeyCode):
+      // Part of pressing fn itself, not a second key: a held push to talk carries on.
+      return Output(swallow: holdsBackGlobeKey)
     case .keyDown(let code, let eventModifiers, let isRepeat):
       return keyDown(code, eventModifiers: eventModifiers, isRepeat: isRepeat, at: time)
     case .keyUp(let code):

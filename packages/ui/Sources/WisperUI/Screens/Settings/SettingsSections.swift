@@ -7,6 +7,8 @@ import WisperEngine
 struct GeneralSettings: View {
   /// The platform's own row for how the app looks, when it has one.
   var appearance: AnyView?
+  /// The Mac app's own row about the floating pill, when it has one.
+  var pill: AnyView?
 
   @Environment(AppModel.self) private var model
   @Environment(\.wisperIdiom) private var idiom
@@ -68,9 +70,13 @@ struct GeneralSettings: View {
           SettingsDivider()
           ToggleRow(
             "Show the floating pill",
-            description: "A small bar at the bottom of the screen. It shows when Open Wisper is listening.",
+            description: "A small bar at the edge of the screen. It shows when Open Wisper is listening.",
             isOn: model.settingBinding(\.showPill)
           )
+          if let pill {
+            SettingsDivider()
+            pill
+          }
           SettingsDivider()
           ToggleRow("Open at login", isOn: model.settingBinding(\.launchAtLogin))
         }

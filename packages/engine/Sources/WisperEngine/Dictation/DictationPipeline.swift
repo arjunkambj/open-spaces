@@ -23,6 +23,13 @@ struct DictationPipeline: Sendable {
     var raw = ""
     /// The text to insert.
     var text = ""
+    /// How long sending the audio and waiting for the transcript took (or, when it failed, how
+    /// long it took to fail), in thousandths of a second.
+    var transcribeMs: Int?
+    /// How long the language model took, when it was asked.
+    var cleanUpMs: Int?
+    /// Where the words came from: the live session, or the uploaded file.
+    var path = Dictation.Timing.Path.file
 
     /// With history turned off nothing about a dictation stays on disk, audio included.
     var keepsHistory: Bool { settings?.historyRetention != .never }
@@ -51,18 +58,41 @@ struct DictationPipeline: Sendable {
     max(4_000, 2 * length + 2_000)
   }
 
+  /// Gets ready for a `run` that will follow soon: the transcriber opens or checks its
+  /// connection. Nothing that was said is sent. Does nothing while the server address in the
+  /// settings cannot be used.
+  func prepare() async {
+    guard (try? await library.settings().apiServer()) != nil else { return }
+    await transcriber.prepare()
+  }
+
+  /// The longest the tidying of `heard` may take: `limit`, or less for a short dictation
+  /// tidied by OpenAI. There a few words are done in about a second, so waiting twelve for
+  /// them helps nobody. A long dictation takes the model longer to write out, and gets up to
+  /// the whole limit. So does a server of the person's own, which may be a slow one.
+  static func cleanUpTime(for heard: String, limit: TimeInterval, openAI: Bool) -> TimeInterval {
+    openAI ? min(limit, 5 + Double(DictationText.wordCount(heard)) / 12) : limit
+  }
+
   /// - Parameters:
   ///   - context: where the text is going.
   ///   - selection: for a command, the text it is to change. Empty when it is to write something new.
   ///   - cleanUpLimit: the longest the tidying of a dictation may take, in seconds. After that
   ///     the words go in as they were heard.
+  ///   - live: the live session that heard this recording while it was made, if there was one.
+  ///     It is ended before this returns.
+  ///   - duration: the length of the recording in seconds. Only used with `live`.
   func run(
     audio: URL,
     mode: DictationMode,
     context: DictationContext,
     selection: String,
-    cleanUpLimit: TimeInterval
+    cleanUpLimit: TimeInterval,
+    live: LiveTake? = nil,
+    duration: TimeInterval = 0
   ) async -> Outcome {
+    // Whatever happens below, the live session does not outlive this call.
+    defer { live?.cancel() }
     var draft = Draft(context: context)
     do {
       let settings = try await library.settings()
@@ -74,14 +104,20 @@ struct DictationPipeline: Sendable {
       let snippets = mode == .dictation ? try await library.snippets() : []
       let spellings = Self.unique(words.map(\.text))
 
-      let transcript = try await transcriber.transcribe(
+      let asked = ContinuousClock.now
+      defer { if draft.transcribeMs == nil { draft.transcribeMs = Self.milliseconds(since: asked) } }
+      let (transcript, path) = try await heard(
         TranscriptionRequest(
           audio: audio,
           model: settings.transcriptionModel,
           language: Self.clean(settings.language),
           vocabulary: Self.unique(spellings + [settings.userName])
-        )
+        ),
+        live: live,
+        duration: duration
       )
+      draft.path = path
+      draft.transcribeMs = Self.milliseconds(since: asked)
       try Task.checkCancellation()
       draft.raw = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !draft.raw.isEmpty else { return .silence }
@@ -95,7 +131,7 @@ struct DictationPipeline: Sendable {
       )
       switch mode {
       case .dictation:
-        draft.text = await dictated(
+        (draft.text, draft.cleanUpMs) = await dictated(
           heard,
           settings: settings,
           setting: setting,
@@ -103,6 +139,8 @@ struct DictationPipeline: Sendable {
           limit: cleanUpLimit
         )
       case .command:
+        let began = ContinuousClock.now
+        defer { draft.cleanUpMs = Self.milliseconds(since: began) }
         draft.text = try await commanded(heard, selection: selection, settings: settings, setting: setting)
       }
       try Task.checkCancellation()
@@ -114,19 +152,21 @@ struct DictationPipeline: Sendable {
     }
   }
 
-  /// The words that were said, tidied, with snippets expanded. Never fails:
-  /// when the model cannot be used, the person still gets what they said.
+  /// The words that were said, tidied, with snippets expanded, and how long the language model
+  /// took when it was asked. Never fails: when the model cannot be used, the person still gets
+  /// what they said.
   private func dictated(
     _ heard: String,
     settings: Settings,
     setting: DictationPrompts.Setting,
     snippets: [Snippet],
     limit: TimeInterval
-  ) async -> String {
+  ) async -> (text: String, cleanUpMs: Int?) {
     let expansions = DictationText.expansions(from: snippets)
-    if let snippet = expansions.whole(heard) { return snippet }
+    if let snippet = expansions.whole(heard) { return (snippet, nil) }
 
     var text = DictationText.tidy(heard, style: setting.style, spellings: setting.spellings)
+    var took: Int?
     if settings.smartFormatting, DictationText.wordCount(heard) >= Self.wordsWorthCleaning {
       let prompt = DictationPrompts.cleanUp(
         transcript: heard,
@@ -141,14 +181,21 @@ struct DictationPipeline: Sendable {
         user: prompt.user,
         effort: CompletionRequest.Effort.none
       )
-      if let reply = await reply(to: request, within: limit),
+      let began = ContinuousClock.now
+      let patience = Self.cleanUpTime(
+        for: heard,
+        limit: limit,
+        openAI: (try? settings.apiServer())?.isOpenAI ?? false
+      )
+      if let reply = await reply(to: request, within: patience),
         let cleaned = DictationText.acceptedCleanUp(reply, of: heard)
       {
         text = cleaned
       }
+      took = Self.milliseconds(since: began)
     }
     // Snippets go in last so the model can never reword them.
-    return expansions.apply(to: text)
+    return (expansions.apply(to: text), took)
   }
 
   /// The model's answer, or `nil` when it fails or takes longer than `seconds`. The words as
@@ -199,7 +246,14 @@ struct DictationPipeline: Sendable {
     return leading + text + trailing
   }
 
-  private static func clean(_ value: String?) -> String? {
+  /// Whole thousandths of a second from `start` until now.
+  static func milliseconds(since start: ContinuousClock.Instant) -> Int {
+    let taken = ContinuousClock.now - start
+    let seconds = Double(taken.components.seconds) + Double(taken.components.attoseconds) / 1e18
+    return max(0, Int((seconds * 1_000).rounded()))
+  }
+
+  static func clean(_ value: String?) -> String? {
     guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
       return nil
     }
@@ -207,7 +261,7 @@ struct DictationPipeline: Sendable {
   }
 
   /// The non-empty values, trimmed, each once, in their first order.
-  private static func unique(_ values: [String]) -> [String] {
+  static func unique(_ values: [String]) -> [String] {
     var seen: Set<String> = []
     return values.compactMap(clean).filter { seen.insert($0).inserted }
   }

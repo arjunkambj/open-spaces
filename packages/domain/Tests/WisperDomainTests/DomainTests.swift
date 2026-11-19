@@ -146,3 +146,103 @@ import Testing
   #expect(meeting.transcriptText.contains("Me: a"))
   #expect(meeting.markdown().contains("# Odd times"))
 }
+
+@Test func dictationTimingsRoundTripAndNeverCostAnEntry() throws {
+  let encoder = JSONEncoder()
+  encoder.dateEncodingStrategy = .iso8601
+  let decoder = JSONDecoder()
+  decoder.dateDecodingStrategy = .iso8601
+  let timing = Dictation.Timing(path: .live, captureMs: 120, transcribeMs: 640, insertMs: 12, totalMs: 801)
+  let dictation = Dictation(rawText: "hi", text: "Hi", duration: 1, timing: timing)
+
+  let back = try decoder.decode(Dictation.self, from: encoder.encode(dictation))
+  #expect(back.timing == timing)
+  #expect(back.timing?.cleanUpMs == nil)
+
+  // An entry from before timings were kept.
+  let plain = try decoder.decode(
+    Dictation.self,
+    from: encoder.encode(Dictation(rawText: "", text: "x", duration: 1))
+  )
+  #expect(plain.timing == nil)
+
+  // Written by a newer version, or by hand: what cannot be read is left out, and the entry stays.
+  func entry(timing: String) throws -> Dictation {
+    let json = """
+      {"id": "00000000-0000-4000-8000-000000000001", "createdAt": "2026-11-19T09:00:00Z",
+       "rawText": "hi", "text": "Hi", "duration": 1, "timing": \(timing)}
+      """
+    return try decoder.decode(Dictation.self, from: Data(json.utf8))
+  }
+  let odd = try entry(
+    timing: #"{"path": "telepathy", "transcribeMs": 12.6, "insertMs": "soon", "totalMs": -4, "more": 1}"#
+  )
+  #expect(odd.timing == Dictation.Timing(transcribeMs: 13))
+  #expect(try entry(timing: #""fast""#).timing == nil)
+  #expect(try entry(timing: "null").text == "Hi")
+}
+
+@Test func aServerThatDoesNotAnswerIsNotCalledAnInternetProblem() throws {
+  #expect(
+    WisperError.noAnswer.errorDescription
+      == "OpenAI did not answer in time, even on a second try. Try again in a moment."
+  )
+  let local = try APIServer(address: "http://localhost:11434")
+  #expect(
+    WisperError.noAnswer.message(server: local)
+      == "localhost did not answer in time, even on a second try. Check that the server is running"
+      + " and the address in Settings is right."
+  )
+  // Still a network error to code that sorts errors by kind.
+  if case .network = WisperError.noAnswer {} else { Issue.record("noAnswer must be a network error") }
+}
+
+@Test func theFakeTranscriberCountsGettingReady() async {
+  let fake = FakeTranscriber(text: "hi")
+  let transcriber: any Transcriber = fake
+  await transcriber.prepare()
+  await transcriber.prepare()
+  #expect(fake.preparations == 2)
+}
+
+@Test func theFakeCaptureHandsOverLiveSoundOnlyWhenAsked() async throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let capture = FakeAudioCapture(stopDuration: 2)
+
+  let asked = try await capture.start(CaptureRequest(directory: directory, liveFrames: true))
+  await asked.stop()
+  var samples = 0
+  for await frames in asked.frames { samples += frames.samples.count }
+  // As much sound as the file it wrote is long.
+  #expect(samples == 2 * 16_000)
+
+  let plain = try await capture.start(CaptureRequest(directory: directory))
+  await plain.stop()
+  var any = false
+  for await _ in plain.frames { any = true }
+  #expect(!any)
+}
+
+@Test func theFakeLiveTranscriberRemembersWhatItWasHanded() async throws {
+  let fake = FakeLiveTranscriber { session in Transcript(text: "\(session.sampleCount) samples") }
+  let live: any LiveTranscriber = fake
+
+  let session = try await live.open(
+    LiveTranscriptionRequest(model: "m", language: "en", vocabulary: ["Acme"])
+  )
+  session.send(AudioFrames(samples: [0, 0.5, -0.5], sampleRate: 16_000))
+  session.send(AudioFrames(samples: [0.25], sampleRate: 16_000))
+
+  #expect(try await session.finish().text == "4 samples")
+  #expect(fake.requests.map(\.model) == ["m"])
+  #expect(fake.sessions.first?.isFinished == true)
+  #expect(fake.sessions.first?.isCancelled == false)
+
+  let refusing = FakeLiveTranscriber(openFailure: .rateLimited) { _ in Transcript(text: "") }
+  await #expect(throws: WisperError.rateLimited) {
+    _ = try await refusing.open(LiveTranscriptionRequest(model: "m"))
+  }
+  #expect(refusing.sessions.isEmpty)
+}

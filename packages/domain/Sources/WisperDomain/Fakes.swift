@@ -218,10 +218,94 @@ public final class FakeTranscriber: Transcriber, @unchecked Sendable {
   }
 
   public var requests: [TranscriptionRequest] { lock.withLock { seen } }
+  /// How many times `prepare` was called.
+  public var preparations: Int { lock.withLock { prepared } }
+  private var prepared = 0
 
   public func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
     lock.withLock { seen.append(request) }
     return try await reply(request)
+  }
+
+  public func prepare() async {
+    lock.withLock { prepared += 1 }
+  }
+}
+
+/// Takes sound as it is "recorded" and answers `finish` with `reply`. Remembers every session.
+public final class FakeLiveTranscriber: LiveTranscriber, @unchecked Sendable {
+  private let lock = NSLock()
+  private var asked: [LiveTranscriptionRequest] = []
+  private var opened: [Session] = []
+  private let reply: @Sendable (Session) async throws -> Transcript
+  private let openFailure: WisperError?
+
+  /// - Parameters:
+  ///   - openFailure: When set, `open` throws it.
+  ///   - reply: What `finish` returns (or throws) for a session.
+  public init(
+    openFailure: WisperError? = nil,
+    reply: @escaping @Sendable (Session) async throws -> Transcript
+  ) {
+    self.openFailure = openFailure
+    self.reply = reply
+  }
+
+  public convenience init(text: String) {
+    self.init { _ in Transcript(text: text) }
+  }
+
+  /// Every request `open` got, also the ones it refused.
+  public var requests: [LiveTranscriptionRequest] { lock.withLock { asked } }
+  /// The sessions opened so far, oldest first.
+  public var sessions: [Session] { lock.withLock { opened } }
+
+  public func open(_ request: LiveTranscriptionRequest) async throws -> any LiveTranscription {
+    lock.withLock { asked.append(request) }
+    if let openFailure { throw openFailure }
+    let session = Session(reply: reply)
+    lock.withLock { opened.append(session) }
+    return session
+  }
+
+  public final class Session: LiveTranscription, @unchecked Sendable {
+    public let partials: AsyncStream<String>
+    private let partialFeed: AsyncStream<String>.Continuation
+    private let reply: @Sendable (Session) async throws -> Transcript
+    private let lock = NSLock()
+    private var got: [AudioFrames] = []
+    private var finishes = 0
+    private var cancelled = false
+
+    init(reply: @escaping @Sendable (Session) async throws -> Transcript) {
+      self.reply = reply
+      (partials, partialFeed) = AsyncStream.makeStream(of: String.self)
+    }
+
+    /// The sound handed over so far.
+    public var received: [AudioFrames] { lock.withLock { got } }
+    /// How many samples were handed over so far.
+    public var sampleCount: Int { lock.withLock { got.reduce(0) { $0 + $1.samples.count } } }
+    public var isFinished: Bool { lock.withLock { finishes > 0 } }
+    public var isCancelled: Bool { lock.withLock { cancelled } }
+
+    /// Reports `text` as what was heard so far.
+    public func hear(_ text: String) { partialFeed.yield(text) }
+
+    public func send(_ frames: AudioFrames) {
+      lock.withLock { got.append(frames) }
+    }
+
+    public func finish() async throws -> Transcript {
+      lock.withLock { finishes += 1 }
+      defer { partialFeed.finish() }
+      return try await reply(self)
+    }
+
+    public func cancel() {
+      lock.withLock { cancelled = true }
+      partialFeed.finish()
+    }
   }
 }
 
@@ -288,8 +372,10 @@ public final class FakeAudioCapture: AudioCapture, @unchecked Sendable {
   public final class Session: CaptureSession, @unchecked Sendable {
     public let levels: AsyncStream<Float>
     public let chunks: AsyncStream<AudioChunk>
+    public let frames: AsyncStream<AudioFrames>
     private let levelContinuation: AsyncStream<Float>.Continuation
     private let chunkContinuation: AsyncStream<AudioChunk>.Continuation
+    private let frameContinuation: AsyncStream<AudioFrames>.Continuation
     private let request: CaptureRequest
     private let stopDuration: TimeInterval
     private let lock = NSLock()
@@ -302,16 +388,26 @@ public final class FakeAudioCapture: AudioCapture, @unchecked Sendable {
       self.stopDuration = stopDuration
       (levels, levelContinuation) = AsyncStream.makeStream(of: Float.self)
       (chunks, chunkContinuation) = AsyncStream.makeStream(of: AudioChunk.self)
+      (frames, frameContinuation) = AsyncStream.makeStream(of: AudioFrames.self)
+      if !request.liveFrames || request.chunkSeconds != nil { frameContinuation.finish() }
       levelContinuation.yield(0.4)
     }
+
+    /// The rate of the sound in `frames`.
+    public static let frameRate = 16_000.0
 
     public var isEnded: Bool { lock.withLock { ended } }
 
     /// Sends a loudness value to `levels`.
     public func setLevel(_ level: Float) { levelContinuation.yield(level) }
 
-    /// Finishes a chunk of `duration` seconds on every requested track.
+    /// Finishes a chunk of `duration` seconds on every requested track. When the request asked
+    /// for live frames, as much silence is handed over in `frames` first.
     public func emit(duration: TimeInterval) {
+      let count = Int((max(duration, 0) * Session.frameRate).rounded())
+      frameContinuation.yield(
+        AudioFrames(samples: [Float](repeating: 0, count: count), sampleRate: Session.frameRate)
+      )
       let (start, number): (TimeInterval, Int) = lock.withLock {
         let current = (offset, index)
         offset += duration
@@ -329,12 +425,14 @@ public final class FakeAudioCapture: AudioCapture, @unchecked Sendable {
       guard !end() else { return }
       emit(duration: stopDuration)
       levelContinuation.finish()
+      frameContinuation.finish()
       chunkContinuation.finish()
     }
 
     public func cancel() async {
       guard !end() else { return }
       levelContinuation.finish()
+      frameContinuation.finish()
       chunkContinuation.finish()
     }
 

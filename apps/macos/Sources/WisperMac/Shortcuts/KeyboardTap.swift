@@ -8,7 +8,10 @@ import WisperDomain
 /// The tap is an *active* one: it can stop a key press from reaching the app
 /// in front. That is needed so that fn+Space does not also type a space and
 /// ⌃⌘V does not also reach the app. Modifier keys and every key that is not
-/// part of a shortcut pass through untouched. An active tap needs the
+/// part of a shortcut pass through untouched. The one other thing it can hold
+/// back is the key press macOS makes up for a lone tap of fn (Globe), which
+/// is what opens the emoji picker; fn itself, fn+arrow and fn+F-keys are
+/// never touched. An active tap needs the
 /// Accessibility permission and nothing else (a listen-only tap would need
 /// Input Monitoring instead, and could not hold a key back).
 ///
@@ -75,6 +78,10 @@ final class KeyboardTap: @unchecked Sendable {
 
   func setCancelsOnEscape(_ value: Bool) {
     lock.withLock { matcher.cancelsOnEscape = value }
+  }
+
+  func setHoldsBackGlobeKey(_ value: Bool) {
+    lock.withLock { matcher.holdsBackGlobeKey = value }
   }
 
   /// While suspended nothing is reported and no key is held back.

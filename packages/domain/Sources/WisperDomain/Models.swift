@@ -428,6 +428,71 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
   /// changes that same text. An empty string means nothing was selected. `nil` on every other
   /// entry, and on failed commands saved before selections were kept.
   public var selection: String?
+  /// How long each step took, from letting go of the key to the text being typed. Numbers
+  /// only: nothing that was said. `nil` on entries saved before timings were kept.
+  public var timing: Timing?
+
+  /// How long the steps of one dictation took, in thousandths of a second. A step that did
+  /// not happen (no clean-up was asked for, the text was not inserted) is `nil`.
+  public struct Timing: Codable, Sendable, Hashable {
+    /// How the words were turned into text.
+    public var path: Path?
+    /// From letting go of the key to a finished audio file. `nil` for a retry.
+    public var captureMs: Int?
+    /// Sending the audio and waiting for the transcript.
+    public var transcribeMs: Int?
+    /// The language model's tidying (or, for a command, its answer). `nil` when it was not asked.
+    public var cleanUpMs: Int?
+    /// Putting the text into the app in front.
+    public var insertMs: Int?
+    /// From letting go of the key (or from starting a retry) to the text being typed. More
+    /// than the sum of the steps: reading settings and saving the history entry sit in between.
+    public var totalMs: Int?
+
+    public enum Path: String, Codable, Sendable, Hashable {
+      /// The finished recording was uploaded as a file.
+      case file
+      /// The sound was sent while the person was still speaking.
+      case live
+    }
+
+    public init(
+      path: Path? = nil,
+      captureMs: Int? = nil,
+      transcribeMs: Int? = nil,
+      cleanUpMs: Int? = nil,
+      insertMs: Int? = nil,
+      totalMs: Int? = nil
+    ) {
+      self.path = path
+      self.captureMs = captureMs
+      self.transcribeMs = transcribeMs
+      self.cleanUpMs = cleanUpMs
+      self.insertMs = insertMs
+      self.totalMs = totalMs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+      case path, captureMs, transcribeMs, cleanUpMs, insertMs, totalMs
+    }
+
+    /// Reads what it can: a value this version does not understand is left out, never an error.
+    public init(from decoder: any Decoder) throws {
+      let c = try decoder.container(keyedBy: CodingKeys.self)
+      func whole(_ key: CodingKeys) -> Int? {
+        guard let number = try? c.decodeIfPresent(Double.self, forKey: key), number.isFinite, number >= 0,
+          number < 1e12
+        else { return nil }
+        return Int(number.rounded())
+      }
+      path = (try? c.decodeIfPresent(IfKnown<Path>.self, forKey: .path))?.value
+      captureMs = whole(.captureMs)
+      transcribeMs = whole(.transcribeMs)
+      cleanUpMs = whole(.cleanUpMs)
+      insertMs = whole(.insertMs)
+      totalMs = whole(.totalMs)
+    }
+  }
 
   public init(
     id: UUID = UUID(),
@@ -440,7 +505,8 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
     bundleID: String? = nil,
     audioFile: String? = nil,
     failure: String? = nil,
-    selection: String? = nil
+    selection: String? = nil,
+    timing: Timing? = nil
   ) {
     self.id = id
     self.createdAt = createdAt
@@ -453,10 +519,12 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
     self.audioFile = audioFile
     self.failure = failure
     self.selection = selection
+    self.timing = timing
   }
 
   private enum CodingKeys: String, CodingKey {
     case id, createdAt, mode, rawText, text, duration, appName, bundleID, audioFile, failure, selection
+    case timing
   }
 
   public init(from decoder: any Decoder) throws {
@@ -473,6 +541,8 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
     audioFile = try c.decodeIfPresent(String.self, forKey: .audioFile)
     failure = try c.decodeIfPresent(String.self, forKey: .failure)
     selection = try c.decodeIfPresent(String.self, forKey: .selection)
+    // Timings are a convenience. One that cannot be read never costs the entry.
+    timing = (try? c.decodeIfPresent(Timing.self, forKey: .timing)) ?? nil
   }
 
   public var wordCount: Int { text.split(whereSeparator: \.isWhitespace).count }

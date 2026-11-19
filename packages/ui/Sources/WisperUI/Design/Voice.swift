@@ -6,27 +6,35 @@ import SwiftUI
 ///
 /// Give it the latest level and it does the rest: the bars ripple, ease towards the level
 /// and rest as small dots in silence. With Reduce Motion on, they only change height.
+///
+/// With `axis: .vertical` the bars lie on their side and are stacked top to bottom, for a
+/// tall, thin place such as the pill at the side of a screen.
 public struct Waveform: View {
   private let level: Double
   private let bars: Int
   private let tint: SwiftUI.Color
   private let height: CGFloat
+  private let axis: Axis
 
   @State private var smoothed = Smoother()
 
   /// - level: loudness from 0 (silence) to 1.
   /// - bars: how many bars to draw.
-  /// - height: the height of the tallest bar, in points.
+  /// - height: the length of the longest bar, in points.
+  /// - axis: the way the row of bars runs. `.horizontal` is bars standing side by side;
+  ///   `.vertical` is bars lying down, one under the other.
   public init(
     level: Double,
     bars: Int = 9,
     tint: SwiftUI.Color = Wisper.Color.textPrimary,
-    height: CGFloat = 20
+    height: CGFloat = 20,
+    axis: Axis = .horizontal
   ) {
     self.level = min(max(level, 0), 1)
     self.bars = max(bars, 1)
     self.tint = tint
     self.height = height
+    self.axis = axis
   }
 
   public var body: some View {
@@ -34,17 +42,16 @@ public struct Waveform: View {
     TimelineView(.animation(paused: Wisper.Motion.reduceMotion)) { timeline in
       let time = timeline.date.timeIntervalSinceReferenceDate
       let value = smoothed.value(target: level, at: time)
-      HStack(spacing: barWidth * 0.8) {
+      BarRow(axis: axis, spacing: barWidth * 0.8, length: height) {
         ForEach(0..<bars, id: \.self) { index in
-          Capsule()
-            .fill(tint)
-            .frame(
-              width: barWidth,
-              height: Self.barHeight(index, of: bars, level: value, time: time, max: height)
-            )
+          Bar(
+            axis: axis,
+            tint: tint,
+            thickness: barWidth,
+            length: Self.barHeight(index, of: bars, level: value, time: time, max: height)
+          )
         }
       }
-      .frame(height: height)
     }
     .accessibilityHidden(true)
   }
@@ -92,30 +99,73 @@ public struct ProcessingIndicator: View {
   private let bars: Int
   private let tint: SwiftUI.Color
   private let height: CGFloat
+  private let axis: Axis
 
-  public init(bars: Int = 5, tint: SwiftUI.Color = Wisper.Color.textPrimary, height: CGFloat = 20) {
+  /// - axis: the way the row of bars runs; see `Waveform`.
+  public init(
+    bars: Int = 5,
+    tint: SwiftUI.Color = Wisper.Color.textPrimary,
+    height: CGFloat = 20,
+    axis: Axis = .horizontal
+  ) {
     self.bars = max(bars, 1)
     self.tint = tint
     self.height = height
+    self.axis = axis
   }
 
   public var body: some View {
     let barWidth = max(2, height / 7)
     TimelineView(.animation(paused: Wisper.Motion.reduceMotion)) { timeline in
       let time = timeline.date.timeIntervalSinceReferenceDate
-      HStack(spacing: barWidth * 0.8) {
+      BarRow(axis: axis, spacing: barWidth * 0.8, length: height) {
         ForEach(0..<bars, id: \.self) { index in
           let phase = time * 4.2 - Double(index) * 0.55
           let amount = 0.5 + 0.5 * sin(phase)
-          Capsule()
-            .fill(tint)
-            .frame(width: barWidth, height: barWidth + (height * 0.62 - barWidth) * amount)
-            .opacity(0.45 + 0.55 * amount)
+          Bar(
+            axis: axis,
+            tint: tint,
+            thickness: barWidth,
+            length: barWidth + (height * 0.62 - barWidth) * amount
+          )
+          .opacity(0.45 + 0.55 * amount)
         }
       }
-      .frame(height: height)
     }
     .accessibilityLabel("Working")
+  }
+}
+
+/// A row of voice bars: side by side, or one under the other.
+private struct BarRow<Bars: View>: View {
+  let axis: Axis
+  let spacing: CGFloat
+  /// The room across the row, which is the length of the longest bar.
+  let length: CGFloat
+  @ViewBuilder var bars: Bars
+
+  var body: some View {
+    switch axis {
+    case .horizontal: HStack(spacing: spacing) { bars }.frame(height: length)
+    case .vertical: VStack(spacing: spacing) { bars }.frame(width: length)
+    }
+  }
+}
+
+/// One voice bar: standing in a horizontal row, lying down in a vertical one.
+private struct Bar: View {
+  let axis: Axis
+  let tint: SwiftUI.Color
+  let thickness: CGFloat
+  let length: CGFloat
+
+  var body: some View {
+    Capsule()
+      .fill(tint)
+      .frame(
+        width: axis == .horizontal ? thickness : length,
+        height: axis == .horizontal ? length : thickness
+      )
   }
 }
 

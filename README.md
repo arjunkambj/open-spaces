@@ -5,6 +5,8 @@
 
 Open Wisper is a free, open-source app for macOS and iOS that turns your voice into text. Hold a key, speak, and clean text appears in whatever app you are typing in; it can also record your meetings and write the notes.
 
+**Website and download: [whisper.0xhoney.com](https://whisper.0xhoney.com)**
+
 ![The Open Wisper window on a Mac, showing dictation history](docs/images/mac-home.png)
 
 | Recording a meeting | The floating pill, in each state |
@@ -30,7 +32,7 @@ Open Wisper is an independent open-source project. It is not affiliated with Wis
 - **Dictate anywhere.** Hold a key, talk, let go. The text is typed into the app you are using.
 - **Hands-free mode.** Press once to start, press again to stop. Good for long thoughts.
 - **Command mode.** Select some text, hold a key, and say how to change it ("make this shorter").
-- **A small pill at the bottom of the screen.** It shows when Open Wisper is listening. You can also click it to dictate.
+- **A small pill at the edge of the screen.** It shows when Open Wisper is listening. Click it to dictate, or drag it to any edge; on a side edge it stands upright.
 - **Personal dictionary.** Teach it names and words it keeps getting wrong.
 - **Snippets.** Say a short phrase ("my calendar link") and get a longer piece of text.
 - **Writing style per kind of app.** Formal in email, casual in chat. You choose.
@@ -56,7 +58,7 @@ Open Wisper is an independent open-source project. It is not affiliated with Wis
 
 For a Mac with Apple silicon and macOS 14.4 or newer.
 
-1. Download `Open-Wisper-<version>.dmg` from the [newest release](https://github.com/arjunkambj/open-wisper/releases/latest).
+1. Download [`Open-Wisper.dmg`](https://github.com/arjunkambj/open-wisper/releases/latest/download/Open-Wisper.dmg), the newest version. Every version is on the [releases page](https://github.com/arjunkambj/open-wisper/releases).
 2. Open the file and drag **Open Wisper** onto **Applications**.
 3. Open it from Applications. The first time, macOS stops it and says it could not check the app. Click **Done**.
 4. Open **System Settings → Privacy & Security**, scroll down to **Security**, and click **Open Anyway** next to the line about Open Wisper. The button is there for about an hour after step 3.
@@ -202,7 +204,7 @@ Good to know:
 - **`Esc` throws a recording away.** Once the text is being written, `Esc` no longer cancels it.
 - **Pressing `fn` alone ends a hands-free recording**, the same as pressing `fn` + `Space` again.
 - **A dictation stops by itself after 10 minutes** and types what it has, so a stuck key cannot record for hours.
-- **If `fn` opens the emoji picker,** open System Settings → Keyboard and set "Press 🌐 key to" to "Do Nothing". The app reminds you when this is needed.
+- **If `fn` opens the emoji picker,** the app offers a one-click fix (it sets "Press 🌐 key to" to "Do Nothing" in the Mac's Keyboard settings for you). It also holds back the hidden key press that opens the picker while `fn` is one of your shortcuts.
 
 ## Connect an agent
 
@@ -246,6 +248,7 @@ See [docs/data-format.md](docs/data-format.md) for what each file holds.
 apps/macos        the macOS app
 apps/ios          the iPhone app, its keyboard and its Lock Screen notice
 apps/ios/Phone    most of the iPhone app's code, as a package that also builds on a Mac
+apps/web          the website, whisper.0xhoney.com
 packages/domain   the shared types and the contracts between parts
 packages/store    saving to files and to the Keychain
 packages/ai       talking to OpenAI
@@ -258,7 +261,9 @@ docs              guides, and the pictures on this page
 scripts           build and CI scripts
 ```
 
-All of it is Swift. There is one library we did not write: [Sparkle](https://sparkle-project.org), the open-source updater most Mac apps outside the App Store use. It is in the Mac app only. [Turborepo](https://turborepo.dev) and pnpm run each part's build, tests and style check in the right order.
+The apps are all Swift. There is one library we did not write: [Sparkle](https://sparkle-project.org), the open-source updater most Mac apps outside the App Store use. It is in the Mac app only. [Turborepo](https://turborepo.dev) and pnpm run each part's build, tests and style check in the right order.
+
+The website is the one part that is not Swift: a static page built with Astro and Tailwind CSS. [apps/web/README.md](apps/web/README.md) says how to run and deploy it.
 
 Useful commands:
 
@@ -268,6 +273,7 @@ pnpm test      # tests only
 pnpm format    # fix the code style in place
 pnpm mac       # build and open the macOS app
 pnpm mac:dmg   # build the macOS app and put it in a disk image
+pnpm web       # work on the website, at http://127.0.0.1:4321
 ```
 
 ## Roadmap
@@ -288,4 +294,4 @@ Found a security problem? Please report it privately. See [SECURITY.md](SECURITY
 
 ## Licence
 
-[MIT](LICENSE). Use it, change it, share it.
+[MIT](LICENSE). Anyone may use Open Wisper, change it and share it, for any purpose, including in a product they sell. There is nothing to ask and nothing to pay. The one condition: keep the copyright and licence text with any copy you pass on. It comes with no warranty. This covers everything in this repository, the website included.

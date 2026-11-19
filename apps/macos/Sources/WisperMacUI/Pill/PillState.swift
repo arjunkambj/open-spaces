@@ -19,6 +19,8 @@ struct PillState: Equatable, Sendable {
     /// A short message. `canFix` means a click leads somewhere that helps.
     /// `isProblem` is false for plain news ("Copied to the clipboard").
     case notice(String, canFix: Bool, isProblem: Bool = true)
+    /// A short message that asks something, with a button for yes and one for no.
+    case question(String, yes: String, no: String)
   }
 
   var look: Look
@@ -26,9 +28,26 @@ struct PillState: Equatable, Sendable {
   var meetingSince: Date?
   /// The shortcuts cannot be heard right now (a password field has the keyboard): the hint says so.
   var shortcutsPaused = false
+  /// The pill is being dragged: it is drawn large enough to see under the pointer, and says nothing.
+  var isGrabbed = false
 
   /// Nothing to draw and nothing to click.
   var isEmpty: Bool { look == .hidden && meetingSince == nil }
+
+  /// The pill can be picked up and dragged to another edge. A message cannot: it is gone
+  /// in a moment, and its buttons must stay where they are.
+  var canMove: Bool {
+    switch look {
+    case .notice, .question: false
+    case .hidden: meetingSince != nil
+    case .resting, .hint, .recording, .working: true
+    }
+  }
+
+  var isRecording: Bool {
+    if case .recording = look { return true }
+    return false
+  }
 
   /// - showsRecording, isWrappingUp, notice: from `MacControls`.
   /// - isEnabled: the user wants the pill on screen while nothing is going on.
@@ -42,10 +61,14 @@ struct PillState: Equatable, Sendable {
     isEnabled: Bool,
     isHovered: Bool,
     hintKeys: [String],
-    shortcutsPaused: Bool = false
+    shortcutsPaused: Bool = false,
+    isGrabbed: Bool = false
   ) -> PillState {
     var look: Look {
       if let notice {
+        if let answers = notice.answers {
+          return .question(notice.message, yes: answers.yes, no: answers.no)
+        }
         return .notice(notice.message, canFix: notice.fix != nil, isProblem: notice.isProblem)
       }
       switch phase {
@@ -61,9 +84,14 @@ struct PillState: Equatable, Sendable {
       }
       // While something is going on the pill is the only feedback, so the "hide" choices stop here.
       guard isEnabled else { return .hidden }
-      return isHovered ? .hint(keys: hintKeys) : .resting
+      return isHovered || isGrabbed ? .hint(keys: hintKeys) : .resting
     }
-    return PillState(look: look, meetingSince: meetingSince, shortcutsPaused: shortcutsPaused)
+    return PillState(
+      look: look,
+      meetingSince: meetingSince,
+      shortcutsPaused: shortcutsPaused,
+      isGrabbed: isGrabbed
+    )
   }
 }
 
@@ -73,6 +101,8 @@ struct PillActions {
   var stop: @MainActor () -> Void = {}
   var cancel: @MainActor () -> Void = {}
   var tapNotice: @MainActor () -> Void = {}
+  /// "No" to a question on the pill.
+  var dismissNotice: @MainActor () -> Void = {}
   var stopMeeting: @MainActor () -> Void = {}
   var openMeeting: @MainActor () -> Void = {}
 }

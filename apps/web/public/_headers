@@ -1,0 +1,28 @@
+# Response headers for every file. Cloudflare reads this file; it is not served.
+# https://developers.cloudflare.com/workers/static-assets/headers/
+
+# "no-transform" tells Cloudflare to send each file exactly as it was built. Without it,
+# a domain with Cloudflare Web Analytics switched on gets a tracking script added to
+# every page. This site has no tracking, so nothing may be added.
+/*
+  ! Cache-Control
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+  Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), browsing-topics=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+
+# Files under /_astro/ have a fingerprint of their content in the name, so a browser can
+# keep them for a year. Everything else is checked again on each visit.
+/_astro/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable, no-transform
+
+# The social preview image is fetched by other sites, so they must be allowed to load it.
+/og.png
+  ! Cross-Origin-Resource-Policy
+  Cross-Origin-Resource-Policy: cross-origin

@@ -6,6 +6,7 @@ import Foundation
 //   Library        -> WisperStore.FileLibrary          (files on disk)
 //   SecretStore    -> WisperStore.KeychainSecretStore  (Keychain)
 //   Transcriber    -> WisperAI.OpenAITranscriber       (OpenAI audio API)
+//   LiveTranscriber -> WisperAI.OpenAILiveTranscriber  (OpenAI realtime API)
 //   LanguageModel  -> WisperAI.OpenAILanguageModel     (OpenAI chat API)
 //   AudioCapture   -> WisperAudio.SystemAudioCapture   (AVFoundation / Core Audio)
 //   TextTarget     -> WisperMac.MacTextTarget          (the app you are typing in)
@@ -164,6 +165,59 @@ public struct Transcript: Sendable, Equatable {
 public protocol Transcriber: Sendable {
   /// Throws `WisperError`. Returns an empty `text` when the audio holds no speech.
   func transcribe(_ request: TranscriptionRequest) async throws -> Transcript
+  /// Gets ready for a `transcribe` that will follow soon, so it starts without delay: an
+  /// adapter that talks to a server opens (or checks) its connection. Call it when recording
+  /// starts, and again now and then during a long recording. It sends no audio and no key,
+  /// never throws, and may be called at any time, any number of times. Does nothing by default.
+  func prepare() async
+}
+
+extension Transcriber {
+  public func prepare() async {}
+}
+
+// MARK: - Transcription while speaking
+
+public struct LiveTranscriptionRequest: Sendable {
+  public var model: String
+  /// ISO 639-1 code, or `nil` to auto-detect.
+  public var language: String?
+  /// Words the transcriber should prefer (names, jargon).
+  public var vocabulary: [String]
+
+  public init(model: String, language: String? = nil, vocabulary: [String] = []) {
+    self.model = model
+    self.language = language
+    self.vocabulary = vocabulary
+  }
+}
+
+/// One recording being turned into text while it is still being made.
+///
+/// Hand over the sound with `send` as it is captured, then call `finish` once for the text.
+/// A session that will not be finished must be cancelled.
+public protocol LiveTranscription: Sendable {
+  /// The text heard so far. Each value replaces the one before. Ends when the session ends.
+  /// May stay empty: not every transcriber reports before the end.
+  var partials: AsyncStream<String> { get }
+  /// Hands over the next run of sound, in order. Returns at once: the sending is queued.
+  func send(_ frames: AudioFrames)
+  /// Says the sound is over and returns the text of all of it. Returns an empty `text` when
+  /// no speech was heard. Throws `WisperError` when the session failed at any point, also
+  /// before this call; the text is then incomplete and must not be used.
+  func finish() async throws -> Transcript
+  /// Ends the session at once. Nothing more is sent, and a `finish` under way throws.
+  func cancel()
+}
+
+/// Turns sound into text while it is being recorded.
+///
+/// This is an extra: the recording is always written to a file as well, and a `Transcriber`
+/// can turn that file into text whenever a live session cannot be opened or fails.
+public protocol LiveTranscriber: Sendable {
+  /// Opens a session that is ready to take sound. Throws `WisperError` when that is not
+  /// possible: the server or the model does not offer it, or it cannot be reached.
+  func open(_ request: LiveTranscriptionRequest) async throws -> any LiveTranscription
 }
 
 // MARK: - Language model
@@ -240,17 +294,34 @@ public struct CaptureRequest: Sendable {
   /// each is emitted as soon as it is finished. When `nil`, one file per
   /// track is emitted after `stop()`.
   public var chunkSeconds: TimeInterval?
+  /// Whether the sound is also handed over while it is recorded, in `CaptureSession.frames`.
+  /// Only for a capture that writes one file (`chunkSeconds == nil`).
+  public var liveFrames: Bool
 
   public init(
     tracks: Set<AudioTrack> = [.microphone],
     microphoneID: String? = nil,
     directory: URL,
-    chunkSeconds: TimeInterval? = nil
+    chunkSeconds: TimeInterval? = nil,
+    liveFrames: Bool = false
   ) {
     self.tracks = tracks
     self.microphoneID = microphoneID
     self.directory = directory
     self.chunkSeconds = chunkSeconds
+    self.liveFrames = liveFrames
+  }
+}
+
+/// A run of sound from a capture in progress: one channel, samples from -1 to 1.
+public struct AudioFrames: Sendable, Equatable {
+  public var samples: [Float]
+  /// Samples per second.
+  public var sampleRate: Double
+
+  public init(samples: [Float], sampleRate: Double) {
+    self.samples = samples
+    self.sampleRate = sampleRate
   }
 }
 
@@ -278,10 +349,23 @@ public protocol CaptureSession: Sendable {
   /// Finished audio files. Ends after `stop()` has flushed the last file, or
   /// right away after `cancel()`. Iterate it once.
   var chunks: AsyncStream<AudioChunk> { get }
+  /// The sound of the microphone track as it is recorded, when the request asked for
+  /// `liveFrames`: the very samples that go into the file, in order, a fraction of a second
+  /// at a time. Ends after `stop()` has handed over the last of it, or right away after
+  /// `cancel()`. Iterate it once. Ends at once when the request did not ask for it.
+  ///
+  /// It never holds the recording up: a reader that falls minutes behind misses frames. So
+  /// before trusting what was read as the whole recording, compare the number of samples
+  /// with the `duration` of the file.
+  var frames: AsyncStream<AudioFrames> { get }
   /// Stops recording and flushes the remaining audio into `chunks`.
   func stop() async
   /// Stops recording and deletes everything not yet emitted.
   func cancel() async
+}
+
+extension CaptureSession {
+  public var frames: AsyncStream<AudioFrames> { AsyncStream { $0.finish() } }
 }
 
 /// Records audio into files.
@@ -336,6 +420,8 @@ public enum WisperError: Error, Sendable, Equatable, LocalizedError {
     case .missingAPIKey: "Add your OpenAI API key in Settings to start dictating."
     case .invalidAPIKey: "OpenAI did not accept your API key. Check it in Settings."
     case .rateLimited: "OpenAI is limiting requests for your key right now. Try again in a moment."
+    case .network(WisperError.noAnswerDetail):
+      "OpenAI did not answer in time, even on a second try. Try again in a moment."
     case .network(let detail): "Could not reach OpenAI. Check your internet connection. (\(detail))"
     case .server(let status, let message): "OpenAI returned an error (\(status)): \(message)"
     case .noSpeech: "No speech was heard."
@@ -349,6 +435,14 @@ public enum WisperError: Error, Sendable, Equatable, LocalizedError {
     case .replyTooLong: "The reply was far longer than expected, so it was not typed. Try the command again."
     }
   }
+}
+
+extension WisperError {
+  /// The request went out, twice, and no answer came back in the time allowed. Not the same
+  /// as being offline: the connection may be fine and the server slow or stuck.
+  public static let noAnswer = WisperError.network(noAnswerDetail)
+
+  static let noAnswerDetail = "no answer in time"
 }
 
 // MARK: - Paths

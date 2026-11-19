@@ -1,0 +1,114 @@
+name: Website
+
+# The website in apps/web, served at https://whisper.0xhoney.com from Cloudflare.
+#
+#   Every pull request   builds the site, so a broken site fails the checks.
+#   A push to main       that changes the site or the app icon builds and deploys it.
+#   A new release        builds and deploys it, so the page shows the new version.
+#   Run by hand          Actions > Website > Run workflow.
+#
+# Deploying needs two repository secrets (apps/web/README.md says how to make them):
+#   CLOUDFLARE_API_TOKEN    a token that may deploy this one Worker
+#   CLOUDFLARE_ACCOUNT_ID   the Cloudflare account that holds the 0xhoney.com domain
+# Without them the deploy job says so and stops, and nothing fails.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "assets/icon-1024.png"
+      - "apps/macos/package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/web.yml"
+  # The Release workflow publishes with the repository's own token, and GitHub starts no
+  # workflow for a "release" event made that way. So this one waits for that workflow to
+  # finish. "release" stays for a release published by a person.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: website-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @open-wisper/web
+      - name: Check the types
+        run: pnpm --filter @open-wisper/web run lint
+      - name: Build the site
+        run: pnpm web:build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: website
+          path: apps/web/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: See whether the Cloudflare secrets are there
+        id: secrets
+        run: |
+          if [[ -n "$CLOUDFLARE_API_TOKEN" && -n "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Not deployed: the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets are not set. apps/web/README.md says how to add them."
+          fi
+      - uses: actions/checkout@v7
+        if: steps.secrets.outputs.present == 'true'
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        if: steps.secrets.outputs.present == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.secrets.outputs.present == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @open-wisper/web
+        if: steps.secrets.outputs.present == 'true'
+      - uses: actions/download-artifact@v8
+        if: steps.secrets.outputs.present == 'true'
+        with:
+          name: website
+          path: apps/web/dist
+      - name: Deploy to Cloudflare
+        if: steps.secrets.outputs.present == 'true'
+        working-directory: apps/web
+        run: pnpm exec wrangler deploy
+      - name: Check the live site
+        if: steps.secrets.outputs.present == 'true'
+        working-directory: apps/web
+        run: node scripts/check.mjs

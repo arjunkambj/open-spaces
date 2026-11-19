@@ -1,0 +1,25 @@
+---
+import Agents from "../components/Agents.astro";
+import Features from "../components/Features.astro";
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+import Hero from "../components/Hero.astro";
+import OpenSource from "../components/OpenSource.astro";
+import Privacy from "../components/Privacy.astro";
+import Steps from "../components/Steps.astro";
+import Page from "../layouts/Page.astro";
+---
+
+<Page>
+  <a href="#main" class="button sr-only h-10 px-4 focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-20">Skip to the content</a>
+  <Header />
+  <main id="main">
+    <Hero />
+    <Steps />
+    <Features />
+    <Agents />
+    <Privacy />
+    <OpenSource />
+  </main>
+  <Footer />
+</Page>

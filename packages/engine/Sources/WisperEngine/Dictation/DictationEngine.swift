@@ -41,6 +41,10 @@ public final class DictationEngine {
   public private(set) var level: Float = 0
   /// The most recent finished dictation of this session.
   public private(set) var last: Dictation?
+  /// What has been heard so far of the recording in progress, when the words are written
+  /// while the person speaks. Empty otherwise: not every transcriber reports before the end.
+  /// A rough draft: the inserted text can differ.
+  public private(set) var partialText = ""
 
   /// The longest a recording may run, in seconds (10 minutes unless changed).
   /// When it is reached the engine finishes on its own and inserts the text,
@@ -56,11 +60,14 @@ public final class DictationEngine {
 
   /// Recordings shorter than this hold no speech.
   static let shortestRecording: TimeInterval = 0.3
+  /// How often the connection is checked during a recording, in seconds.
+  static let warmEvery: TimeInterval = 20
 
   @ObservationIgnored private let library: any Library
   @ObservationIgnored private let capture: any AudioCapture
   @ObservationIgnored private let target: any TextTarget
   @ObservationIgnored private let pipeline: DictationPipeline
+  @ObservationIgnored private let liveTranscriber: (any LiveTranscriber)?
 
   /// The recording in progress, until `finish` or `cancel` takes it.
   @ObservationIgnored private var take: Take?
@@ -80,16 +87,23 @@ public final class DictationEngine {
   /// history ("not finished") is not something to show while the work is going well.
   @ObservationIgnored private(set) var unfinished: Dictation.ID?
 
+  /// - Parameter liveTranscriber: Writes the words while the person is still speaking, for
+  ///   the transcription models that can. The recording is still written to a file, and
+  ///   `transcriber` turns that file into text whenever the live side cannot: it is not on
+  ///   offer for the chosen model or server, it cannot be reached, or it fails half-way.
+  ///   Leave it out to always use the file.
   public init(
     library: any Library,
     capture: any AudioCapture,
     transcriber: any Transcriber,
+    liveTranscriber: (any LiveTranscriber)? = nil,
     languageModel: any LanguageModel,
     target: any TextTarget
   ) {
     self.library = library
     self.capture = capture
     self.target = target
+    self.liveTranscriber = liveTranscriber
     pipeline = DictationPipeline(library: library, transcriber: transcriber, languageModel: languageModel)
   }
 
@@ -115,6 +129,7 @@ public final class DictationEngine {
     let capture = capture
     let earlier = previous
     let tidying = tidying
+    let wantsFrames = liveTranscriber != nil
     let starting = Task { () -> Take.Started in
       // Let the last recording let go of the microphone first, and let the tidying after a
       // quit finish, so it can never take a new recording for an old one.
@@ -126,7 +141,8 @@ public final class DictationEngine {
           tracks: [.microphone],
           microphoneID: settings.microphoneID,
           directory: try await library.dictationAudioDirectory(),
-          chunkSeconds: nil
+          chunkSeconds: nil,
+          liveFrames: wantsFrames
         )
         return .success(try await capture.start(request))
       } catch {
@@ -138,7 +154,30 @@ public final class DictationEngine {
     previous = take
     epoch += 1
     level = 0
+    partialText = ""
     phase = .recording(mode: mode, since: Date(), handsFree: handsFree)
+    if let liveTranscriber {
+      let live = LiveTake(transcriber: liveTranscriber, library: library, capture: starting)
+      take.live = live
+      take.hearing = Task { [weak self, weak take] in
+        guard let session = await live.opening.value else { return }
+        for await text in session.partials {
+          guard let self, let take, self.take === take else { return }
+          self.partialText = text
+        }
+      }
+    }
+    // While the person speaks, get the connection ready, so the upload starts the moment they
+    // stop. During a long recording it is checked again now and then, so it is still good at the end.
+    let pipeline = pipeline
+    take.warming = Task { [weak self, weak take] in
+      while !Task.isCancelled {
+        await pipeline.prepare()
+        try? await Task.sleep(for: .seconds(DictationEngine.warmEvery))
+        // Stops with the recording, and with the engine.
+        guard let self, let take, self.take === take else { return }
+      }
+    }
 
     take.watch = Task { [weak self, weak take] in
       switch await starting.value {
@@ -178,10 +217,15 @@ public final class DictationEngine {
     guard case .recording(let mode, let since, _) = phase, let take else { return nil }
     self.take = nil
     level = 0
+    partialText = ""
+    let released = ContinuousClock.now
     let stopping = take.stop()
+    let live = take.live
     let epoch = epoch
     // A task of the engine's own, so `cancel` can stop it and the caller's task cannot cut it short.
-    let job = Task { await self.complete(stopping, mode: mode, since: since, epoch: epoch) }
+    let job = Task {
+      await self.complete(stopping, live: live, mode: mode, since: since, released: released, epoch: epoch)
+    }
     work = job
     return await job.value
   }
@@ -202,6 +246,7 @@ public final class DictationEngine {
     work?.cancel()
     work = nil
     level = 0
+    partialText = ""
     phase = .idle
   }
 
@@ -223,6 +268,9 @@ public final class DictationEngine {
     phase = .processing(mode: .dictation)
     epoch += 1
     let epoch = epoch
+    let pipeline = pipeline
+    // Nothing got the connection ready for a retry, so do it while the entry is read.
+    Task { await pipeline.prepare() }
     let job = Task { await self.reprocess(id, insert: insert, epoch: epoch) }
     work = job
     return await job.value
@@ -307,6 +355,12 @@ public final class DictationEngine {
     var selection = ""
     /// Whether a place-holder entry for this recording is in the history.
     var noted = false
+    /// The live session that heard this recording while it was made, if there was one.
+    var live: LiveTake?
+    /// When the key was let go (or the retry was asked for): where the waiting starts.
+    var released = ContinuousClock.now
+    /// How long it took from there to a finished audio file. `nil` for a retry.
+    var captureMs: Int?
 
     var isNew: Bool { original == nil }
 
@@ -319,17 +373,39 @@ public final class DictationEngine {
         text: draft.text,
         duration: duration,
         appName: original?.appName ?? draft.context.appName,
-        bundleID: original?.bundleID ?? draft.context.bundleID
+        bundleID: original?.bundleID ?? draft.context.bundleID,
+        timing: timing(from: draft)
+      )
+    }
+
+    /// What is known about how long the steps took, up to this moment.
+    func timing(from draft: DictationPipeline.Draft, insertMs: Int? = nil) -> Dictation.Timing {
+      Dictation.Timing(
+        path: draft.path,
+        captureMs: captureMs,
+        transcribeMs: draft.transcribeMs,
+        cleanUpMs: draft.cleanUpMs,
+        insertMs: insertMs,
+        totalMs: DictationPipeline.milliseconds(since: released)
       )
     }
   }
 
   private func complete(
     _ stopping: Task<Take.Stopped, Never>,
+    live: LiveTake?,
     mode: DictationMode,
     since: Date,
+    released: ContinuousClock.Instant,
     epoch: Int
   ) async -> Dictation? {
+    // Look at where the text is going now, while the microphone closes: it is the app in
+    // front at the moment the key was let go, and the look need not wait for the file.
+    let target = target
+    let looking = Task { await target.context() }
+    // Until the pipeline takes the live session over, every way out of here ends it.
+    var handedOver = false
+    defer { if !handedOver { live?.cancel() } }
     let files: [AudioChunk]
     switch await stopping.value {
     case .success(let chunks): files = chunks
@@ -358,8 +434,12 @@ public final class DictationEngine {
     phase = .processing(mode: mode)
     let id = UUID()
     let audio = await DictationAudio.adopt(recording.url, for: id)
-    let entry = Entry(id: id, createdAt: since, mode: mode, duration: recording.duration, audio: audio)
-    return await process(entry, epoch: epoch)
+    var entry = Entry(id: id, createdAt: since, mode: mode, duration: recording.duration, audio: audio)
+    entry.released = released
+    entry.captureMs = DictationPipeline.milliseconds(since: released)
+    entry.live = live
+    handedOver = true
+    return await process(entry, context: await looking.value, epoch: epoch)
   }
 
   private func reprocess(_ id: Dictation.ID, insert: Bool, epoch: Int) async -> Dictation? {
@@ -403,15 +483,23 @@ public final class DictationEngine {
     }
   }
 
-  private func process(_ entry: Entry, insert: Bool = true, epoch: Int) async -> Dictation? {
+  /// - Parameter context: where the text is going, when it has been looked up already.
+  private func process(
+    _ entry: Entry,
+    context known: DictationContext? = nil,
+    insert: Bool = true,
+    epoch: Int
+  ) async -> Dictation? {
     var entry = entry
-    let context = await target.context()
+    let context: DictationContext
+    if let known { context = known } else { context = await target.context() }
     if entry.isNew {
       // Read the selection now, while the app the person spoke into is still in front.
       if entry.mode == .command { entry.selection = await target.selectedText() ?? "" }
       unfinished = entry.id
       entry.noted = await note(entry, context: context)
       guard epoch == self.epoch else {
+        entry.live?.cancel()
         await forget(entry)
         return nil
       }
@@ -421,7 +509,9 @@ public final class DictationEngine {
       mode: entry.mode,
       context: context,
       selection: entry.selection,
-      cleanUpLimit: cleanUpLimit
+      cleanUpLimit: cleanUpLimit,
+      live: entry.live,
+      duration: entry.duration
     )
     guard epoch == self.epoch else {
       // Cancelled while the text was being made. A retry keeps its audio: the failed entry still needs it.
@@ -474,15 +564,19 @@ public final class DictationEngine {
     insert: Bool = true,
     epoch: Int
   ) async -> Dictation? {
-    var dictation = entry.dictation(from: draft)
     var insertProblem: String?
+    var insertMs: Int?
     if insert {
+      let began = ContinuousClock.now
       do {
         try await target.insert(draft.text)
+        insertMs = DictationPipeline.milliseconds(since: began)
       } catch {
         insertProblem = DictationText.message(for: error)
       }
     }
+    var dictation = entry.dictation(from: draft)
+    dictation.timing = entry.timing(from: draft, insertMs: insertMs)
     if insertProblem != nil, epoch != self.epoch {
       // Cancelled before the text went in: throw the dictation away, as asked.
       if entry.isNew { await forget(entry) }
@@ -571,6 +665,7 @@ public final class DictationEngine {
     guard epoch == self.epoch else { return }
     work = nil
     level = 0
+    partialText = ""
     self.phase = phase
   }
 }
@@ -587,6 +682,12 @@ private final class Take {
   var watch: Task<Void, Never>?
   /// Ends a recording that runs too long.
   var limit: Task<Void, Never>?
+  /// Keeps the connection to the server ready while the recording runs.
+  var warming: Task<Void, Never>?
+  /// The live session that hears the recording while it is made, if there is one.
+  var live: LiveTake?
+  /// Shows what the live session has heard so far.
+  var hearing: Task<Void, Never>?
   private var ending: Task<Stopped, Never>?
 
   init(starting: Task<Started, Never>) {
@@ -597,8 +698,12 @@ private final class Take {
   func release() {
     watch?.cancel()
     limit?.cancel()
+    warming?.cancel()
+    hearing?.cancel()
     watch = nil
     limit = nil
+    warming = nil
+    hearing = nil
   }
 
   /// Closes the microphone once it has opened and returns the audio files.
@@ -628,6 +733,7 @@ private final class Take {
   /// Closes the microphone once it has opened and throws the audio away.
   func discard() {
     release()
+    live?.cancel()
     let starting = starting
     ending = Task { () -> Stopped in
       if case .success(let session) = await starting.value { await session.cancel() }

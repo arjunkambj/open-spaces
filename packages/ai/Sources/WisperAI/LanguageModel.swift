@@ -21,6 +21,17 @@ struct OpenAILanguageModel: LanguageModel {
     // meeting get more time, in step with how much there is to read.
     let size = Double(request.system.count + request.user.count)
     let budget = min(300, 30 + size / 150 + (format == nil ? 0 : 30))
+    // Nothing arrives until the whole answer is ready, so silence on the line is normal, and
+    // how long it lasts depends on how much the model has to write. Tidying a dictation
+    // (asked for with no thinking) is quick: a few words come back in about a second. When
+    // nothing has come after a few seconds, the request is sent once more over a new
+    // connection. Anything else (a command, meeting notes) gets most of the allowance first,
+    // and so does a server of the person's own: a model on their own machine is slower, and
+    // asking it twice only makes it slower still.
+    let quick =
+      request.effort == CompletionRequest.Effort.none
+      ? await client.usesOpenAI() : false
+    let wait = quick ? min(budget * 0.4, 3 + Double(request.user.count) / 250) : budget * 0.6
 
     let data = try await client.send(
       scope: request.model,
@@ -41,8 +52,7 @@ struct OpenAILanguageModel: LanguageModel {
       guard let json = try? JSONSerialization.data(withJSONObject: body) else {
         throw WisperError.invalidResponse("the request could not be written")
       }
-      // Nothing arrives until the whole answer is ready, so silence on the line is normal.
-      return Client.Call(method: "POST", path: "chat/completions", body: .json(json), idle: budget)
+      return Client.Call(method: "POST", path: "chat/completions", body: .json(json), wait: wait)
     }
 
     let text = try OpenAILanguageModel.text(in: data)

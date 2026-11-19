@@ -2,7 +2,7 @@
 
 The one page to read before building a screen. Everything here is `public` in the module `WisperUI` and works on macOS 14.4+ and iOS 17+.
 
-The look: a quiet tool on warm paper. A warm off-white window, a slightly lighter page, and as few boxes as possible: lists sit right on the page with hairlines between their rows, and only groups of settings and things that are live get a soft warm-grey fill. One type voice, the system sans (SF), with size, weight and space doing the work that colour and borders would. Near-black primary buttons. One accent colour, a deep pine green, used sparingly. Dark mode is warm near-black.
+The look: a quiet tool on warm paper. The greys are the "stone" scale (a warm grey; the steps are listed in `Design/Colors.swift`): a stone-100 window, a slightly lighter stone-50 page, and as few boxes as possible: lists sit right on the page with hairlines between their rows, and only groups of settings and things that are live get a soft warm-grey fill. One type voice, the system sans (SF), with size, weight and space doing the work that colour and borders would. Near-black primary buttons. One accent colour, a deep pine green, used sparingly. Dark mode is warm near-black.
 
 ## Rules
 
@@ -46,7 +46,7 @@ RoundedRectangle(cornerRadius: Wisper.Radius.card).fill(Wisper.Color.surface)
 
 ### Text: `.wisperText(_ style:, color:)`
 
-Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. (The name "Open Wisper" in `Wordmark` is the one place rounded letters are used, to go with the rounded bars of the mark.) Sizes follow the idiom and Dynamic Type.
+Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. (The name "Open Wisper" in `Wordmark` is the one place rounded letters are used, to go with the rounded line of the mark.) Sizes follow the idiom and Dynamic Type.
 
 | Style | Mac / iPhone | Use |
 | --- | --- | --- |
@@ -285,8 +285,8 @@ On a Mac the dialog is a centred card on a dimmed layer that covers **the view t
 ### Voice
 
 ```swift
-Waveform(level: Double, bars: = 9, tint: = textPrimary, height: = 20)       // level 0...1
-ProcessingIndicator(bars: = 5, tint: = textPrimary, height: = 20)
+Waveform(level: Double, bars: = 9, tint: = textPrimary, height: = 20, axis: = .horizontal)   // level 0...1
+ProcessingIndicator(bars: = 5, tint: = textPrimary, height: = 20, axis: = .horizontal)
 RecordButton(_ mode: RecordButton.Mode, diameter: = 80) { }   // .idle, .recording(level:), .processing
 ```
 
@@ -295,7 +295,7 @@ Waveform(level: Double(model.dictation.level), tint: Wisper.Color.accent, height
 RecordButton(isRecording ? .recording(level: level) : .idle, diameter: 96) { toggle() }
 ```
 
-Give `Waveform` the newest level each time it changes; it smooths the motion itself. On a dark pill use `tint: Wisper.Color.onInverse`.
+Give `Waveform` the newest level each time it changes; it smooths the motion itself. On a dark pill use `tint: Wisper.Color.onInverse`. With `axis: .vertical` the bars lie on their side, one under the other, for a tall thin place (the pill at the side of a screen); `height` is then how wide the row is.
 
 ### Brand
 

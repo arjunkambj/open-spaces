@@ -1,0 +1,43 @@
+---
+import { Image } from "astro:assets";
+import appIcon from "../../../../assets/icon-1024.png";
+import { closing, download, links, openSource } from "../content";
+import { latestRelease } from "../release";
+import DownloadButton from "./DownloadButton.astro";
+
+const { version } = await latestRelease();
+---
+
+<section id="open-source" class="border-t border-stone-900/10 dark:border-white/10">
+  <div class="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+    <div class="max-w-3xl">
+      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">{openSource.title}</h2>
+      <p class="mt-4 text-lg text-pretty text-stone-600 dark:text-stone-300">{openSource.lead}</p>
+      <p class="mt-3 text-lg text-pretty text-stone-600 dark:text-stone-300">{openSource.help}</p>
+      <ul class="mt-7 flex flex-wrap gap-x-8 gap-y-3">
+        {
+          openSource.links.map((link) => (
+            <li>
+              <a href={link.href} class="link">
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="mt-8 text-sm text-stone-600 dark:text-stone-400">
+        {openSource.iphone}{" "}<a href={links.buildIphone} class="link">{openSource.iphoneLink}</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="bg-stone-100 dark:bg-stone-900">
+  <div class="mx-auto flex w-full max-w-6xl flex-col items-center px-5 py-20 text-center sm:px-8 sm:py-24">
+    <Image src={appIcon} alt="" width={88} height={88} densities={[1, 2, 3]} class="size-22" />
+    <h2 class="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">{closing.title}</h2>
+    <p class="mt-3 text-lg text-stone-600 dark:text-stone-300">{closing.lead}</p>
+    <div class="mt-8"><DownloadButton /></div>
+    <p class="mt-5 text-sm text-stone-600 dark:text-stone-400">Version {version} · {download.requirements}</p>
+  </div>
+</section>
