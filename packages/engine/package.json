@@ -9,6 +9,7 @@
     "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests"
   },
   "dependencies": {
-    "@open-wisper/domain": "workspace:*"
+    "@open-wisper/domain": "workspace:*",
+    "@open-wisper/store": "workspace:*"
   }
 }
