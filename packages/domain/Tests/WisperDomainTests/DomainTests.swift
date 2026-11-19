@@ -89,3 +89,15 @@ import Testing
   #expect(markdown.contains("- [x] Send onboarding copy to design (Jordan)"))
   #expect(markdown.contains("**Length:** 31 min"))
 }
+
+@Test func updateMeetingChangesInPlaceAndNeverRevivesADeletedMeeting() async throws {
+  let library = InMemoryLibrary()
+  let meeting = Meeting(title: "Sync")
+  try await library.save(meeting)
+  let updated = try await library.updateMeeting(meeting.id) { $0.tags = ["team"] }
+  #expect(updated?.tags == ["team"])
+  #expect(try await library.meeting(meeting.id)?.title == "Sync")
+  try await library.deleteMeeting(meeting.id)
+  #expect(try await library.updateMeeting(meeting.id) { $0.title = "Back" } == nil)
+  #expect(try await library.meetings().isEmpty)
+}

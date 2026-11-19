@@ -48,8 +48,18 @@ public protocol Library: Sendable {
   /// Meetings, newest first. `search` matches title, notes, tags and transcript.
   func meetings(search: String?) async throws -> [Meeting]
   func meeting(_ id: Meeting.ID) async throws -> Meeting?
-  /// Inserts or replaces by `id`.
+  /// Inserts or replaces by `id`. To change part of a stored meeting, use
+  /// `updateMeeting`, so another writer's edit is never overwritten.
   func save(_ meeting: Meeting) async throws
+  /// Applies `change` to the stored meeting in one step and returns the
+  /// result: no other writer, in this process or another, can slip in between
+  /// the read and the write. Returns `nil`, and saves nothing, when the
+  /// meeting does not exist (it is never brought back after a delete).
+  @discardableResult
+  func updateMeeting(
+    _ id: Meeting.ID,
+    _ change: @Sendable (inout Meeting) -> Void
+  ) async throws -> Meeting?
   /// Deletes the meeting and its audio.
   func deleteMeeting(_ id: Meeting.ID) async throws
   /// Folder where a meeting's audio chunks are written. Created on demand.

@@ -228,6 +228,27 @@ public actor FileLibrary: Library {
     try write(.meetings) { try meetingIndex.save(meeting) }
   }
 
+  @discardableResult
+  public func updateMeeting(
+    _ id: Meeting.ID,
+    _ change: @Sendable (inout Meeting) -> Void
+  ) throws -> Meeting? {
+    // Read and write under one hold of the shared lock, so neither this process nor
+    // another one can change the meeting in between.
+    let (result, changed): (Meeting?, Bool) = try lock.withLock {
+      guard let stored = try meetingIndex.meeting(id).meeting else { return (nil, false) }
+      var meeting = stored
+      change(&meeting)
+      // The folder name decides the ID; a change cannot move the meeting.
+      meeting.id = stored.id
+      guard meeting != stored else { return (stored, false) }
+      try meetingIndex.save(meeting)
+      return (meeting, true)
+    }
+    if changed { hub.send(.meetings) }
+    return result
+  }
+
   public func deleteMeeting(_ id: Meeting.ID) throws {
     try write(.meetings) { try meetingIndex.delete(id) }
   }

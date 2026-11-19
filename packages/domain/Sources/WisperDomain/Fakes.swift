@@ -152,6 +152,15 @@ public actor InMemoryLibrary: Library {
     broadcaster.send(.meetings)
   }
 
+  @discardableResult
+  public func updateMeeting(_ id: Meeting.ID, _ change: @Sendable (inout Meeting) -> Void) -> Meeting? {
+    guard let index = storedMeetings.firstIndex(where: { $0.id == id }) else { return nil }
+    let before = storedMeetings[index]
+    change(&storedMeetings[index])
+    if storedMeetings[index] != before { broadcaster.send(.meetings) }
+    return storedMeetings[index]
+  }
+
   public func deleteMeeting(_ id: Meeting.ID) {
     storedMeetings.removeAll { $0.id == id }
     broadcaster.send(.meetings)

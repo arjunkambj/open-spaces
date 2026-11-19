@@ -69,6 +69,33 @@ struct SharedFolderTests {
     #expect(try await app.words().isEmpty)
   }
 
+  @Test func twoLibrariesUpdatingOneMeetingNeverLoseAnEdit() async throws {
+    let app = FileLibrary(root: folder.url)
+    let tool = FileLibrary(root: folder.url)
+    let meeting = Meeting(title: "Sync", status: .ready)
+    try await app.save(meeting)
+
+    // Each side adds its own tags, many times, at the same moment.
+    await withTaskGroup(of: Void.self) { group in
+      for (library, name) in [(app, "app"), (tool, "tool")] {
+        group.addTask {
+          for index in 0..<40 {
+            _ = try? await library.updateMeeting(meeting.id) { $0.tags.append("\(name)-\(index)") }
+          }
+        }
+      }
+    }
+    let tags = try #require(try await app.meeting(meeting.id)).tags
+    #expect(tags.count == 80)
+    #expect(Set(tags).count == 80)
+
+    // A deleted meeting is not brought back by a late update.
+    try await tool.deleteMeeting(meeting.id)
+    #expect(try await app.updateMeeting(meeting.id) { $0.title = "Back" } == nil)
+    #expect(try await app.meetings().isEmpty)
+    #expect(!folder.exists("meetings/\(meeting.id.uuidString)/meeting.json"))
+  }
+
   @Test(arguments: Watching.allCases)
   func aPlainWriteFromOutsideIsNoticed(_ watching: Watching) async throws {
     let library = FileLibrary(root: folder.url, watching: watching.mode)

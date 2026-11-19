@@ -459,13 +459,14 @@ public final class MeetingEngine {
         }
       }
 
+      let (finalFailure, finalDraft) = (failure, draft)
       let finished = try await update(id) { meeting in
         // Set again: someone who saved an older copy of the meeting meanwhile must not undo it.
         if result.chunkCount > 0 { meeting.segments = result.segments }
         meeting.endedAt = transcribed.endedAt
         meeting.status = nothingHeard ? .failed : .ready
-        meeting.failure = failure
-        if let draft { MeetingEngine.apply(draft, to: &meeting) }
+        meeting.failure = finalFailure
+        if let finalDraft { MeetingEngine.apply(finalDraft, to: &meeting) }
       }
       // The audio goes only when nothing is left that could need it.
       if finished == nil || (failure == nil && !settings.meetings.keepAudio) {
@@ -480,17 +481,16 @@ public final class MeetingEngine {
   /// Applies `change` to the stored meeting and saves it. Working on the stored copy keeps what
   /// the user or an agent changed in the meantime. Returns `nil` when the meeting is gone.
   @discardableResult
-  private func update(_ id: Meeting.ID, _ change: (inout Meeting) -> Void) async throws -> Meeting? {
-    guard let stored = try await library.meeting(id) else { return nil }
-    var meeting = stored
-    change(&meeting)
-    if meeting != stored { try await library.save(meeting) }
-    return meeting
+  private func update(
+    _ id: Meeting.ID,
+    _ change: @Sendable (inout Meeting) -> Void
+  ) async throws -> Meeting? {
+    try await library.updateMeeting(id, change)
   }
 
   /// Puts freshly written notes into a meeting. The title is taken only while the meeting
   /// still carries its dated placeholder, so a name the user chose is never replaced.
-  private static func apply(_ draft: MeetingNotesWriter.Draft, to meeting: inout Meeting) {
+  private nonisolated static func apply(_ draft: MeetingNotesWriter.Draft, to meeting: inout Meeting) {
     meeting.notes = draft.notes(keeping: meeting.notes)
     if !draft.title.isEmpty, meeting.title == placeholderTitle(for: meeting.startedAt) {
       meeting.title = draft.title
@@ -499,17 +499,17 @@ public final class MeetingEngine {
 
   private static let transcriptFailed = "This meeting could not be transcribed."
   private static let partFailed = "Part of this meeting could not be transcribed."
-  private static let notesFailed = "The notes could not be written."
+  private nonisolated static let notesFailed = "The notes could not be written."
 
   /// The title a meeting gets until the notes give it a better one, e.g. "Meeting, 19 Nov, 2:30 PM".
-  static func placeholderTitle(for date: Date) -> String {
+  nonisolated static func placeholderTitle(for date: Date) -> String {
     let day = date.formatted(.dateTime.day().month(.abbreviated))
     let time = date.formatted(date: .omitted, time: .shortened)
     return "Meeting, \(day), \(time)"
   }
 
   /// When a meeting that was never stopped properly ended: where its audio or transcript ends.
-  private static func end(of meeting: Meeting, audio: TimeInterval) -> Date {
+  private nonisolated static func end(of meeting: Meeting, audio: TimeInterval) -> Date {
     meeting.startedAt.addingTimeInterval(max(audio, meeting.segments.map(\.end).max() ?? 0))
   }
 
