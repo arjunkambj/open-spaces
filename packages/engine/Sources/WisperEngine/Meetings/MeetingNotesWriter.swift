@@ -88,7 +88,8 @@ struct MeetingNotesWriter: Sendable {
         system: system,
         user: user,
         jsonSchema: MeetingNotesWriter.schema,
-        temperature: 0.2
+        temperature: 0.2,
+        effort: .low
       )
     )
     return try MeetingNotesWriter.parse(reply)
@@ -124,7 +125,8 @@ struct MeetingNotesWriter: Sendable {
             model: model,
             system: MeetingNotesWriter.findPrompt,
             user: "Question: \(question)\n\nTranscript part:\n\(part)",
-            temperature: 0
+            temperature: 0,
+            effort: CompletionRequest.Effort.none
           )
         )
       }
@@ -144,7 +146,8 @@ struct MeetingNotesWriter: Sendable {
         model: model,
         system: MeetingNotesWriter.answerPrompt(who),
         user: material.joined(separator: "\n\n"),
-        temperature: 0.2
+        temperature: 0.2,
+        effort: .low
       )
     )
   }
