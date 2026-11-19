@@ -54,5 +54,14 @@ let package = Package(
       name: "WisperMacTests",
       dependencies: ["WisperMac", .product(name: "WisperDomain", package: "domain")]
     ),
+    .testTarget(
+      name: "WisperMacUITests",
+      dependencies: [
+        "WisperMac",
+        "WisperMacUI",
+        .product(name: "WisperDomain", package: "domain"),
+        .product(name: "WisperEngine", package: "engine"),
+      ]
+    ),
   ]
 )
