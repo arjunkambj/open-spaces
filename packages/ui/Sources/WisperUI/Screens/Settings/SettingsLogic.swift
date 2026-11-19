@@ -236,11 +236,6 @@ enum AgentSetup {
     """
   }
 
-  /// The command that prints the settings block.
-  static func configCommand(toolPath: String) -> String {
-    "\(shellQuoted(toolPath)) mcp-config"
-  }
-
   /// `path` in double quotes, safe to paste into a shell.
   static func shellQuoted(_ path: String) -> String {
     var quoted = ""
@@ -253,20 +248,17 @@ enum AgentSetup {
 
   private static func jsonString(_ text: String) -> String {
     let options: JSONSerialization.WritingOptions = [.fragmentsAllowed, .withoutEscapingSlashes]
-    guard
-      let data = try? JSONSerialization.data(withJSONObject: text, options: options),
-      let encoded = String(data: data, encoding: .utf8)
-    else { return "\"\"" }
-    return encoded
+    // A string always has a JSON form.
+    let data = try! JSONSerialization.data(withJSONObject: text, options: options)
+    return String(decoding: data, as: UTF8.self)
   }
 }
 
 /// The version shown in About and at the foot of the settings navigation.
 enum AppVersion {
-  /// The app's version, or "dev" when the code is not running from a built app.
-  static func text(info: [String: Any]? = Bundle.main.infoDictionary) -> String {
-    guard let version = info?["CFBundleShortVersionString"] as? String, !version.isEmpty else { return "dev" }
-    return version
+  /// The app's version, or "dev" when the code is not running from a built app (the snapshot tools).
+  static var text: String {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
   }
 }
 

@@ -3,7 +3,7 @@ import Observation
 import WisperDomain
 
 /// What the keyboard can do to the text field it is typing into, and to the system.
-/// The keyboard extension supplies the real one; tests supply their own.
+/// The keyboard extension supplies the real one; the sample keyboard's does nothing.
 public struct KeyboardHost: Sendable {
   /// Types text at the cursor.
   public var insert: @MainActor @Sendable (String) -> Void
@@ -64,8 +64,8 @@ public final class KeyboardModel {
   public private(set) var showsGlobeKey = true
 
   /// How long the delete key is held before it starts repeating, and how fast it repeats.
-  @ObservationIgnored var repeatDelay: Duration = .milliseconds(420)
-  @ObservationIgnored var repeatInterval: Duration = .milliseconds(85)
+  private static let repeatDelay: Duration = .milliseconds(420)
+  private static let repeatInterval: Duration = .milliseconds(85)
 
   @ObservationIgnored private let library: (any Library)?
   @ObservationIgnored private let dataFolder: URL?
@@ -107,7 +107,7 @@ public final class KeyboardModel {
     }
   }
 
-  /// Fills the keyboard without a library. For the sample and for tests.
+  /// Fills the keyboard without a library. For the sample.
   func show(snippets: [Snippet], latest: String?, problem: Problem? = nil) {
     self.snippets = snippets
     self.latest = latest
@@ -165,13 +165,11 @@ public final class KeyboardModel {
     repeating?.cancel()
     host.deleteBackward()
     let host = host
-    let delay = repeatDelay
-    let interval = repeatInterval
     repeating = Task {
-      try? await Task.sleep(for: delay)
+      try? await Task.sleep(for: Self.repeatDelay)
       while !Task.isCancelled {
         host.deleteBackward()
-        try? await Task.sleep(for: interval)
+        try? await Task.sleep(for: Self.repeatInterval)
       }
     }
   }

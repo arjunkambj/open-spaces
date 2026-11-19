@@ -154,14 +154,10 @@ enum MeetingsLogic {
 
   /// Puts meetings under date headings: Today, Yesterday, This week, then one per month.
   /// Keeps the order the meetings come in.
-  static func groups(
-    _ meetings: [Meeting],
-    now: Date = Date(),
-    calendar: Calendar = .current
-  ) -> [MeetingGroup] {
+  static func groups(_ meetings: [Meeting]) -> [MeetingGroup] {
     var groups: [MeetingGroup] = []
     for meeting in meetings {
-      let title = heading(for: meeting.startedAt, now: now, calendar: calendar)
+      let title = heading(for: meeting.startedAt)
       if let index = groups.firstIndex(where: { $0.title == title }) {
         groups[index].meetings.append(meeting)
       } else {
@@ -171,35 +167,37 @@ enum MeetingsLogic {
     return groups
   }
 
-  static func heading(for date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
-    switch age(of: date, now: now, calendar: calendar) {
+  static func heading(for date: Date) -> String {
+    switch age(of: date) {
     case .today: return "Today"
     case .yesterday: return "Yesterday"
     case .thisWeek: return "This week"
-    case .thisYear: return date.formatted(style(calendar).month(.wide))
-    case .older: return date.formatted(style(calendar).month(.wide).year())
+    case .thisYear: return date.formatted(style.month(.wide))
+    case .older: return date.formatted(style.month(.wide).year())
     }
   }
 
   /// When a meeting started, said as briefly as its date heading allows: the time alone under
   /// Today and Yesterday, with the weekday under This week, with the day under a month.
-  static func when(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
-    let time = date.formatted(style(calendar).hour().minute())
-    switch age(of: date, now: now, calendar: calendar) {
+  static func when(_ date: Date) -> String {
+    let time = date.formatted(style.hour().minute())
+    switch age(of: date) {
     case .today, .yesterday:
       return time
     case .thisWeek:
-      return "\(date.formatted(style(calendar).weekday(.wide))), \(time)"
+      return "\(date.formatted(style.weekday(.wide))), \(time)"
     case .thisYear:
-      return "\(date.formatted(style(calendar).month(.abbreviated).day())), \(time)"
+      return "\(date.formatted(style.month(.abbreviated).day())), \(time)"
     case .older:
-      return "\(date.formatted(style(calendar).month(.abbreviated).day().year())), \(time)"
+      return "\(date.formatted(style.month(.abbreviated).day().year())), \(time)"
     }
   }
 
   private enum Age { case today, yesterday, thisWeek, thisYear, older }
 
-  private static func age(of date: Date, now: Date, calendar: Calendar) -> Age {
+  private static func age(of date: Date) -> Age {
+    let now = Date()
+    let calendar = Calendar.current
     // A clock that jumped can put a meeting in the future. It still belongs to today.
     if date > now || calendar.isDate(date, inSameDayAs: now) { return .today }
     if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
@@ -211,8 +209,9 @@ enum MeetingsLogic {
     return calendar.isDate(date, equalTo: now, toGranularity: .year) ? .thisYear : .older
   }
 
-  private static func style(_ calendar: Calendar) -> Date.FormatStyle {
-    Date.FormatStyle(locale: calendar.locale ?? .current, calendar: calendar, timeZone: calendar.timeZone)
+  private static var style: Date.FormatStyle {
+    let calendar = Calendar.current
+    return Date.FormatStyle(locale: .current, calendar: calendar, timeZone: calendar.timeZone)
   }
 
   /// How long a meeting was, in words: "31 min", "1 hr 5 min". `nil` when it has no length.

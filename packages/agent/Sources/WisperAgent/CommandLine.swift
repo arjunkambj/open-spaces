@@ -282,7 +282,7 @@ struct CommandLineFrontEnd {
   private func doctor(json: Bool) async -> Int32 {
     let folder = environment.dataFolder
     let folderExists = FileManager.default.fileExists(atPath: folder.path)
-    let running = await environment.appIsRunning()
+    let running = await Live.appIsRunning()
     var data: JSONObject = [
       "version": .string(WisperAgent.version),
       "tool": .string(environment.executablePath),

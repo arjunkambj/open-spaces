@@ -8,7 +8,8 @@ Open Wisper is an open-source voice dictation and meeting-notes app for macOS an
 - **One branch, one environment.** `main` is the base branch. There is no staging or dev environment. Work on a branch, open a PR into `main`.
 - **Original work only.** The layout and flows are inspired by popular dictation apps, but never copy another product's code, images, icons, sounds, name or wording.
 - **No third-party Swift dependencies** without a strong reason. Apple frameworks and the standard library cover what we need. The one exception is Sparkle, the updater in the Mac app, imported in a single file (`AppUpdater.swift`).
-- The API key never goes into a file, a log, an error message or a test.
+- The API key never goes into a file, a log or an error message.
+- **No tests, no legacy, no fallbacks.** No test suites. No code kept for old callers or old data: change the callers instead. No second path in case the first one fails: fail plainly, with a clear `WisperError`.
 
 ## Layout
 
@@ -28,9 +29,9 @@ scripts           swiftw, ios, ci-try and other build helpers
 docs              agents.md (connecting an agent), data-format.md (files on disk)
 ```
 
-Turborepo (`turbo.json`) runs each package's `build`, `test` and `lint` scripts; pnpm workspaces declare the dependency graph. The code is Swift 6 with strict concurrency.
+Turborepo (`turbo.json`) runs each package's `build` and `lint` scripts; pnpm workspaces declare the dependency graph. The code is Swift 6 with strict concurrency.
 
-Dependencies point one way: `domain` knows nothing; `store`, `ai`, `audio`, `engine`, `ui`, `agent` depend on `domain` (and `ui` on `engine`, `agent` on `store`; the tests of `ai` and `engine` also use `store`); the apps depend on everything and are the only place real adapters are wired together.
+Dependencies point one way: `domain` knows nothing; `store`, `ai`, `audio`, `engine`, `ui`, `agent` depend on `domain` (and `ui` on `engine`, `agent` on `store`); the apps depend on everything and are the only place real adapters are wired together.
 
 ## Contracts every change keeps
 
@@ -40,16 +41,16 @@ Dependencies point one way: `domain` knows nothing; `store`, `ai`, `audio`, `eng
 - **Nothing said is lost.** A failed dictation keeps its audio and a history entry to retry. A meeting's audio stays on disk until all of it is transcribed, and `recoverUnfinished` rebuilds from it after a crash.
 - **Agent export.** `meetings export` writes only a new `.md` file. Keep the rules in `docs/agents.md` ("Safety") true.
 - **Updates.** The Mac app updates itself through Sparkle from GitHub Releases. Every release is signed with the same certificate and update key (`scripts/setup-signing`), so permissions survive an update and a tampered download is refused. A release is a `vX.Y.Z` tag that matches `apps/macos/package.json`; see CONTRIBUTING.md.
-- **Docs follow the code.** A change to a stored model updates `docs/data-format.md`. A change to a `wisper` tool updates the tables in `docs/agents.md`: paste the output of `wisper tools --markdown` between the markers (a test compares them).
+- **Docs follow the code.** A change to a stored model updates `docs/data-format.md`. A change to a `wisper` tool updates the tables in `docs/agents.md`: paste the output of `wisper tools --markdown` between the markers.
 
 ## Design: deep modules
 
 We design **deep modules**: a lot of behaviour behind a small interface.
 
-- The seams are the protocols in `packages/domain/Sources/WisperDomain/Seams.swift`: `Library`, `SecretStore`, `Transcriber`, `LanguageModel`, `AudioCapture`, `TextTarget`, `Permissions`. Each has a real adapter and an in-memory adapter (`Fakes.swift`). Two adapters make a seam real; do not add a protocol with one.
+- The seams are the protocols in `packages/domain/Sources/WisperDomain/Seams.swift`: `Library`, `SecretStore`, `Transcriber`, `LanguageModel`, `AudioCapture`, `TextTarget`, `Permissions`. Each has a real adapter and an in-memory adapter (`Fakes.swift`) that demo mode and the snapshot tools run on. Two adapters make a seam real; do not add a protocol with one.
 - `DictationEngine` and `MeetingEngine` each hide a whole pipeline behind a handful of methods. Screens never talk to a transcriber or a file.
 - `AppModel` is the one object screens use. It holds a live copy of the library, so a change made by an agent through the `wisper` tool shows up in the app.
-- Test through the interface, with the fakes. If a test needs to reach inside a module, the module has the wrong shape.
+- Callers go through the interface. If one needs to reach inside a module, the module has the wrong shape.
 - Accept dependencies, do not create them. Return results instead of hiding side effects.
 - Before adding a type, ask the deletion test: if it were deleted, would complexity vanish (it was a pass-through) or spread across callers (it earns its keep)?
 
@@ -59,15 +60,14 @@ Vocabulary: module, interface, implementation, seam, adapter, depth. Avoid "serv
 
 ```bash
 pnpm install            # once
-pnpm check              # lint + build + test, everything
-pnpm test               # tests only
+pnpm check              # lint + build, everything
 pnpm format             # format all Swift in place
 pnpm mac                # build, bundle and open the macOS app
 pnpm web                # the website on 127.0.0.1:4321; web:build builds it, web:deploy puts it on Cloudflare
 
 # One package:
-cd packages/engine && ../../scripts/swiftw build && ../../scripts/swiftw test
-cd apps/ios/Phone && ../../../scripts/swiftw build && ../../../scripts/swiftw test
+cd packages/engine && ../../scripts/swiftw build
+cd apps/ios/Phone && ../../../scripts/swiftw build
 swift format lint --strict --recursive --parallel packages apps
 
 # Look at screens as PNG files, with no window opened:
@@ -80,11 +80,9 @@ The website is the one part that is not Swift. Its words are all in `apps/web/sr
 
 The Mac app also starts with `--demo`: made-up data, no microphone, Keychain, shortcuts or network.
 
-Always call `scripts/swiftw` instead of `swift` for build/test/run. It makes the build work on a Mac that has only the Command Line Tools (it picks an SDK whose compiler plugins are present and adds the Swift Testing plugin path).
+Always call `scripts/swiftw` instead of `swift` for build and run. It makes the build work on a Mac that has only the Command Line Tools (it picks an SDK whose compiler plugins are present).
 
-Tests use **Swift Testing** (`import Testing`, `@Test`, `#expect`), not XCTest.
-
-The iOS app cannot be built without full Xcode: `scripts/ios <generate|build|test>` (also `pnpm ios:build`, `pnpm ios:test`) skips with a message when Xcode is missing, and CI builds it. To build an uncommitted working tree in CI: `scripts/ci-try <name>` pushes a snapshot to the throwaway branch `ci/try-<name>`; delete that branch when you are done (`git push origin --delete ci/try-<name>`).
+The iOS app cannot be built without full Xcode: `scripts/ios <generate|build>` (also `pnpm ios:build`) skips with a message when Xcode is missing, and CI builds it. To build an uncommitted working tree in CI: `scripts/ci-try <name>` pushes a snapshot to the throwaway branch `ci/try-<name>`; delete that branch when you are done (`git push origin --delete ci/try-<name>`).
 
 CI runs on `macos-26` with Xcode 26.6 (Swift 6.3), which can be older than your local Swift. Write code that the older compiler accepts. CI takes iOS screenshots only on a run started by hand (Actions > CI > Run workflow) or from `scripts/ci-try ios`.
 

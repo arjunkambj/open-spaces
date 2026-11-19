@@ -27,9 +27,9 @@ public final class SoundPlayer {
     }
   }
 
-  /// Plays `cue`, unless `enabled` is false. Pass the user's `playSounds` setting.
-  public func play(_ cue: SoundCue, enabled: Bool = true) {
-    guard enabled, let player = players[cue] else { return }
+  /// Plays `cue`.
+  public func play(_ cue: SoundCue) {
+    guard let player = players[cue] else { return }
     player.currentTime = 0
     player.play()
   }

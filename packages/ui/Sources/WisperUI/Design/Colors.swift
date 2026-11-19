@@ -7,8 +7,8 @@ import SwiftUI
 #endif
 
 /// One colour with its light and dark value, as `0xRRGGBB` plus an opacity.
-struct ColorPair: Sendable, Equatable {
-  struct Value: Sendable, Equatable {
+struct ColorPair: Sendable {
+  struct Value: Sendable {
     var hex: UInt32
     var alpha: Double = 1
 
@@ -29,8 +29,6 @@ struct ColorPair: Sendable, Equatable {
     self.light = light
     self.dark = dark
   }
-
-  func value(_ scheme: ColorScheme) -> Value { scheme == .dark ? dark : light }
 
   /// A colour that follows the light or dark appearance by itself. No asset catalog needed.
   var color: SwiftUI.Color {
@@ -63,7 +61,7 @@ struct ColorPair: Sendable, Equatable {
 }
 
 extension Wisper {
-  /// The raw values behind `Wisper.Color`. Tests check their contrast.
+  /// The raw values behind `Wisper.Color`.
   ///
   /// The greys are the "stone" scale (a warm grey: 50 `FAFAF9`, 100 `F5F5F4`, 200 `E7E5E4`,
   /// 300 `D6D3D1`, 400 `A8A29E`, 500 `78716C`, 600 `57534E`, 700 `44403C`, 800 `292524`,

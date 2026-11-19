@@ -13,7 +13,6 @@ let package = Package(
     .target(
       name: "WisperDomain",
       dependencies: []
-    ),
-    .testTarget(name: "WisperDomainTests", dependencies: ["WisperDomain"]),
+    )
   ]
 )

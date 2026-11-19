@@ -27,16 +27,15 @@ public struct SnapshotCase {
   public var name: String
   public var canvas: Canvas
   public var view: AnyView
-  /// Makes the app model for this case, or `nil` for the renderer's own (`AppModel.demo()`).
-  /// The renderer calls `load()` on it.
-  public var model: (@MainActor () -> AppModel)?
+  /// Makes the app model for this case. The renderer calls `load()` on it.
+  public var model: @MainActor () -> AppModel
 
   /// - model: a different starting state, e.g. `{ .demo(onboarded: false) }`. Leave out for the standard demo.
   @MainActor
   public init<Content: View>(
     _ name: String,
     canvas: Canvas = .mac,
-    model: (@MainActor () -> AppModel)? = nil,
+    model: @escaping @MainActor () -> AppModel = { .demo() },
     @ViewBuilder view: () -> Content
   ) {
     self.name = name

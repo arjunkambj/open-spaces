@@ -104,8 +104,7 @@ cause, not a proven one: we could not reproduce the owner's stall on demand.
 
 ### Reliability: a stall no longer costs half a minute
 
-All of this is in `packages/ai` (`Connections.swift`, `Client.swift`) and proven by tests that
-run a real small server on this Mac (`ConnectionTests.swift`).
+All of this is in `packages/ai` (`Connections.swift`, `Client.swift`).
 
 - **Our own connections.** The app no longer uses the system's shared connection pool. It keeps
   a private one: no cookies, no cache, nothing on disk, and it fails at once when there is no
@@ -146,15 +145,8 @@ How one stalled request plays out for a 5-second dictation:
 | The server truly does not answer | fail at about 28 s | fail at about 17 s (5.8 s, then 11.5 s on a new connection) |
 
 Where the "now" numbers come from: the waits themselves (5.8 s, then 11.5 s) are fixed in
-`OpenAITranscriber.limits` and checked by `aShortDictationToOpenAIWaitsAboutFiveSecondsThenTwiceThat`.
-That a silent request is given up after exactly its wait, sent again on a new connection of a
-new pool, and never outlasts its allowance is measured on real connections to a local server
-that goes silent, with the waits made short so the tests stay quick
-(`aStalledConnectionIsGivenUpQuicklyAndTheRetryUsesANewOne`,
-`aSilentUploadTakesTheTimeItsLimitsSay`, `theWholeCallNeverOutlastsItsAllowance`). While this
-was being built, a test with the full waits against a server that never answers failed after
-about 17 s (it checked for 16 to 21 s and passed); it was then replaced by the quick ones. The
-"before" numbers come from the old code's settings and from the owner's history file.
+`OpenAITranscriber.limits`. The "before" numbers come from the old code's settings and from the
+owner's history file.
 
 Decisions, and why:
 
@@ -168,10 +160,8 @@ Decisions, and why:
   system has no public switch to forbid it, so a stall is handled the same way whichever
   protocol was used: a new connection.
 
-Not proven here: the exact stall on the owner's VPN. A small local server cannot imitate the
-way OpenAI's connections work (several requests share one connection), so the tests show that a
-retry travels on a new connection from a new pool, not that this cures the owner's case. That
-needs a day of real use, and the timing numbers below will show it.
+Not proven here: that this cures the stall on the owner's VPN. That needs a day of real use,
+and the timing numbers below will show it.
 
 ### What we measure
 
@@ -246,8 +236,8 @@ it is skipped before anything is sent, and nothing about a dictation changes.
 
 **How it is built.**
 
-- A new seam, `LiveTranscriber` (`packages/domain`, `Seams.swift`), with two adapters:
-  `OpenAILiveTranscriber` (`packages/ai`, `LiveTranscriber.swift`) and `FakeLiveTranscriber`.
+- A new seam, `LiveTranscriber` (`packages/domain`, `Seams.swift`). Its adapter is
+  `OpenAILiveTranscriber` (`packages/ai`, `LiveTranscriber.swift`).
 - `AudioCapture` can now hand over the sound while it records: `CaptureRequest.liveFrames` and
   `CaptureSession.frames`. They are the very samples that go into the file. The file is written
   in every case.
@@ -266,10 +256,8 @@ it is skipped before anything is sent, and nothing about a dictation changes.
   file path. If `gpt-live-transcribe` is the chosen model, files go to `gpt-transcribe`,
   because the live model does not take files.
 
-**What is proven and what is not.** The adapter is tested against a small server on this Mac
-that speaks the protocol as the documentation describes it, and the engine is tested with the
-fakes: the live words are used, and the file takes over in every failure case. **Nothing has
-been tried against OpenAI itself**, because no key was available. Things only a real key can
+**What is not proven.** **Nothing has been tried against OpenAI itself**, because no key was
+available. The adapter follows the protocol as the documentation describes it. Things only a real key can
 show: whether the handshake and the settings are accepted as written, whether 24 kHz samples
 made from our 16 kHz recording are fine, how fast the final text really arrives, how long a
 recording a session takes, and how good `gpt-live-transcribe` is next to `gpt-transcribe`.
@@ -350,7 +338,6 @@ Read from its public voice documents. Ideas only; no code was taken.
 
 - **Spoken corrections.** Its clean-up fixes "make it 42, sorry, 24", and a cue phrase such as "scratch that" can be set.
 - **Skip the clean-up.** While the text is being tidied, a Skip button inserts the raw words at once.
-- **A test set for the clean-up prompt.** A few made-up transcripts, run several times and compared with the last run. A case is added whenever a real failure shows up.
 - **Clean-up sees the text around the cursor** (up to about 1,000 characters), so the result fits what is already written.
 - **Note where the text will go before recording, and check again before inserting,** so a late result cannot land in the wrong place.
 - **Two test buttons:** "Test microphone" plays your voice back and sends nothing; "Test model" shows what the model heard, with no clean-up.

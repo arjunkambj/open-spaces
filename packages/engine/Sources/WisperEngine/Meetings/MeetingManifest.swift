@@ -34,7 +34,6 @@ struct MeetingManifest: Codable, Equatable, Sendable {
     var segments: [TranscriptSegment] = []
   }
 
-  var version = 1
   var chunks: [Chunk] = []
   /// Set once audio was found that nobody can read: the file that was being written when the
   /// app closed. That part of the meeting is gone, and the meeting has to say so.

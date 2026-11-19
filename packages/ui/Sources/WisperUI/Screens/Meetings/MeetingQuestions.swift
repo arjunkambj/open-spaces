@@ -30,16 +30,14 @@ final class MeetingQuestions {
   /// The meetings with a thread, the one asked about last at the end.
   private var recent: [Meeting.ID]
 
-  private let meetingLimit: Int
-  private let questionLimit: Int
+  /// How many meetings keep a thread. The ones asked about longest ago go first.
+  private let meetingLimit = 20
+  /// How many questions a thread keeps. The oldest go first.
+  private let questionLimit = 50
 
-  /// - meetingLimit: how many meetings keep a thread. The ones asked about longest ago go first.
-  /// - questionLimit: how many questions a thread keeps. The oldest go first.
-  init(threads: [Meeting.ID: [Entry]] = [:], meetingLimit: Int = 20, questionLimit: Int = 50) {
+  init(threads: [Meeting.ID: [Entry]] = [:]) {
     self.threads = threads
     recent = Array(threads.keys)
-    self.meetingLimit = max(1, meetingLimit)
-    self.questionLimit = max(1, questionLimit)
   }
 
   /// The questions about one meeting, oldest first.

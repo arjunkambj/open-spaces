@@ -30,13 +30,5 @@ let package = Package(
         .product(name: "WisperEngine", package: "engine"),
       ]
     ),
-    .testTarget(
-      name: "WisperUITests",
-      dependencies: [
-        "WisperUI",
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperEngine", package: "engine"),
-      ]
-    ),
   ]
 )

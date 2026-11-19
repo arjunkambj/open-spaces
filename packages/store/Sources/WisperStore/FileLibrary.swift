@@ -13,7 +13,6 @@ public actor FileLibrary: Library {
   // File work blocks, so it gets a queue of its own instead of the shared pool.
   private let queue: DispatchSerialQueue
   private let layout: FolderLayout
-  private let watchMode: WatchMode
   private let hub = ChangeHub()
   private let lock: FolderLock
   private let settingsFile: JSONDocument<Settings>
@@ -32,15 +31,10 @@ public actor FileLibrary: Library {
   /// Opens the library in `root`. Nothing is read or created until it is needed, so this
   /// never fails and is cheap to call.
   public init(root: URL = WisperPaths.defaultRoot()) {
-    self.init(root: root, watching: .automatic)
-  }
-
-  init(root: URL, watching watchMode: WatchMode) {
     let layout = FolderLayout(root: root.standardizedFileURL)
     let lock = FolderLock(layout: layout)
     self.queue = DispatchSerialQueue(label: "dev.openwisper.store.library", qos: .userInitiated)
     self.layout = layout
-    self.watchMode = watchMode
     self.lock = lock
     // A data folder made by something else (or opened up later) is closed to other users
     // again every time it is opened. A folder that is not there yet is made private later.
@@ -297,7 +291,7 @@ public actor FileLibrary: Library {
       guard let self else { return }
       Task { await self.lookForChanges() }
     }
-    watcher.start(watchMode)
+    watcher.start()
     self.watcher = watcher
     // Files that were read before are compared with what was read. The rest are compared
     // with what they were when the listener arrived. Nothing slips through in between.

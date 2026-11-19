@@ -261,15 +261,14 @@ docs              guides, and the pictures on this page
 scripts           build and CI scripts
 ```
 
-The apps are all Swift. There is one library we did not write: [Sparkle](https://sparkle-project.org), the open-source updater most Mac apps outside the App Store use. It is in the Mac app only. [Turborepo](https://turborepo.dev) and pnpm run each part's build, tests and style check in the right order.
+The apps are all Swift. There is one library we did not write: [Sparkle](https://sparkle-project.org), the open-source updater most Mac apps outside the App Store use. It is in the Mac app only. [Turborepo](https://turborepo.dev) and pnpm run each part's build and style check in the right order.
 
 The website is the one part that is not Swift: a static page built with Astro and Tailwind CSS. [apps/web/README.md](apps/web/README.md) says how to run and deploy it.
 
 Useful commands:
 
 ```bash
-pnpm check     # style check, build and tests for everything
-pnpm test      # tests only
+pnpm check     # style check and build for everything
 pnpm format    # fix the code style in place
 pnpm mac       # build and open the macOS app
 pnpm mac:dmg   # build the macOS app and put it in a disk image

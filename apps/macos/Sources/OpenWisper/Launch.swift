@@ -1,9 +1,8 @@
 import Foundation
-import WisperDomain
 
-/// How this run of the app was asked to start, read from its arguments and environment.
-struct Launch: Equatable {
-  enum Mode: Equatable {
+/// How this run of the app was asked to start, read from its arguments.
+struct Launch {
+  enum Mode {
     /// The real app.
     case app
     /// The whole app on made-up data: no microphone, Keychain, shortcuts, network or sounds.
@@ -27,15 +26,11 @@ struct Launch: Equatable {
                                               Draw the app's screens as PNG files and quit.
 
     Environment:
-      OPEN_WISPER_DEMO=1    Same as --demo.
       OPEN_WISPER_HOME      Folder for the app's data, instead of Application Support/Open Wisper.
     """
 
-  init(arguments: [String], environment: [String: String]) {
+  init(arguments: [String]) {
     var mode = Mode.app
-    if let flag = environment["OPEN_WISPER_DEMO"], !flag.isEmpty, flag != "0" {
-      mode = .demo(firstRun: false)
-    }
     var rest = arguments.dropFirst()
     while let argument = rest.popFirst() {
       switch argument {

@@ -177,13 +177,14 @@ A few rules hold everywhere:
 
 ## All tools
 
-These tables are printed by `wisper tools --markdown`, so they always match the program. Each tool has two
+These tables are printed by `wisper tools --markdown`. Each tool has two
 names: the one an MCP client sees, and the command for the terminal. Both do exactly the same thing.
 `wisper <command> --help` explains every argument.
 
 The last column says what a tool does to your data. MCP clients are told the same, so a careful client can
 ask you before it runs a tool that overwrites or deletes, or that saves a file outside Open Wisper.
 
+<!-- After changing a tool, run `wisper tools --markdown` and paste what it prints between these two markers. -->
 <!-- tools:start -->
 ### Meetings
 
@@ -338,7 +339,7 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 **Recording is authorised by a ticket.** `wisper` proves to the app that a request to start or stop is its
 own by leaving a one-time ticket in the data folder (see "Recording, and the app's links" above). A web page
 or a document that opens the same link has no ticket, so the app asks you first, or ignores it. When
-`wisper` cannot write to the data folder it has no ticket either, and it tells you so.
+`wisper` cannot write to the data folder it cannot leave a ticket, so it sends nothing and tells you so.
 
 **Export rules.** `meetings export --path` is the one tool that writes outside the data folder, so it is
 narrow on purpose:

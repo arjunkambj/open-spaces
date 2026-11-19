@@ -1,6 +1,5 @@
 import AppKit
 import Sparkle
-import WisperMac
 
 /// Looks for new versions of Open Wisper and installs one when the person says yes.
 ///
@@ -20,11 +19,10 @@ final class AppUpdater {
   private let reminders: Reminders
 
   /// Starts looking for updates.
-  /// Returns `nil` when this copy of the app cannot update itself, such as a build that
-  /// was not wrapped into "Open Wisper.app".
-  init?(bundle: Bundle = .main) {
-    let problem = UpdateReadiness.problem(bundlePath: bundle.bundlePath, info: bundle.infoDictionary ?? [:])
-    guard problem == nil else { return nil }
+  /// Returns `nil` when this copy of the app does not update itself: the build script
+  /// leaves the address to ask for updates out of a build made without the project's keys.
+  init?() {
+    guard Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil else { return nil }
     let reminders = Reminders()
     self.reminders = reminders
     controller = SPUStandardUpdaterController(

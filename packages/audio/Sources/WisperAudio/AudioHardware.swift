@@ -152,7 +152,6 @@
     private struct Registry: Sendable {
       var lastToken: UInt = 0
       var listeners: [UInt: Listener] = [:]
-      var calls = 0
     }
 
     /// Every live watch, by the number Core Audio hands back with each change.
@@ -166,17 +165,10 @@
 
     private static let listener: AudioObjectPropertyListenerProc = { _, _, _, context in
       let token = UInt(bitPattern: context)
-      let found = HardwareWatch.registry.withLock { registry in
-        registry.calls += 1
-        return registry.listeners[token]
-      }
+      let found = HardwareWatch.registry.withLock { $0.listeners[token] }
       if let found { found.queue.async(execute: found.changed) }
       return noErr
     }
-
-    /// How often Core Audio has called this process about a watched property, for a live
-    /// watch or not. A watch that was dropped but never taken away would keep adding to it.
-    static var callsFromTheSystem: Int { registry.withLock { $0.calls } }
 
     private let object: AudioObjectID
     private var address: AudioObjectPropertyAddress

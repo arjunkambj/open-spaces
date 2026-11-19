@@ -544,7 +544,7 @@ struct AboutSettings: View {
   var body: some View {
     Wordmark(size: 24)
     Card(padding: 0) {
-      SettingRow("Version \(AppVersion.text())", description: AboutCopy.tagline) {
+      SettingRow("Version \(AppVersion.text)", description: AboutCopy.tagline) {
         // Only where the app updates itself: on iPhone the App Store does it.
         if let check = model.host.checkForUpdates {
           Button("Check for updates", action: check)

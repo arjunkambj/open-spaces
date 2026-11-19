@@ -17,9 +17,6 @@ import Network
 /// - the network changed (Wi-Fi to cable, a VPN going up or down);
 /// - a request on it got no answer (`renew`).
 ///
-/// A session that was handed in from outside (tests, an app with its own) is used as it is and
-/// never replaced.
-///
 /// `@unchecked Sendable`: every mutable property is read and written while holding `lock`.
 final class Connections: @unchecked Sendable {
   /// A connection nobody used for this long is not trusted. Opening a new one costs a fraction
@@ -29,78 +26,61 @@ final class Connections: @unchecked Sendable {
 
   /// A point in time on two clocks: one that keeps counting while the machine sleeps, and one
   /// that stops. When they disagree, the machine slept in between.
-  struct Moment: Sendable {
+  private struct Moment {
     var elapsed: TimeInterval
     var awake: TimeInterval
+
+    static func now() -> Moment {
+      Moment(
+        elapsed: seconds(ContinuousClock.now - origin.continuous),
+        awake: seconds(SuspendingClock.now - origin.suspending)
+      )
+    }
+
+    private static let origin = (continuous: ContinuousClock.now, suspending: SuspendingClock.now)
+
+    private static func seconds(_ duration: Duration) -> TimeInterval {
+      Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
+    }
   }
 
-  private let make: (@Sendable () -> URLSession)?
-  private let now: @Sendable () -> Moment
   private let lock = NSLock()
-  private var session: URLSession
+  private var session = Connections.newSession()
   /// When the session was last handed out or carried an answer.
   private var lastUse: Moment?
   /// When the session last carried an answer.
   private var lastAnswer: Moment?
   private var networkChanged = false
   private var sawFirstPath = false
-  private var made = 1
   /// The warming that is under way.
   private var warming: Task<Void, Never>?
   /// Whether a connection that was in use is being checked, with no answer yet.
   private var checking = false
   /// Requests waiting for that answer.
   private var checkWaiters: [CheckedContinuation<Void, Never>] = []
-  private var monitor: NWPathMonitor?
+  private let monitor = NWPathMonitor()
 
-  /// Uses `session` for everything and never replaces it.
-  init(fixed session: URLSession) {
-    make = nil
-    now = Connections.clock
-    self.session = session
-  }
-
-  /// Makes sessions with `make`, and replaces the current one when it cannot be trusted.
-  ///
-  /// - Parameters:
-  ///   - watchesNetwork: Whether to notice the network changing. Off in tests.
-  ///   - now: The time. Tests pass their own.
-  init(
-    make: @escaping @Sendable () -> URLSession = Connections.newSession,
-    watchesNetwork: Bool = true,
-    now: @escaping @Sendable () -> Moment = Connections.clock
-  ) {
-    self.make = make
-    self.now = now
-    session = make()
-    guard watchesNetwork else { return }
-    let monitor = NWPathMonitor()
+  init() {
     monitor.pathUpdateHandler = { [weak self] _ in self?.networkReported() }
     monitor.start(queue: DispatchQueue(label: "openwisper.ai.network", qos: .utility))
-    self.monitor = monitor
   }
 
   deinit {
-    monitor?.cancel()
-    if make != nil { session.finishTasksAndInvalidate() }
+    monitor.cancel()
+    session.finishTasksAndInvalidate()
   }
-
-  /// How many sessions have been made so far. For tests.
-  var sessionsMade: Int { lock.withLock { made } }
 
   /// The session to send the next request on: a fresh one when the last cannot be trusted.
   func current() -> URLSession {
     lock.withLock {
-      let moment = now()
-      if make != nil {
-        var stale = networkChanged
-        if let lastUse {
-          let elapsed = moment.elapsed - lastUse.elapsed
-          let asleep = elapsed - (moment.awake - lastUse.awake)
-          if elapsed > Connections.longestIdle || asleep > 1 { stale = true }
-        }
-        if stale { replace() }
+      let moment = Moment.now()
+      var stale = networkChanged
+      if let lastUse {
+        let elapsed = moment.elapsed - lastUse.elapsed
+        let asleep = elapsed - (moment.awake - lastUse.awake)
+        if elapsed > Connections.longestIdle || asleep > 1 { stale = true }
       }
+      if stale { replace() }
       lastUse = moment
       return session
     }
@@ -110,7 +90,7 @@ final class Connections: @unchecked Sendable {
   func used(_ session: URLSession) {
     lock.withLock {
       guard session === self.session else { return }
-      lastUse = now()
+      lastUse = .now()
       lastAnswer = lastUse
     }
   }
@@ -120,13 +100,13 @@ final class Connections: @unchecked Sendable {
   /// do not throw away the session made for the first.
   func renew(after failed: URLSession) {
     lock.withLock {
-      if make != nil, failed === session { replace() }
+      if failed === session { replace() }
     }
   }
 
   /// Takes a report about the network from the system. The first one only says what the
   /// network is. Every later one means it changed.
-  func networkReported() {
+  private func networkReported() {
     lock.withLock {
       if sawFirstPath { networkChanged = true }
       sawFirstPath = true
@@ -208,7 +188,7 @@ final class Connections: @unchecked Sendable {
   private func isProven() -> Bool {
     lock.withLock {
       guard let lastAnswer, !networkChanged else { return false }
-      let moment = now()
+      let moment = Moment.now()
       let elapsed = moment.elapsed - lastAnswer.elapsed
       return elapsed <= Connections.provenFor && elapsed - (moment.awake - lastAnswer.awake) <= 1
     }
@@ -230,18 +210,14 @@ final class Connections: @unchecked Sendable {
 
   /// Call with `lock` held.
   private func replace() {
-    guard let make else { return }
     let old = session
-    session = make()
-    made += 1
+    session = Connections.newSession()
     networkChanged = false
     lastUse = nil
     lastAnswer = nil
     // Requests still under way on the old session run to their end; nothing new starts on it.
     old.finishTasksAndInvalidate()
   }
-
-  // MARK: Defaults
 
   /// A session of our own: nothing shared with other apps or with the rest of this one.
   ///
@@ -255,7 +231,7 @@ final class Connections: @unchecked Sendable {
   ///   VPNs and office networks drop. (The system may still pick it by itself when a server
   ///   advertises it. There is no public switch to forbid that. A stalled request is retried
   ///   on a fresh session whichever protocol it used.)
-  static let newSession: @Sendable () -> URLSession = {
+  private static func newSession() -> URLSession {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.httpCookieStorage = nil
     configuration.httpShouldSetCookies = false
@@ -268,19 +244,5 @@ final class Connections: @unchecked Sendable {
     configuration.timeoutIntervalForResource = 20 * 60
     configuration.networkServiceType = .responsiveData
     return URLSession(configuration: configuration)
-  }
-
-  /// The real clocks.
-  static let clock: @Sendable () -> Moment = {
-    Moment(
-      elapsed: seconds(ContinuousClock.now - origin.continuous),
-      awake: seconds(SuspendingClock.now - origin.suspending)
-    )
-  }
-
-  private static let origin = (continuous: ContinuousClock.now, suspending: SuspendingClock.now)
-
-  private static func seconds(_ duration: Duration) -> TimeInterval {
-    Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
   }
 }

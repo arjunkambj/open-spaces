@@ -67,7 +67,7 @@ public final class ShortcutRecorder {
 
   /// `monitor` is suspended for as long as a recording runs, so the keys
   /// being recorded do not also set off a dictation.
-  public init(suspending monitor: ShortcutMonitor? = nil) {
+  public init(suspending monitor: ShortcutMonitor?) {
     self.monitor = monitor
   }
 

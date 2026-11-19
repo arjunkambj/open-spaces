@@ -247,8 +247,10 @@ public final class AppModel {
     await refreshKeyState()
   }
 
-  public func removeAPIKey() async {
-    try? await secrets.setAPIKey(nil)
+  /// Removes the saved key, whatever server it was saved for. Throws `WisperError` when the
+  /// key could not be removed.
+  public func removeAPIKey() async throws {
+    try await secrets.setAPIKey(nil, host: APIServer.openAIHost)
     hasAPIKey = false
   }
 
@@ -340,7 +342,7 @@ struct AddressChecked: Transcriber, LanguageModel {
 
 extension AppModel {
   /// An app model backed entirely by in-memory fakes and made-up data, for
-  /// demos, snapshots and tests. Call `load()` before showing it.
+  /// demos and snapshots. Call `load()` before showing it.
   public static func demo(
     onboarded: Bool = true,
     hasAPIKey: Bool = true,

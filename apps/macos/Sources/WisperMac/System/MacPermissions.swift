@@ -18,23 +18,11 @@ import WisperDomain
 public final class MacPermissions: Permissions {
   public let needed: [Permission] = [.microphone, .accessibility, .systemAudio]
 
-  private let defaults: UserDefaults
-  private let systemAudio: SystemAudioAccess
+  /// Remembers what the system cannot be asked about.
+  private let defaults = UserDefaults.standard
+  private static let askedAccessibility = "permissions.accessibility.asked"
 
-  private enum Key {
-    static let askedAccessibility = "permissions.accessibility.asked"
-    static let systemAudio = "permissions.systemAudio.lastKnown"
-  }
-
-  /// `defaults` remembers what the system cannot be asked about.
-  public convenience init(defaults: UserDefaults = .standard) {
-    self.init(defaults: defaults, systemAudio: .system)
-  }
-
-  init(defaults: UserDefaults, systemAudio: SystemAudioAccess) {
-    self.defaults = defaults
-    self.systemAudio = systemAudio
-  }
+  public init() {}
 
   public func status(_ permission: Permission) -> PermissionStatus {
     switch permission {
@@ -48,19 +36,14 @@ public final class MacPermissions: Permissions {
       // The system only says yes or no. "No" before we ever asked means the
       // user has not been shown anything yet.
       if AXIsProcessTrusted() { return .granted }
-      return defaults.bool(forKey: Key.askedAccessibility) ? .denied : .notDetermined
+      return defaults.bool(forKey: Self.askedAccessibility) ? .denied : .notDetermined
     case .systemAudio:
-      // macOS has no public way to ask about this one. The private check the system's own
-      // apps use is asked on the macOS versions it is known to work on, and its answer is
-      // remembered. On a newer macOS the answer is what it said last: a permission that was
-      // given stays given when macOS is updated.
-      if let known = systemAudio.status() {
-        if defaults.string(forKey: Key.systemAudio) != known.rawValue {
-          defaults.set(known.rawValue, forKey: Key.systemAudio)
-        }
-        return known
+      // 0: allowed, 1: refused, 2: never asked.
+      switch SystemPermissionLibrary.preflight(SystemPermissionLibrary.audioCapture, nil) {
+      case 0: return .granted
+      case 2: return .notDetermined
+      default: return .denied
       }
-      return defaults.string(forKey: Key.systemAudio).flatMap(PermissionStatus.init) ?? .notDetermined
     }
   }
 
@@ -69,15 +52,19 @@ public final class MacPermissions: Permissions {
     switch (permission, status(permission)) {
     case (_, .granted):
       break
-    case (.microphone, .notDetermined) where Self.hasUsageText("NSMicrophoneUsageDescription"):
+    case (.microphone, .notDetermined):
       _ = await AVCaptureDevice.requestAccess(for: .audio)
     case (.accessibility, .notDetermined):
       // Shows the system's "would like to control this computer" alert, which
       // has a button that opens the right pane, and adds the app to the list.
-      defaults.set(true, forKey: Key.askedAccessibility)
+      defaults.set(true, forKey: Self.askedAccessibility)
       _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-    case (.systemAudio, .notDetermined) where Self.hasUsageText("NSAudioCaptureUsageDescription"):
-      if await systemAudio.request() == nil { openSettings(for: permission) }
+    case (.systemAudio, .notDetermined):
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        SystemPermissionLibrary.request(SystemPermissionLibrary.audioCapture, nil) { _ in
+          continuation.resume()
+        }
+      }
     default:
       // The system will not ask twice. The user has to flip the switch.
       openSettings(for: permission)
@@ -87,80 +74,22 @@ public final class MacPermissions: Permissions {
 
   /// Opens System Settings at the pane where `permission` is switched on.
   public func openSettings(for permission: Permission) {
-    for url in Self.settingsURLs(for: permission) where NSWorkspace.shared.open(url) { return }
-  }
-
-  /// The links that open the pane for `permission`, best first.
-  static func settingsURLs(for permission: Permission) -> [URL] {
     let anchor =
       switch permission {
       case .microphone: "Privacy_Microphone"
       case .accessibility: "Privacy_Accessibility"
       case .systemAudio: "Privacy_AudioCapture"
       }
-    return ["com.apple.settings.PrivacySecurity.extension", "com.apple.preference.security"].compactMap {
-      URL(string: "x-apple.systempreferences:\($0)?\(anchor)")
-    }
-  }
-
-  /// The system ends an app that asks for a permission without having said
-  /// why in its Info.plist. That text is missing when run outside the bundle.
-  private static func hasUsageText(_ key: String) -> Bool {
-    Bundle.main.object(forInfoDictionaryKey: key) != nil
+    let pane = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(anchor)"
+    guard let url = URL(string: pane) else { return }
+    NSWorkspace.shared.open(url)
   }
 }
 
-/// How to ask the system about recording the computer's sound.
-///
-/// macOS has no public call for this permission. `system` uses the private
-/// functions in the system's own permission library, looked up by name at run
-/// time so that their absence is survivable: every answer can be "don't know".
-///
-/// Private functions can change shape without notice, and calling one with
-/// the wrong shape crashes the app. So they are only called on the macOS
-/// versions they have been seen to work on (`knownVersions`). On any other
-/// version every answer is "don't know".
-struct SystemAudioAccess: Sendable {
-  /// The status, or nil when the system cannot be asked.
-  var status: @Sendable () -> PermissionStatus?
-  /// Shows the system prompt and waits for the answer. Nil when it cannot.
-  var request: @Sendable () async -> Bool?
-
-  /// The major macOS versions the private functions are known to work on.
-  /// (macOS went from 15 straight to 26.) Add a version here after trying it there.
-  static let knownVersions: Set<Int> = [14, 15, 26, 27]
-
-  /// The way to ask on this Mac.
-  static var system: SystemAudioAccess {
-    forMacOS(major: ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
-  }
-
-  static func forMacOS(major: Int) -> SystemAudioAccess {
-    knownVersions.contains(major) ? privateCalls : SystemAudioAccess(status: { nil }, request: { nil })
-  }
-
-  private static let privateCalls = SystemAudioAccess(
-    status: {
-      guard let preflight = SystemPermissionLibrary.preflight else { return nil }
-      // 0: allowed, 1: refused, 2: never asked.
-      switch preflight(SystemPermissionLibrary.audioCapture, nil) {
-      case 0: return .granted
-      case 1: return .denied
-      case 2: return .notDetermined
-      default: return nil
-      }
-    },
-    request: {
-      guard let request = SystemPermissionLibrary.request else { return nil }
-      return await withCheckedContinuation { continuation in
-        request(SystemPermissionLibrary.audioCapture, nil) { granted in
-          continuation.resume(returning: granted)
-        }
-      }
-    }
-  )
-}
-
+/// The system's own permission library, for the one permission macOS has no public call
+/// for: recording the computer's sound. Its functions are private, so they are looked up
+/// by name at run time. A macOS that does not have them stops the app with a message
+/// that says so.
 private enum SystemPermissionLibrary {
   typealias Preflight = @convention(c) (CFString, CFDictionary?) -> Int32
   typealias Request =
@@ -169,15 +98,16 @@ private enum SystemPermissionLibrary {
 
   static var audioCapture: CFString { "kTCCServiceAudioCapture" as CFString }
 
-  static let preflight: Preflight? = symbol("TCCAccessPreflight").map {
-    unsafeBitCast($0, to: Preflight.self)
-  }
-  static let request: Request? = symbol("TCCAccessRequest").map { unsafeBitCast($0, to: Request.self) }
+  /// Says whether the permission is given, without showing anything.
+  static let preflight = unsafeBitCast(symbol("TCCAccessPreflight"), to: Preflight.self)
+  /// Shows the system prompt and calls back with the answer.
+  static let request = unsafeBitCast(symbol("TCCAccessRequest"), to: Request.self)
 
-  private static func symbol(_ name: String) -> UnsafeMutableRawPointer? {
-    guard let library = dlopen("/System/Library/PrivateFrameworks/TCC.framework/TCC", RTLD_NOW) else {
-      return nil
+  private static func symbol(_ name: String) -> UnsafeMutableRawPointer {
+    let path = "/System/Library/PrivateFrameworks/TCC.framework/TCC"
+    guard let library = dlopen(path, RTLD_NOW), let symbol = dlsym(library, name) else {
+      fatalError("This macOS has no \(name), which Open Wisper needs to ask about recording system audio.")
     }
-    return dlsym(library, name)
+    return symbol
   }
 }

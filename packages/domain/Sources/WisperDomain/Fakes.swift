@@ -1,7 +1,6 @@
 import Foundation
 
-// In-memory adapters for every seam. Used by tests, by the apps' demo and
-// snapshot modes, and as the reference for how each seam must behave.
+// In-memory adapters for the seams. Used by the apps' demo and snapshot modes.
 
 /// Fans one stream of values out to any number of `AsyncStream`s.
 public final class Broadcaster<Value: Sendable>: @unchecked Sendable {
@@ -24,15 +23,6 @@ public final class Broadcaster<Value: Sendable>: @unchecked Sendable {
   public func send(_ value: Value) {
     let targets = lock.withLock { Array(continuations.values) }
     for target in targets { target.yield(value) }
-  }
-
-  public func finish() {
-    let targets = lock.withLock {
-      let all = Array(continuations.values)
-      continuations.removeAll()
-      return all
-    }
-    for target in targets { target.finish() }
   }
 }
 
@@ -203,211 +193,81 @@ public actor InMemorySecretStore: SecretStore {
   }
 }
 
-/// Answers every transcription with `reply`, and remembers what it was asked.
-public final class FakeTranscriber: Transcriber, @unchecked Sendable {
-  private let lock = NSLock()
-  private var seen: [TranscriptionRequest] = []
+/// Answers every transcription with `reply`.
+public struct FakeTranscriber: Transcriber {
   private let reply: @Sendable (TranscriptionRequest) async throws -> Transcript
 
   public init(reply: @escaping @Sendable (TranscriptionRequest) async throws -> Transcript) {
     self.reply = reply
   }
 
-  public convenience init(text: String) {
+  public init(text: String) {
     self.init { _ in Transcript(text: text) }
   }
-
-  public var requests: [TranscriptionRequest] { lock.withLock { seen } }
-  /// How many times `prepare` was called.
-  public var preparations: Int { lock.withLock { prepared } }
-  private var prepared = 0
 
   public func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
-    lock.withLock { seen.append(request) }
-    return try await reply(request)
-  }
-
-  public func prepare() async {
-    lock.withLock { prepared += 1 }
+    try await reply(request)
   }
 }
 
-/// Takes sound as it is "recorded" and answers `finish` with `reply`. Remembers every session.
-public final class FakeLiveTranscriber: LiveTranscriber, @unchecked Sendable {
-  private let lock = NSLock()
-  private var asked: [LiveTranscriptionRequest] = []
-  private var opened: [Session] = []
-  private let reply: @Sendable (Session) async throws -> Transcript
-  private let openFailure: WisperError?
+/// Answers every prompt with the same text.
+public struct FakeLanguageModel: LanguageModel {
+  private let text: String
 
-  /// - Parameters:
-  ///   - openFailure: When set, `open` throws it.
-  ///   - reply: What `finish` returns (or throws) for a session.
-  public init(
-    openFailure: WisperError? = nil,
-    reply: @escaping @Sendable (Session) async throws -> Transcript
-  ) {
-    self.openFailure = openFailure
-    self.reply = reply
+  public init(text: String) {
+    self.text = text
   }
 
-  public convenience init(text: String) {
-    self.init { _ in Transcript(text: text) }
-  }
-
-  /// Every request `open` got, also the ones it refused.
-  public var requests: [LiveTranscriptionRequest] { lock.withLock { asked } }
-  /// The sessions opened so far, oldest first.
-  public var sessions: [Session] { lock.withLock { opened } }
-
-  public func open(_ request: LiveTranscriptionRequest) async throws -> any LiveTranscription {
-    lock.withLock { asked.append(request) }
-    if let openFailure { throw openFailure }
-    let session = Session(reply: reply)
-    lock.withLock { opened.append(session) }
-    return session
-  }
-
-  public final class Session: LiveTranscription, @unchecked Sendable {
-    public let partials: AsyncStream<String>
-    private let partialFeed: AsyncStream<String>.Continuation
-    private let reply: @Sendable (Session) async throws -> Transcript
-    private let lock = NSLock()
-    private var got: [AudioFrames] = []
-    private var finishes = 0
-    private var cancelled = false
-
-    init(reply: @escaping @Sendable (Session) async throws -> Transcript) {
-      self.reply = reply
-      (partials, partialFeed) = AsyncStream.makeStream(of: String.self)
-    }
-
-    /// The sound handed over so far.
-    public var received: [AudioFrames] { lock.withLock { got } }
-    /// How many samples were handed over so far.
-    public var sampleCount: Int { lock.withLock { got.reduce(0) { $0 + $1.samples.count } } }
-    public var isFinished: Bool { lock.withLock { finishes > 0 } }
-    public var isCancelled: Bool { lock.withLock { cancelled } }
-
-    /// Reports `text` as what was heard so far.
-    public func hear(_ text: String) { partialFeed.yield(text) }
-
-    public func send(_ frames: AudioFrames) {
-      lock.withLock { got.append(frames) }
-    }
-
-    public func finish() async throws -> Transcript {
-      lock.withLock { finishes += 1 }
-      defer { partialFeed.finish() }
-      return try await reply(self)
-    }
-
-    public func cancel() {
-      lock.withLock { cancelled = true }
-      partialFeed.finish()
-    }
-  }
-}
-
-/// Answers every prompt with `reply`, and remembers what it was asked.
-public final class FakeLanguageModel: LanguageModel, @unchecked Sendable {
-  private let lock = NSLock()
-  private var seen: [CompletionRequest] = []
-  private let reply: @Sendable (CompletionRequest) async throws -> String
-
-  public init(reply: @escaping @Sendable (CompletionRequest) async throws -> String) {
-    self.reply = reply
-  }
-
-  public convenience init(text: String) {
-    self.init { _ in text }
-  }
-
-  public var requests: [CompletionRequest] { lock.withLock { seen } }
-
-  public func complete(_ request: CompletionRequest) async throws -> String {
-    lock.withLock { seen.append(request) }
-    return try await reply(request)
-  }
+  public func complete(_ request: CompletionRequest) async throws -> String { text }
 }
 
 /// A capture that records nothing real. Each `emit` (or `stop`) writes a tiny
 /// placeholder file per track and sends it as a chunk.
 public final class FakeAudioCapture: AudioCapture, @unchecked Sendable {
   private let lock = NSLock()
-  private var started: [CaptureRequest] = []
   private var active: [Session] = []
-  public let devices: [AudioDevice]
-  /// When set, `start` throws it.
-  public let failure: WisperError?
-  /// Length reported for the audio flushed by `stop()`.
-  public let stopDuration: TimeInterval
+  private let devices: [AudioDevice]
 
   public init(
-    devices: [AudioDevice] = [AudioDevice(id: "built-in", name: "MacBook Pro Microphone", isDefault: true)],
-    failure: WisperError? = nil,
-    stopDuration: TimeInterval = 3
+    devices: [AudioDevice] = [AudioDevice(id: "built-in", name: "MacBook Pro Microphone", isDefault: true)]
   ) {
     self.devices = devices
-    self.failure = failure
-    self.stopDuration = stopDuration
   }
 
-  public var requests: [CaptureRequest] { lock.withLock { started } }
   /// The sessions started so far, oldest first.
   public var sessions: [Session] { lock.withLock { active } }
 
   public func microphones() async -> [AudioDevice] { devices }
 
   public func start(_ request: CaptureRequest) async throws -> any CaptureSession {
-    if let failure { throw failure }
-    let session = Session(request: request, stopDuration: stopDuration)
-    lock.withLock {
-      started.append(request)
-      active.append(session)
-    }
+    let session = Session(request: request)
+    lock.withLock { active.append(session) }
     return session
   }
 
   public final class Session: CaptureSession, @unchecked Sendable {
     public let levels: AsyncStream<Float>
     public let chunks: AsyncStream<AudioChunk>
-    public let frames: AsyncStream<AudioFrames>
     private let levelContinuation: AsyncStream<Float>.Continuation
     private let chunkContinuation: AsyncStream<AudioChunk>.Continuation
-    private let frameContinuation: AsyncStream<AudioFrames>.Continuation
     private let request: CaptureRequest
-    private let stopDuration: TimeInterval
     private let lock = NSLock()
     private var offset: TimeInterval = 0
     private var index = 0
     private var ended = false
 
-    init(request: CaptureRequest, stopDuration: TimeInterval) {
+    init(request: CaptureRequest) {
       self.request = request
-      self.stopDuration = stopDuration
       (levels, levelContinuation) = AsyncStream.makeStream(of: Float.self)
       (chunks, chunkContinuation) = AsyncStream.makeStream(of: AudioChunk.self)
-      (frames, frameContinuation) = AsyncStream.makeStream(of: AudioFrames.self)
-      if !request.liveFrames || request.chunkSeconds != nil { frameContinuation.finish() }
       levelContinuation.yield(0.4)
     }
 
-    /// The rate of the sound in `frames`.
-    public static let frameRate = 16_000.0
+    /// No sound is handed over while it is "recorded".
+    public var frames: AsyncStream<AudioFrames> { AsyncStream { $0.finish() } }
 
-    public var isEnded: Bool { lock.withLock { ended } }
-
-    /// Sends a loudness value to `levels`.
-    public func setLevel(_ level: Float) { levelContinuation.yield(level) }
-
-    /// Finishes a chunk of `duration` seconds on every requested track. When the request asked
-    /// for live frames, as much silence is handed over in `frames` first.
+    /// Finishes a chunk of `duration` seconds on every requested track.
     public func emit(duration: TimeInterval) {
-      let count = Int((max(duration, 0) * Session.frameRate).rounded())
-      frameContinuation.yield(
-        AudioFrames(samples: [Float](repeating: 0, count: count), sampleRate: Session.frameRate)
-      )
       let (start, number): (TimeInterval, Int) = lock.withLock {
         let current = (offset, index)
         offset += duration
@@ -423,16 +283,14 @@ public final class FakeAudioCapture: AudioCapture, @unchecked Sendable {
 
     public func stop() async {
       guard !end() else { return }
-      emit(duration: stopDuration)
+      emit(duration: 3)
       levelContinuation.finish()
-      frameContinuation.finish()
       chunkContinuation.finish()
     }
 
     public func cancel() async {
       guard !end() else { return }
       levelContinuation.finish()
-      frameContinuation.finish()
       chunkContinuation.finish()
     }
 
@@ -447,35 +305,22 @@ public final class FakeAudioCapture: AudioCapture, @unchecked Sendable {
   }
 }
 
-/// Collects inserted text instead of typing it anywhere.
-public actor FakeTextTarget: TextTarget {
-  public private(set) var inserted: [String] = []
-  private var current: DictationContext
-  private var selection: String?
-  private var failure: WisperError?
+/// Takes inserted text and types it nowhere.
+public struct FakeTextTarget: TextTarget {
+  public init() {}
 
-  public init(
-    context: DictationContext = DictationContext(appName: "Notes", bundleID: "com.apple.Notes"),
-    selection: String? = nil,
-    failure: WisperError? = nil
-  ) {
-    current = context
-    self.selection = selection
-    self.failure = failure
+  public func context() async -> DictationContext {
+    DictationContext(appName: "Notes", bundleID: "com.apple.Notes")
   }
 
-  public func context() -> DictationContext { current }
-  public func selectedText() -> String? { selection }
+  public func selectedText() async -> String? { nil }
 
-  public func insert(_ text: String) throws {
-    if let failure { throw failure }
-    inserted.append(text)
-  }
+  public func insert(_ text: String) async throws {}
 }
 
 @MainActor
 public final class FakePermissions: Permissions {
-  public var statuses: [Permission: PermissionStatus]
+  private var statuses: [Permission: PermissionStatus]
   public let needed: [Permission]
 
   public init(
@@ -497,7 +342,7 @@ public final class FakePermissions: Permissions {
   }
 }
 
-/// Made-up content for demos, snapshots and tests. Nothing here is real user data.
+/// Made-up content for demos and snapshots. Nothing here is real user data.
 public enum SampleData {
   public static func library(now: Date = Date(), onboarded: Bool = true) -> InMemoryLibrary {
     InMemoryLibrary(

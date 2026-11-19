@@ -2,8 +2,8 @@
 import PackageDescription
 
 // Everything of the iPhone app that is not tied to an Xcode target: the screens only the
-// phone has, the phone's adapters, and the keyboard. It also builds on a Mac, so its tests
-// and its snapshot tool run without Xcode. The Xcode targets in `../App`, `../Keyboard` and
+// phone has, the phone's adapters, and the keyboard. It also builds on a Mac, so its
+// snapshot tool runs without Xcode. The Xcode targets in `../App`, `../Keyboard` and
 // `../Widgets` are thin shells around these libraries.
 let package = Package(
   name: "WisperPhone",
@@ -61,16 +61,6 @@ let package = Package(
         "WisperPhone",
         "WisperKeyboard",
         .product(name: "WisperUI", package: "ui"),
-      ]
-    ),
-    .testTarget(
-      name: "WisperPhoneTests",
-      dependencies: [
-        "WisperPhone",
-        "WisperKeyboard",
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperEngine", package: "engine"),
-        .product(name: "WisperStore", package: "store"),
       ]
     ),
   ]

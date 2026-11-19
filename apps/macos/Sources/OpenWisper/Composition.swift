@@ -14,7 +14,7 @@ enum Composition {
   struct Parts {
     var model: AppModel
     var controls: MacControls
-    /// Looks for new versions. `nil` in the demo, and when the app is not a finished bundle.
+    /// Looks for new versions. `nil` in the demo, and in a build that does not update itself.
     var updater: AppUpdater?
   }
 
@@ -49,7 +49,7 @@ enum Composition {
         target: target,
         permissions: MacPermissions(),
         host: HostActions(
-          agentToolPath: FileManager.default.isExecutableFile(atPath: tool) ? tool : nil,
+          agentToolPath: tool,
           dataFolder: root,
           // macOS can refuse, or wait for a yes in System Settings: the controls put the
           // setting right and say so.

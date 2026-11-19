@@ -121,7 +121,7 @@ enum SettingsSnapshots {
     _ name: String,
     _ preview: SettingsPreview,
     height: CGFloat = card.height,
-    model: (@MainActor () -> AppModel)? = { SetupSnapshotModels.make() }
+    model: @escaping @MainActor () -> AppModel = { SetupSnapshotModels.make() }
   ) -> SnapshotCase {
     SnapshotCase(name, canvas: .custom(width: card.width + 60, height: height + 60), model: model) {
       SettingsScreen(shortcuts: AnyView(ShortcutsStandIn()), onClose: {}, preview: preview)
@@ -135,7 +135,7 @@ enum SettingsSnapshots {
     _ name: String,
     _ preview: SettingsPreview,
     height: CGFloat? = nil,
-    model: (@MainActor () -> AppModel)? = { SetupSnapshotModels.make(onPhone: true) }
+    model: @escaping @MainActor () -> AppModel = { SetupSnapshotModels.make(onPhone: true) }
   ) -> SnapshotCase {
     let canvas = height.map {
       SnapshotCase.Canvas.custom(width: SnapshotCase.Canvas.phone.size.width, height: $0)

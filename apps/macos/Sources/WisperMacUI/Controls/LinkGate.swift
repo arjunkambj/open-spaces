@@ -47,14 +47,13 @@ public struct LinkGate: Sendable {
     _ link: WisperLink,
     ticketIsValid: Bool,
     isSetUp: Bool,
-    isRecordingMeeting: Bool,
-    now: Date = Date()
+    isRecordingMeeting: Bool
   ) -> Decision {
     guard isSetUp else { return .ignore }
     guard link.needsTrust, !ticketIsValid else { return .act }
     switch link {
     case .startMeeting:
-      guard !isRecordingMeeting, !isAsking, now >= quietUntil else { return .ignore }
+      guard !isRecordingMeeting, !isAsking, Date() >= quietUntil else { return .ignore }
       isAsking = true
       return .ask
     case .toggleDictation, .stopMeeting, .showMeeting, .showHub:
@@ -63,8 +62,8 @@ public struct LinkGate: Sendable {
   }
 
   /// The person answered the question that `decide` asked for.
-  public mutating func answered(allowed: Bool, now: Date = Date()) {
+  public mutating func answered(allowed: Bool) {
     isAsking = false
-    if !allowed { quietUntil = now.addingTimeInterval(Self.quietTime) }
+    if !allowed { quietUntil = Date().addingTimeInterval(Self.quietTime) }
   }
 }

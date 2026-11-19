@@ -15,16 +15,14 @@
   },
   "scripts": {
     "build": "scripts/turbow run build",
-    "test": "scripts/turbow run test",
     "lint": "scripts/turbow run lint",
-    "check": "scripts/turbow run lint build test",
+    "check": "scripts/turbow run lint build",
     "format": "swift format format --in-place --recursive --parallel apps packages",
     "mac": "pnpm --filter @open-wisper/macos run dev",
     "mac:bundle": "pnpm --filter @open-wisper/macos run bundle",
     "mac:dmg": "pnpm --filter @open-wisper/macos run dmg",
     "ios:generate": "scripts/ios generate",
     "ios:build": "scripts/ios build",
-    "ios:test": "scripts/ios test",
     "web": "pnpm --filter @open-wisper/web run dev",
     "web:build": "pnpm --filter @open-wisper/web run build",
     "web:deploy": "pnpm --filter @open-wisper/web run deploy"

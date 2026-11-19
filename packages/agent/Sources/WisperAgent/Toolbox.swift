@@ -24,13 +24,13 @@ struct Toolbox: Sendable {
   let library: any Library
   let environment: WisperAgent.Environment
 
-  var now: Date { environment.now() }
+  var now: Date { Date() }
 
   // MARK: Dates
 
   /// ISO 8601 with the user's own offset, e.g. `2026-11-18T10:00:00+05:30`.
   func iso(_ date: Date) -> String {
-    Date.ISO8601FormatStyle(timeZoneSeparator: .colon, timeZone: environment.timeZone)
+    Date.ISO8601FormatStyle(timeZoneSeparator: .colon, timeZone: .current)
       .format(Toolbox.sane(date))
   }
 
@@ -47,7 +47,7 @@ struct Toolbox: Sendable {
   func friendly(_ date: Date) -> String {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = environment.timeZone
+    formatter.timeZone = .current
     formatter.dateFormat = "yyyy-MM-dd HH:mm"
     return formatter.string(from: Toolbox.sane(date))
   }
@@ -60,7 +60,7 @@ struct Toolbox: Sendable {
   func date(from text: String, argument: String) throws -> Date {
     let value = text.trimmingCharacters(in: .whitespaces)
     var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = environment.timeZone
+    calendar.timeZone = .current
     let today = calendar.startOfDay(for: now)
     switch value.lowercased() {
     case "now": return now
@@ -88,7 +88,7 @@ struct Toolbox: Sendable {
     }
     let local = DateFormatter()
     local.locale = Locale(identifier: "en_US_POSIX")
-    local.timeZone = environment.timeZone
+    local.timeZone = .current
     local.isLenient = false
     for format in [
       "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd",

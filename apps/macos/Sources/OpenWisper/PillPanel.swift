@@ -15,7 +15,7 @@ import WisperUI
 /// - It can be dragged. Let go, it settles against the nearest edge of the
 ///   screen it is on (bottom, top, left or right) and stays on that display.
 ///   The spot is remembered for each arrangement of displays (`PillSpots`);
-///   a spot that no longer fits falls back to the bottom middle.
+///   a spot that does not fit the displays is not used, and the pill is at the bottom middle.
 /// - A press that hardly moves is still a click. A press that moves further
 ///   is a drag, and the release that ends it clicks nothing.
 ///

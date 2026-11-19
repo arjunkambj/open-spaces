@@ -4,7 +4,6 @@ import AVFoundation
 //
 //   AudioSource -> MicrophoneSource   (AVAudioEngine input)
 //               -> SystemTapSource    (Core Audio process tap, macOS)
-//               -> a scripted source in the tests
 //
 // Everything after the source (resampling, cutting into files, encoding,
 // loudness) is the same for every adapter and lives in `Recording`.

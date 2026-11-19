@@ -7,16 +7,10 @@ import WisperDomain
 /// times a second while someone types; only a changed transcript or new text costs anything.
 @MainActor
 final class MeetingTranscriptIndex {
-  private let group: ([TranscriptSegment]) -> [TranscriptTurn]
   private var segments: [TranscriptSegment] = []
   private var grouped: [TranscriptTurn] = []
   private var query = ""
   private var found: [TranscriptMatch] = []
-
-  /// - group: turns segments into turns. Tests pass their own to count how often it runs.
-  init(group: @escaping ([TranscriptSegment]) -> [TranscriptTurn] = MeetingsLogic.turns) {
-    self.group = group
-  }
 
   /// The transcript as turns. See `MeetingsLogic.turns`.
   func turns(of segments: [TranscriptSegment]) -> [TranscriptTurn] {
@@ -24,7 +18,7 @@ final class MeetingTranscriptIndex {
     // which it is between two changes of the library.
     if segments != self.segments {
       self.segments = segments
-      grouped = group(segments)
+      grouped = MeetingsLogic.turns(segments)
       found = MeetingsLogic.matches(of: query, in: grouped)
     }
     return grouped

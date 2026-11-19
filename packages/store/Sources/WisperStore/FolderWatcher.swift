@@ -5,20 +5,13 @@ import WisperDomain
   import CoreServices
 #endif
 
-/// How a `FileLibrary` finds out that another process wrote to the data folder.
-enum WatchMode: Sendable {
-  /// File system events on macOS. Elsewhere, and when those cannot be started, `polling`.
-  case automatic
-  /// Watches the top folder and the meetings folder for files being added, replaced or
-  /// removed, and also looks at everything once per `interval` seconds, which catches
-  /// what those two watches cannot see.
-  case polling(interval: TimeInterval)
-
-  static let defaultPollInterval: TimeInterval = 2
-}
-
 /// Says when something in the data folder may have changed. It does not say what: the
 /// library looks for itself, which is cheap. Bursts of activity arrive as one call.
+///
+/// On macOS it listens to file system events. iOS has none of those for a folder tree, so
+/// there it watches the top folder and the meetings folder for files being added, replaced
+/// or removed, and also looks at everything once every `pollInterval` seconds, which catches
+/// what those two watches cannot see.
 final class FolderWatcher: @unchecked Sendable {
   private let layout: FolderLayout
   private let onActivity: @Sendable () -> Void
@@ -34,6 +27,8 @@ final class FolderWatcher: @unchecked Sendable {
 
   /// Bursts closer together than this arrive as one call.
   private static let quietTime: TimeInterval = 0.08
+  /// How often everything is looked at, where there are no file system events.
+  private static let pollInterval: TimeInterval = 2
 
   /// `onActivity` is called on a private queue.
   init(layout: FolderLayout, onActivity: @escaping @Sendable () -> Void) {
@@ -45,24 +40,17 @@ final class FolderWatcher: @unchecked Sendable {
     stopOnQueue()
   }
 
-  func start(_ mode: WatchMode) {
+  func start() {
     queue.async { [self] in
       guard !running else { return }
       running = true
       // Watching needs something to watch. Reading alone never makes the folder.
       try? FileAccess.createFolder(layout.root)
-      switch mode {
-      case .automatic:
-        #if os(macOS)
-          if startEventStream() {
-            lookAfterStarting()
-            return
-          }
-        #endif
-        startPolling(every: WatchMode.defaultPollInterval)
-      case .polling(let interval):
-        startPolling(every: interval)
-      }
+      #if os(macOS)
+        if !startEventStream() { startPolling() }
+      #else
+        startPolling()
+      #endif
       lookAfterStarting()
     }
   }
@@ -99,7 +87,8 @@ final class FolderWatcher: @unchecked Sendable {
 
   // MARK: Polling
 
-  private func startPolling(every interval: TimeInterval) {
+  private func startPolling() {
+    let interval = FolderWatcher.pollInterval
     let timer = DispatchSource.makeTimerSource(queue: queue)
     timer.schedule(
       deadline: .now() + interval,

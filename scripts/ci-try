@@ -9,7 +9,7 @@
 #
 # extra-dir (optional) is a folder outside the repo whose files are added to
 # the snapshot at the same relative paths. Use it to try CI against files you
-# do not want in the working tree, e.g. a small test project.
+# do not want in the working tree, e.g. a small sample project.
 set -euo pipefail
 name="${1:?usage: ci-try <name> [extra-dir]}"
 extra="${2:-}"

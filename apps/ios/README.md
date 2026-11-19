@@ -13,7 +13,6 @@ App/          the app target: entry point, Shortcuts actions, icon, launch scree
 Keyboard/     the keyboard extension target: one small class
 Widgets/      the widget extension target: the Lock Screen notice for a recording
 Shared/       code compiled into both the app and the widget extension: the Stop button's action
-Tests/        checks that run inside the built app (its Info.plist, its keyboard)
 Phone/        a Swift package with nearly all of the code:
                 WisperPhone     the Dictate and Library screens, the tabs, links, wiring
                 WisperKeyboard  everything the keyboard does
@@ -22,7 +21,7 @@ scripts/      screenshots: pictures of the app from a simulator
 ```
 
 Most of the code is in `Phone/` on purpose. A Swift package builds on any Mac, even one
-without Xcode, so its tests run in seconds and its screens can be drawn to image files.
+without Xcode, and its screens can be drawn to image files there.
 The Xcode targets only start things up.
 
 ## Run it
@@ -43,10 +42,9 @@ From the command line:
 
 ```bash
 pnpm ios:build                    # build for a simulator, without signing
-pnpm ios:test                     # run the tests on a simulator
 ```
 
-On a Mac without Xcode these two say why they are skipping and stop. CI builds the app on
+On a Mac without Xcode this says why it is skipping and stops. CI builds the app on
 every pull request.
 
 ### Try it without a key or a microphone
@@ -69,8 +67,7 @@ Signing is not set up in the project, because it is yours to choose.
    of the three targets you just signed (`dev.openwisper.ios`, `dev.openwisper.ios.keyboard`
    and `dev.openwisper.ios.widgets`) to something of your own, such as
    `com.yourname.wisper`, `com.yourname.wisper.keyboard` and `com.yourname.wisper.widgets`.
-   The two extensions' IDs must start with the app's ID. The fourth line, for
-   **OpenWisperTests**, can stay as it is.
+   The two extensions' IDs must start with the app's ID.
 3. Change the App Group, in three places that must match:
    - `App/OpenWisper.entitlements`
    - `Keyboard/OpenWisperKeyboard.entitlements`
@@ -79,9 +76,7 @@ Signing is not set up in the project, because it is yours to choose.
    Use a name of your own that starts with `group.`, such as `group.com.yourname.wisper`.
 4. Run `pnpm ios:generate` and build to your phone.
 
-These changes are for your own copy. Keep them out of a pull request. Three checks in
-`Tests/BundleTests.swift` name the project's own bundle IDs, so `pnpm ios:test` fails on
-them in a copy with changed IDs.
+These changes are for your own copy. Keep them out of a pull request.
 
 ### Why the App Group matters
 
@@ -91,8 +86,7 @@ there so the keyboard can read your latest dictation and your snippets.
 
 If the App Group is missing or the names do not match, the app still works: it keeps its
 library in its own folder. The keyboard then cannot see it and says so instead of typing
-anything. When you fix the signing later, the app moves the library into the shared folder
-the next time it starts, so nothing is lost.
+anything.
 
 Your OpenAI key is never shared. It stays in the app's own Keychain. The keyboard does not
 need it and cannot read it.
@@ -170,7 +164,6 @@ keyboard to find. Paste from the clipboard instead.
 ```bash
 cd apps/ios/Phone
 ../../../scripts/swiftw build     # builds on a Mac, no Xcode needed
-../../../scripts/swiftw test      # the tests, on fakes
 ../../../scripts/swiftw run wisper-phone-snapshots /tmp/phone   # draws the screens to PNG files
 ```
 

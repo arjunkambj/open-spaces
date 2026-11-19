@@ -21,10 +21,11 @@ struct MeetingNotesWriter: Sendable {
   }
 
   let languageModel: any LanguageModel
-  /// The most transcript text, in characters, sent in one request.
-  var characterLimit: Int
+  /// The most transcript text, in characters, sent in one request. About 15,000 tokens: an
+  /// hour of talk fits in one or two requests, and a small local model can still take it.
+  private let characterLimit = 60_000
   /// How many requests run at the same time for a long meeting.
-  var concurrency = 3
+  private let concurrency = 3
 
   // MARK: Notes
 

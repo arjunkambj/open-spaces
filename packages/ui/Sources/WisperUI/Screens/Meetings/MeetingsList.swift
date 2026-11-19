@@ -124,9 +124,14 @@ struct MeetingsList: View {
       return
     }
     if found != nil { try? await Task.sleep(for: .milliseconds(250)) }
-    guard !Task.isCancelled, let result = try? await model.library.meetings(search: text) else { return }
     guard !Task.isCancelled else { return }
-    found = Set(result.map(\.id))
+    do {
+      let result = try await model.library.meetings(search: text)
+      guard !Task.isCancelled else { return }
+      found = Set(result.map(\.id))
+    } catch {
+      if !Task.isCancelled { model.errorMessage = error.localizedDescription }
+    }
   }
 
   // MARK: Starting

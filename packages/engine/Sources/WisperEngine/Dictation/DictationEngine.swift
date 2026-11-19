@@ -46,18 +46,10 @@ public final class DictationEngine {
   /// A rough draft: the inserted text can differ.
   public private(set) var partialText = ""
 
-  /// The longest a recording may run, in seconds (10 minutes unless changed).
-  /// When it is reached the engine finishes on its own and inserts the text,
-  /// so a key that got stuck or a forgotten hands-free session cannot record
-  /// for hours. Read when `start` is called. `.infinity` means no limit.
-  @ObservationIgnored public var recordingLimit: TimeInterval = 600
-
-  /// The longest the tidying of a dictation may take, in seconds. When the
-  /// language model has not answered by then, the words are inserted as they
-  /// were heard: they are ready, and nobody should wait on a slow server for
-  /// polish. Commands are not affected (they have no text without the model).
-  @ObservationIgnored public var cleanUpLimit: TimeInterval = 12
-
+  /// The longest a recording may run, in seconds. When it is reached the engine finishes on
+  /// its own and inserts the text, so a key that got stuck or a forgotten hands-free session
+  /// cannot record for hours.
+  static let recordingLimit: TimeInterval = 600
   /// Recordings shorter than this hold no speech.
   static let shortestRecording: TimeInterval = 0.3
   /// How often the connection is checked during a recording, in seconds.
@@ -195,11 +187,8 @@ public final class DictationEngine {
         if self == nil { await session.cancel() }
       }
     }
-    // A limit of a day or more (or one that is not a number) is no limit at all.
-    let limit = recordingLimit
-    guard limit < 86_400 else { return }
     take.limit = Task { [weak self, weak take] in
-      try? await Task.sleep(for: .seconds(max(limit, 0)))
+      try? await Task.sleep(for: .seconds(DictationEngine.recordingLimit))
       guard !Task.isCancelled, let self, let take, self.take === take else { return }
       await self.finish()
     }
@@ -509,7 +498,6 @@ public final class DictationEngine {
       mode: entry.mode,
       context: context,
       selection: entry.selection,
-      cleanUpLimit: cleanUpLimit,
       live: entry.live,
       duration: entry.duration
     )

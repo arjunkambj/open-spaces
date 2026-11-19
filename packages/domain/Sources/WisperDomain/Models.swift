@@ -3,8 +3,7 @@ import Foundation
 // MARK: - Settings
 
 /// Everything the user can configure. Stored as one JSON document.
-/// Decoding is tolerant: a missing key falls back to its default, so files
-/// written by an older version keep loading.
+/// A key that is missing from the file gets its default.
 public struct Settings: Codable, Sendable, Equatable {
   /// The name asked for during onboarding. Used in greetings and passed to the
   /// language model so it can spell the user's name.
@@ -126,28 +125,23 @@ public struct Settings: Codable, Sendable, Equatable {
     language = try c.decodeIfPresent(String.self, forKey: .language)
     apiBaseURL = try c.decodeIfPresent(String.self, forKey: .apiBaseURL)
     smartFormatting = try c.decodeIfPresent(Bool.self, forKey: .smartFormatting) ?? d.smartFormatting
-    // A style, shortcut or other choice this version does not know (the file was written by a
-    // newer one) is skipped, and the default applies. It never makes the whole file unreadable.
-    let rawStyles = try c.decodeIfPresent([String: IfKnown<WritingStyle>].self, forKey: .styles) ?? [:]
-    var styles = d.styles
-    for (key, value) in rawStyles {
-      if let category = AppCategory(rawValue: key), let style = value.value { styles[category] = style }
+    // Written as plain string-keyed objects (see `encode`). A kind of app or an action the file
+    // does not name keeps its default.
+    styles = d.styles
+    for (key, style) in try c.decodeIfPresent([String: WritingStyle].self, forKey: .styles) ?? [:] {
+      if let category = AppCategory(rawValue: key) { styles[category] = style }
     }
-    self.styles = styles
-    let rawShortcuts = try c.decodeIfPresent([String: IfKnown<KeyCombo>].self, forKey: .shortcuts) ?? [:]
-    var shortcuts = d.shortcuts
-    for (key, value) in rawShortcuts {
-      if let action = ShortcutAction(rawValue: key), let combo = value.value { shortcuts[action] = combo }
+    shortcuts = d.shortcuts
+    for (key, combo) in try c.decodeIfPresent([String: KeyCombo].self, forKey: .shortcuts) ?? [:] {
+      if let action = ShortcutAction(rawValue: key) { shortcuts[action] = combo }
     }
-    self.shortcuts = shortcuts
     microphoneID = try c.decodeIfPresent(String.self, forKey: .microphoneID)
     playSounds = try c.decodeIfPresent(Bool.self, forKey: .playSounds) ?? d.playSounds
     showPill = try c.decodeIfPresent(Bool.self, forKey: .showPill) ?? d.showPill
     launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
     keepDictationAudio = try c.decodeIfPresent(Bool.self, forKey: .keepDictationAudio) ?? d.keepDictationAudio
     historyRetention =
-      try c.decodeIfPresent(IfKnown<HistoryRetention>.self, forKey: .historyRetention)?.value
-      ?? d.historyRetention
+      try c.decodeIfPresent(HistoryRetention.self, forKey: .historyRetention) ?? d.historyRetention
     meetings = try c.decodeIfPresent(MeetingSettings.self, forKey: .meetings) ?? d.meetings
   }
 
@@ -176,17 +170,6 @@ public struct Settings: Codable, Sendable, Equatable {
     try c.encode(keepDictationAudio, forKey: .keepDictationAudio)
     try c.encode(historyRetention, forKey: .historyRetention)
     try c.encode(meetings, forKey: .meetings)
-  }
-}
-
-/// A stored value that may have been written by a newer version of the app. When this version
-/// cannot read it (an enum case it does not know, say), `value` is `nil` instead of the whole
-/// file failing to load.
-struct IfKnown<Value: Decodable>: Decodable {
-  var value: Value?
-
-  init(from decoder: any Decoder) throws {
-    value = try? Value(from: decoder)
   }
 }
 
@@ -426,10 +409,10 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
   public var failure: String?
   /// For a failed command: the text that was selected when the command was spoken, so a retry
   /// changes that same text. An empty string means nothing was selected. `nil` on every other
-  /// entry, and on failed commands saved before selections were kept.
+  /// entry.
   public var selection: String?
   /// How long each step took, from letting go of the key to the text being typed. Numbers
-  /// only: nothing that was said. `nil` on entries saved before timings were kept.
+  /// only: nothing that was said.
   public var timing: Timing?
 
   /// How long the steps of one dictation took, in thousandths of a second. A step that did
@@ -471,27 +454,6 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
       self.insertMs = insertMs
       self.totalMs = totalMs
     }
-
-    private enum CodingKeys: String, CodingKey {
-      case path, captureMs, transcribeMs, cleanUpMs, insertMs, totalMs
-    }
-
-    /// Reads what it can: a value this version does not understand is left out, never an error.
-    public init(from decoder: any Decoder) throws {
-      let c = try decoder.container(keyedBy: CodingKeys.self)
-      func whole(_ key: CodingKeys) -> Int? {
-        guard let number = try? c.decodeIfPresent(Double.self, forKey: key), number.isFinite, number >= 0,
-          number < 1e12
-        else { return nil }
-        return Int(number.rounded())
-      }
-      path = (try? c.decodeIfPresent(IfKnown<Path>.self, forKey: .path))?.value
-      captureMs = whole(.captureMs)
-      transcribeMs = whole(.transcribeMs)
-      cleanUpMs = whole(.cleanUpMs)
-      insertMs = whole(.insertMs)
-      totalMs = whole(.totalMs)
-    }
   }
 
   public init(
@@ -520,29 +482,6 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
     self.failure = failure
     self.selection = selection
     self.timing = timing
-  }
-
-  private enum CodingKeys: String, CodingKey {
-    case id, createdAt, mode, rawText, text, duration, appName, bundleID, audioFile, failure, selection
-    case timing
-  }
-
-  public init(from decoder: any Decoder) throws {
-    let c = try decoder.container(keyedBy: CodingKeys.self)
-    id = try c.decode(UUID.self, forKey: .id)
-    createdAt = try c.decode(Date.self, forKey: .createdAt)
-    // A mode this version does not know (the file comes from a newer one) reads as plain dictation.
-    mode = try c.decodeIfPresent(IfKnown<DictationMode>.self, forKey: .mode)?.value ?? .dictation
-    rawText = try c.decode(String.self, forKey: .rawText)
-    text = try c.decode(String.self, forKey: .text)
-    duration = try c.decode(TimeInterval.self, forKey: .duration)
-    appName = try c.decodeIfPresent(String.self, forKey: .appName)
-    bundleID = try c.decodeIfPresent(String.self, forKey: .bundleID)
-    audioFile = try c.decodeIfPresent(String.self, forKey: .audioFile)
-    failure = try c.decodeIfPresent(String.self, forKey: .failure)
-    selection = try c.decodeIfPresent(String.self, forKey: .selection)
-    // Timings are a convenience. One that cannot be read never costs the entry.
-    timing = (try? c.decodeIfPresent(Timing.self, forKey: .timing)) ?? nil
   }
 
   public var wordCount: Int { text.split(whereSeparator: \.isWhitespace).count }
@@ -578,13 +517,14 @@ public struct DictationStats: Sendable, Equatable {
     self.dictationCount = dictationCount
   }
 
-  public init(_ dictations: [Dictation], now: Date = Date(), calendar: Calendar = .current) {
+  public init(_ dictations: [Dictation]) {
+    let calendar = Calendar.current
     let done = dictations.filter { !$0.failed }
     let words = done.reduce(0) { $0 + $1.wordCount }
     let seconds = done.reduce(0.0) { $0 + $1.duration }
     let days = Set(done.map { calendar.startOfDay(for: $0.createdAt) })
     var streak = 0
-    var day = calendar.startOfDay(for: now)
+    var day = calendar.startOfDay(for: Date())
     if !days.contains(day), let yesterday = calendar.date(byAdding: .day, value: -1, to: day) {
       day = yesterday
     }
@@ -754,11 +694,11 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
   }
 
   /// The meeting as a Markdown document: title, date, summary, key points,
-  /// decisions, action items, the user's notes and the transcript.
-  public func markdown(timeZone: TimeZone = .current) -> String {
+  /// decisions, action items, the user's notes and the transcript. Times are in the
+  /// device's time zone.
+  public func markdown() -> String {
     let dateFormat = DateFormatter()
     dateFormat.locale = Locale(identifier: "en_US_POSIX")
-    dateFormat.timeZone = timeZone
     dateFormat.dateFormat = "yyyy-MM-dd HH:mm"
     var lines = ["# \(title)", ""]
     var facts = ["**Date:** \(dateFormat.string(from: startedAt))"]
@@ -795,9 +735,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Untitled meeting"
     startedAt = try c.decode(Date.self, forKey: .startedAt)
     endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
-    // A status this version does not know (the file comes from a newer one) reads as `ready`:
-    // nothing is recorded or retried for it, and the file is left as it is.
-    status = try c.decodeIfPresent(IfKnown<MeetingStatus>.self, forKey: .status)?.value ?? .ready
+    status = try c.decodeIfPresent(MeetingStatus.self, forKey: .status) ?? .ready
     failure = try c.decodeIfPresent(String.self, forKey: .failure)
     segments = try c.decodeIfPresent([TranscriptSegment].self, forKey: .segments) ?? []
     notes = try c.decodeIfPresent(MeetingNotes.self, forKey: .notes)

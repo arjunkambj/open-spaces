@@ -271,7 +271,7 @@ extension Toolbox {
     // Dates no formatter can choke on, whatever the file holds.
     copy.startedAt = Toolbox.sane(meeting.startedAt)
     copy.endedAt = meeting.endedAt.map(Toolbox.sane)
-    return copy.markdown(timeZone: environment.timeZone)
+    return copy.markdown()
   }
 
   fileprivate func getMeeting(_ arguments: Arguments) async throws -> ToolOutput {

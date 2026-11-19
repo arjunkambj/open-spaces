@@ -75,7 +75,6 @@ The version next to the button is looked up **while the site is built** ([`src/r
 
 - The build asks GitHub where `releases/latest` leads. The answer ends in the tag, such as `v0.1.0`.
 - If GitHub does not answer, it uses the version in `apps/macos/package.json`.
-- If the newest release has no `Open-Wisper.dmg`, the button goes to the release page instead, so it never leads nowhere.
 
 The page only changes when the site is built again. That is why a new release deploys the site (see below).
 

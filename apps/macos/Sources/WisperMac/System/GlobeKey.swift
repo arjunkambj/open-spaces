@@ -32,26 +32,19 @@ public enum GlobeKey {
   public enum Outcome: Sendable, Equatable {
     /// macOS already behaves the new way.
     case now
-    /// The choice is saved, but macOS only follows it after the user logs out and back in.
-    case afterLogin
     /// macOS did not take the change.
     case failed
   }
 
   /// The way to the system's setting: how to read it and how to change it.
   ///
-  /// The app uses `.live`. Tests, the demo and snapshots use `.inert` or closures of their own,
-  /// so nothing on the Mac is ever changed by them.
+  /// The app uses `.live`. The demo and snapshots use `.inert`, so nothing on the Mac is
+  /// ever changed by them.
   public struct System: Sendable {
     /// The value macOS has stored (0 to 3), or `nil` when the user never chose.
-    public var read: @Sendable () -> Int?
+    var read: @Sendable () -> Int?
     /// Sets the value and says how that went.
-    public var write: @Sendable (Int) -> Outcome
-
-    public init(read: @escaping @Sendable () -> Int?, write: @escaping @Sendable (Int) -> Outcome) {
-      self.read = read
-      self.write = write
-    }
+    var write: @Sendable (Int) -> Outcome
 
     /// Reads "Do Nothing" and changes nothing.
     public static let inert = System(read: { SystemUse.nothing.rawValue }, write: { _ in .failed })
@@ -114,9 +107,9 @@ public final class GlobeKeySetting {
     static let asked = "globeKey.asked"
   }
 
-  /// - system: how to reach the Mac's setting. The default reads "Do Nothing" and changes nothing.
-  /// - memory: where the earlier choice and "already asked" are kept, or `nil` to keep nothing.
-  public init(system: GlobeKey.System = .inert, memory: UserDefaults? = nil) {
+  /// - system: how to reach the Mac's setting: `.live`, or `.inert` for the demo.
+  /// - memory: where the choice before the fix and "already asked" are kept, or `nil` to keep nothing.
+  public init(system: GlobeKey.System, memory: UserDefaults?) {
     self.system = system
     self.memory = memory
     systemUse = GlobeKey.systemUse(setting: system.read())
@@ -158,7 +151,7 @@ public final class GlobeKeySetting {
     guard interferes else { return .now }
     let before = systemUse
     let result = system.write(GlobeKey.SystemUse.nothing.rawValue)
-    if result != .failed {
+    if result == .now {
       previousUse = before
       memory?.set(before.rawValue, forKey: Key.previous)
     }
@@ -182,9 +175,8 @@ public final class GlobeKeySetting {
 /// Programs that are already running keep their own copy of it, so writing the preference
 /// alone only counts after the next login. macOS has a function that System Settings itself
 /// uses to change the value everywhere at once (`TISUpdateFnUsageType`). It is not part of
-/// the public system interface, so it is looked up by name at run time: when a future macOS
-/// no longer has it, the plain preference is written instead and the app says that a
-/// log-out is needed.
+/// the public system interface, so it is looked up by name at run time. On a macOS that
+/// does not have it the change fails, and the app says how to make it by hand.
 enum LiveSetting {
   private static var domain: CFString { "com.apple.HIToolbox" as CFString }
   private static var key: CFString { "AppleFnUsageType" as CFString }
@@ -194,25 +186,18 @@ enum LiveSetting {
   }
 
   static func write(_ value: Int) -> GlobeKey.Outcome {
-    if let update = function(named: "TISUpdateFnUsageType") {
-      // One whole register for the value: right whether the system reads 32 or 64 bits of it.
-      typealias Update = @convention(c) (Int) -> Void
-      unsafeBitCast(update, to: Update.self)(value)
-      // Taken when macOS itself now answers with the new value, or has it stored.
-      if resolved() == value || stored() == value {
-        // Make sure it also lasts past the next login.
-        if stored() != value { save(value) }
-        return .now
-      }
+    guard let update = function(named: "TISUpdateFnUsageType") else { return .failed }
+    // One whole register for the value: right whether the system reads 32 or 64 bits of it.
+    typealias Update = @convention(c) (Int) -> Void
+    unsafeBitCast(update, to: Update.self)(value)
+    // Taken when macOS itself now answers with the new value, or has it stored.
+    guard resolved() == value || stored() == value else { return .failed }
+    // The preference too, so the change lasts past the next login.
+    if stored() != value {
+      CFPreferencesSetAppValue(key, value as CFNumber, domain)
+      CFPreferencesAppSynchronize(domain)
     }
-    return save(value) ? .afterLogin : .failed
-  }
-
-  /// Writes the plain preference. True when it is stored.
-  @discardableResult
-  private static func save(_ value: Int) -> Bool {
-    CFPreferencesSetAppValue(key, value as CFNumber, domain)
-    return CFPreferencesAppSynchronize(domain) && stored() == value
+    return .now
   }
 
   /// The value in the preferences, asked for afresh.

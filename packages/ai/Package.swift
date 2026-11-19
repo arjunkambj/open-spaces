@@ -9,9 +9,7 @@ let package = Package(
     .library(name: "WisperAI", targets: ["WisperAI"])
   ],
   dependencies: [
-    .package(path: "../domain"),
-    // Tests only: what reaches the network is also tested with the real settings file.
-    .package(path: "../store"),
+    .package(path: "../domain")
   ],
   targets: [
     .target(
@@ -19,14 +17,6 @@ let package = Package(
       dependencies: [
         .product(name: "WisperDomain", package: "domain")
       ]
-    ),
-    .testTarget(
-      name: "WisperAITests",
-      dependencies: [
-        "WisperAI",
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperStore", package: "store"),
-      ]
-    ),
+    )
   ]
 )

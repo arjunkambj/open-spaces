@@ -10,10 +10,9 @@ public struct RootScreen: View {
   private let session: PhoneSession
   @Environment(\.scenePhase) private var scenePhase
 
-  /// - session: the app to show. Leave out for the real one.
   @MainActor
-  public init(session: PhoneSession? = nil) {
-    self.session = session ?? .shared
+  public init() {
+    session = .shared
   }
 
   public var body: some View {

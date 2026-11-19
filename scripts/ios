@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# ios <generate|build|test>: work on the iOS app in apps/ios.
+# ios <generate|build>: work on the iOS app in apps/ios.
 #
 #   generate   make the Xcode project from apps/ios/project.yml (needs XcodeGen)
 #   build      generate, then build the app for the iOS Simulator, unsigned
-#   test       generate, then run the app's tests on a simulator
 #
 # The iOS app needs full Xcode. On a Mac that has only the Command Line Tools
 # this prints why it is skipping and exits 0, so `pnpm check` still passes.
@@ -15,7 +14,7 @@
 # job is the one that builds the iOS app).
 set -euo pipefail
 
-usage="usage: ios <generate|build|test>"
+usage="usage: ios <generate|build>"
 cmd="${1:?$usage}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 app_dir="$root/apps/ios"
@@ -31,7 +30,7 @@ skip() {
 }
 
 case "$cmd" in
-  generate | build | test) ;;
+  generate | build) ;;
   *)
     echo "$usage" >&2
     exit 2
@@ -56,14 +55,14 @@ project="$(find "$app_dir" -maxdepth 1 -name '*.xcodeproj' | head -1)"
 [[ -n "$project" ]] || { echo "error: XcodeGen made no .xcodeproj in apps/ios" >&2; exit 1; }
 
 # The scheme to build: IOS_SCHEME, else the one named like the project, else
-# the first that is not a test or extension scheme.
+# the first that is not an extension scheme.
 scheme="${IOS_SCHEME:-}"
 if [[ -z "$scheme" ]]; then
   schemes="$(xcodebuild -list -project "$project" 2>/dev/null \
     | awk '/^ *Schemes:/ {on = 1; next} on && NF {sub(/^ +/, ""); print}')"
   wanted="$(basename "$project" .xcodeproj)"
   scheme="$(grep -Fx "$wanted" <<<"$schemes" || true)"
-  [[ -n "$scheme" ]] || scheme="$(grep -Ev '(Tests|Keyboard|Extension)$' <<<"$schemes" | head -1 || true)"
+  [[ -n "$scheme" ]] || scheme="$(grep -Ev '(Keyboard|Extension)$' <<<"$schemes" | head -1 || true)"
   [[ -n "$scheme" ]] || { echo "error: no scheme found in $project" >&2; exit 1; }
 fi
 
@@ -83,7 +82,7 @@ run_xcodebuild() {
   if ((status != 0)); then
     echo
     echo "---- iOS $cmd failed. Errors from the raw log ($log): ----"
-    grep -E '(error:|fatal error|\*\* [A-Z ]+ FAILED \*\*|Testing failed|failed \()' "$log" | sort -u | head -80 || true
+    grep -E '(error:|fatal error|\*\* [A-Z ]+ FAILED \*\*)' "$log" | sort -u | head -80 || true
     exit "$status"
   fi
 }
@@ -109,16 +108,9 @@ if [[ -z "$destination" ]]; then
     | sed -nE 's/^ +iPhone[^(]*\(([0-9A-Fa-f-]{36})\).*/\1/p' | tail -1 || true)"
   if [[ -n "$udid" ]]; then
     destination="platform=iOS Simulator,id=$udid"
-  elif [[ "$cmd" == build ]]; then
-    destination="generic/platform=iOS Simulator"
   else
-    echo "error: no iPhone simulator is installed, so the tests cannot run" >&2
-    exit 1
+    destination="generic/platform=iOS Simulator"
   fi
 fi
 
-if [[ "$cmd" == test ]] && ! grep -Eq 'bundle\.(unit-test|ui-testing)' "$app_dir/project.yml"; then
-  echo "No test target in apps/ios/project.yml. Nothing to test."
-  exit 0
-fi
-run_xcodebuild "$cmd" "${common[@]}" -destination "$destination"
+run_xcodebuild build "${common[@]}" -destination "$destination"

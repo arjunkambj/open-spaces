@@ -57,7 +57,7 @@ All JSON files are:
   (`2026-11-17`).
 - IDs are UUIDs.
 - A key with no value is left out instead of being written as `null`.
-- A missing key gets its default, so files from older versions keep working.
+- A missing key gets its default, unless the notes below say the key is required.
 - The order of entries in a list does not matter. The app sorts by date when it reads.
 
 The examples below were written by the app itself, from made-up data.
@@ -138,8 +138,9 @@ The examples below were written by the app itself, from made-up data.
   set to anything else, the app shows an error and sends nothing; it does not fall back to
   OpenAI. The saved API key is tied to the server it was saved for, so changing this
   address by hand does not send your key to the new server.
-- A value the app does not know (a style or a shortcut written by a newer version) is
-  skipped, and the default is used for it.
+- A value the app does not know (a style it has no name for, say) makes the file count as
+  damaged: it is moved aside, and that setting goes back to its default (see "A file that
+  cannot be read" below).
 
 ### dictionary.json
 
@@ -245,10 +246,12 @@ All four keys are required.
   - `totalMs`: from letting go of the key (or from starting a retry) until the text was typed.
     A little more than the steps added up: reading settings and saving the entry sit between.
 
-  Every key in `timing` is optional, and so is `timing` itself: entries saved by older versions
-  have none. A value the app cannot read is ignored, and the entry is still loaded.
-- `id`, `createdAt`, `rawText`, `text` and `duration` are required. `mode` is `dictation`
-  when left out. The other keys are optional.
+  Every key in `timing` is optional, and so is `timing` itself: the "not finished" entry has
+  none.
+- `id`, `createdAt`, `mode`, `rawText`, `text` and `duration` are required. The other keys
+  are optional. An entry that lacks a required key, or holds a value the app cannot read,
+  counts as damaged: the file is moved aside and saved again without that entry (see "A file
+  that cannot be read" below).
 
 ### meetings/&lt;ID&gt;/meeting.json
 
@@ -358,8 +361,7 @@ removed.
       "state" : "done",
       "track" : "microphone"
     }
-  ],
-  "version" : 1
+  ]
 }
 ```
 

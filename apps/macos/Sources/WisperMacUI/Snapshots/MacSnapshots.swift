@@ -65,9 +65,6 @@ public enum MacSnapshots {
       SnapshotCase("mac-shortcuts-fn-fixed", canvas: .custom(width: 720, height: 560)) {
         PartMock { ShortcutsEditor(globeHint: .nothing, globeUndo: .showEmoji) }
       },
-      SnapshotCase("mac-shortcuts-fn-after-login", canvas: .custom(width: 720, height: 600)) {
-        PartMock { ShortcutsEditor(globeHint: .afterLogin, globeUndo: .changeInputSource) }
-      },
       SnapshotCase("mac-shortcuts-fn-failed", canvas: .custom(width: 720, height: 580)) {
         PartMock { ShortcutsEditor(globeHint: .failed(.showEmoji)) }
       },
@@ -138,7 +135,6 @@ public enum MacSnapshots {
       ("Being dragged", PillState(look: .hint(keys: ["fn"]), meetingSince: nil, isGrabbed: true)),
     ]
     let now = meeting.addingTimeInterval(247)
-    // The bottom edge keeps the old name, so it can be laid beside the picture from before.
     var cases = PillEdge.allCases.map { edge in
       SnapshotCase(
         edge == .bottom ? "mac-pill" : "mac-pill-\(edge.rawValue)",
@@ -184,7 +180,7 @@ private struct Staged<Content: View>: View {
 private struct WindowMock: View {
   var prepare: @MainActor (AppModel, MacControls) -> Void = { _, _ in }
   var navigate: @MainActor (HubNavigation) -> Void
-  @State private var navigation = HubNavigation()
+  @State private var navigation = HubNavigation(defaults: nil)
 
   var body: some View {
     Staged(prepare: prepare) { _ in

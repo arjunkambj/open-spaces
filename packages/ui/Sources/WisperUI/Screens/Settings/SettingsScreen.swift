@@ -83,7 +83,7 @@ public struct SettingsScreen: View {
       Button("Cancel") { dialog = nil }.buttonStyle(.wisper()).keyboardShortcut(.defaultAction)
       Button("Remove key") {
         dialog = nil
-        Task { await model.removeAPIKey() }
+        model.run { try await $0.removeAPIKey() }
       }
       .buttonStyle(.wisper(.destructive))
     }

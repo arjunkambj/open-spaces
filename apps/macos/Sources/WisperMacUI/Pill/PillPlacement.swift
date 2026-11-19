@@ -244,8 +244,8 @@ public final class PillSpots {
   @ObservationIgnored private let defaults: UserDefaults?
   private static let key = "pill.spots"
 
-  /// - defaults: where the spots are kept, or `nil` to keep nothing (demo, snapshots, tests).
-  public init(defaults: UserDefaults? = nil) {
+  /// - defaults: where the spots are kept, or `nil` to keep nothing (demo, snapshots).
+  public init(defaults: UserDefaults?) {
     self.defaults = defaults
     let saved = defaults?.data(forKey: Self.key)
     memory = saved.flatMap { try? JSONDecoder().decode(PillMemory.self, from: $0) } ?? PillMemory()

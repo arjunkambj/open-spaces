@@ -19,7 +19,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.1.1"
+    MARKETING_VERSION: "0.1.2"
     CURRENT_PROJECT_VERSION: "1"
     # Signing is yours to set up: pick your team in Xcode.
     # See README.md.
@@ -104,12 +104,6 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-    scheme:
-      testTargets:
-        - OpenWisperTests
-        # The package's own tests, run once more on an iPhone simulator.
-        - package: phone/WisperPhoneTests
-      gatherCoverageData: false
 
   OpenWisperKeyboard:
     type: app-extension
@@ -166,16 +160,3 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
-
-  # Checks the built app itself: its Info.plist, its icon, its link scheme.
-  OpenWisperTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: Tests
-    dependencies:
-      - target: OpenWisper
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.openwisper.ios.tests
-        GENERATE_INFOPLIST_FILE: true

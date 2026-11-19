@@ -5,8 +5,7 @@
   "description": "MCP server and `wisper` command-line tool for agents.",
   "scripts": {
     "build": "../../scripts/swiftw build",
-    "test": "../../scripts/swiftw test",
-    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests"
+    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources"
   },
   "dependencies": {
     "@open-wisper/domain": "workspace:*",

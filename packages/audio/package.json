@@ -5,8 +5,7 @@
   "description": "Microphone and system-audio capture.",
   "scripts": {
     "build": "../../scripts/swiftw build",
-    "test": "../../scripts/swiftw test",
-    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests"
+    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources"
   },
   "dependencies": {
     "@open-wisper/domain": "workspace:*"

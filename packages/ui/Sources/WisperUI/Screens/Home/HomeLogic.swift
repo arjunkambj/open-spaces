@@ -34,19 +34,15 @@ enum HomeHistory {
   }
 
   /// Groups entries by the day they were made, newest day first.
-  static func days(
-    _ dictations: [Dictation],
-    now: Date = Date(),
-    calendar: Calendar = .current,
-    locale: Locale = .current
-  ) -> [HomeHistoryDay] {
+  static func days(_ dictations: [Dictation]) -> [HomeHistoryDay] {
+    let calendar = Calendar.current
     var days: [HomeHistoryDay] = []
     for dictation in dictations.sorted(by: { $0.createdAt > $1.createdAt }) {
       let day = calendar.startOfDay(for: dictation.createdAt)
       if days.last?.id == day {
         days[days.count - 1].entries.append(dictation)
       } else {
-        let title = dayTitle(day, now: now, calendar: calendar, locale: locale)
+        let title = dayTitle(day)
         days.append(HomeHistoryDay(id: day, title: title, entries: [dictation]))
       }
     }
@@ -54,19 +50,15 @@ enum HomeHistory {
   }
 
   /// "Today", "Yesterday", then the weekday and date. The year is added for other years.
-  static func dayTitle(
-    _ day: Date,
-    now: Date = Date(),
-    calendar: Calendar = .current,
-    locale: Locale = .current
-  ) -> String {
-    let today = calendar.startOfDay(for: now)
+  static func dayTitle(_ day: Date) -> String {
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
     let start = calendar.startOfDay(for: day)
     if start == today { return "Today" }
     if let yesterday = calendar.date(byAdding: .day, value: -1, to: today), start == yesterday {
       return "Yesterday"
     }
-    var format = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+    var format = Date.FormatStyle(locale: .current, calendar: calendar, timeZone: calendar.timeZone)
       .weekday(.wide).month(.wide).day()
     if calendar.component(.year, from: start) != calendar.component(.year, from: today) {
       format = format.year()
@@ -75,9 +67,10 @@ enum HomeHistory {
   }
 
   /// The time of day of an entry, such as "9:41 am".
-  static func time(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
-    date.formatted(
-      Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone).hour().minute()
+  static func time(_ date: Date) -> String {
+    let calendar = Calendar.current
+    return date.formatted(
+      Date.FormatStyle(locale: .current, calendar: calendar, timeZone: calendar.timeZone).hour().minute()
     )
     .lowercased()
   }

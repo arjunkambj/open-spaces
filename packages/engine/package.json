@@ -5,11 +5,9 @@
   "description": "Dictation and meeting engines.",
   "scripts": {
     "build": "../../scripts/swiftw build",
-    "test": "../../scripts/swiftw test",
-    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests"
+    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources"
   },
   "dependencies": {
-    "@open-wisper/domain": "workspace:*",
-    "@open-wisper/store": "workspace:*"
+    "@open-wisper/domain": "workspace:*"
   }
 }

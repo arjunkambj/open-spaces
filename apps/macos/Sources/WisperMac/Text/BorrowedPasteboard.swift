@@ -31,7 +31,6 @@ final class BorrowedPasteboard {
     self.pasteboard = pasteboard
   }
 
-  var isBorrowed: Bool { saved != nil }
   var changeCount: Int { pasteboard.changeCount }
 
   /// Remembers what is on the clipboard. Borrowing again before giving back
