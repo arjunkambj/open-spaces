@@ -279,7 +279,10 @@ public struct Tabs<Value: Hashable, Trailing: View>: View {
           withAnimation(Wisper.Motion.smooth) { selection = option }
         } label: {
           Text(title(option))
-            .wisperText(.bodyStrong, color: isSelected ? Wisper.Color.textPrimary : Wisper.Color.textSecondary)
+            .wisperText(
+              .bodyStrong,
+              color: isSelected ? Wisper.Color.textPrimary : Wisper.Color.textSecondary
+            )
             .lineLimit(1)
             .padding(.bottom, Wisper.Space.m)
             .overlay(alignment: .bottom) {
@@ -312,7 +315,10 @@ public struct Tabs<Value: Hashable, Trailing: View>: View {
           withAnimation(Wisper.Motion.smooth) { selection = option }
         } label: {
           Text(title(option))
-            .wisperText(.captionStrong, color: isSelected ? Wisper.Color.textPrimary : Wisper.Color.textSecondary)
+            .wisperText(
+              .captionStrong,
+              color: isSelected ? Wisper.Color.textPrimary : Wisper.Color.textSecondary
+            )
             .lineLimit(1)
             .minimumScaleFactor(0.85)
             .padding(.horizontal, 6)

@@ -12,7 +12,9 @@ enum DesignSnapshots {
       SnapshotCase("kit-feedback") { FeedbackGallery() },
       SnapshotCase("kit-empty") { EmptyGallery() },
       SnapshotCase("kit-dialog") { DialogGallery() },
-      SnapshotCase("kit-settings-sheet", canvas: .custom(width: 1180, height: 760)) { SettingsSheetGallery() },
+      SnapshotCase("kit-settings-sheet", canvas: .custom(width: 1180, height: 760)) {
+        SettingsSheetGallery()
+      },
       SnapshotCase("kit-voice", canvas: .custom(width: 880, height: 400)) { VoiceGallery() },
       SnapshotCase("kit-hub", canvas: .custom(width: 1180, height: 760)) { HubGallery() },
       SnapshotCase("kit-phone-page", canvas: .phone) { PhonePageGallery() },
@@ -241,7 +243,9 @@ private struct ControlsGallery: View {
         .padding(.top, Wisper.Space.xs)
       }
       GalleryGroup(title: "Tabs") {
-        Tabs(selection: $tab, options: SampleTab.allCases) { $0.rawValue } trailing: {
+        Tabs(selection: $tab, options: SampleTab.allCases) {
+          $0.rawValue
+        } trailing: {
           IconButton("magnifyingglass", label: "Search") {}
           IconButton("arrow.up.arrow.down", label: "Sort") {}
         }
@@ -329,7 +333,9 @@ private struct PageGallery: View {
       Button("Import") {}.buttonStyle(.wisper(.secondary))
       Button("Add word") {}.buttonStyle(.wisper(.primary))
     } content: {
-      Tabs(selection: $tab, options: SampleTab.allCases) { $0.rawValue } trailing: {
+      Tabs(selection: $tab, options: SampleTab.allCases) {
+        $0.rawValue
+      } trailing: {
         SearchField(text: $query)
       }
       HeroCard(
@@ -613,7 +619,10 @@ private struct HubGallery: View {
       sidebar
         .frame(width: 228)
       content
-        .background(Wisper.Color.panel, in: RoundedRectangle(cornerRadius: Wisper.Radius.panel, style: .continuous))
+        .background(
+          Wisper.Color.panel,
+          in: RoundedRectangle(cornerRadius: Wisper.Radius.panel, style: .continuous)
+        )
         .overlay {
           RoundedRectangle(cornerRadius: Wisper.Radius.panel, style: .continuous)
             .strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline)
@@ -647,7 +656,10 @@ private struct HubGallery: View {
           .padding(.top, Wisper.Space.xs)
       }
       .padding(Wisper.Space.l)
-      .background(Wisper.Color.raised, in: RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous))
+      .background(
+        Wisper.Color.raised,
+        in: RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous)
+      )
       .overlay {
         RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous)
           .strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline)

@@ -17,7 +17,12 @@ public struct Waveform: View {
   /// - level: loudness from 0 (silence) to 1.
   /// - bars: how many bars to draw.
   /// - height: the height of the tallest bar, in points.
-  public init(level: Double, bars: Int = 9, tint: SwiftUI.Color = Wisper.Color.textPrimary, height: CGFloat = 20) {
+  public init(
+    level: Double,
+    bars: Int = 9,
+    tint: SwiftUI.Color = Wisper.Color.textPrimary,
+    height: CGFloat = 20
+  ) {
     self.level = min(max(level, 0), 1)
     self.bars = max(bars, 1)
     self.tint = tint
@@ -33,7 +38,10 @@ public struct Waveform: View {
         ForEach(0..<bars, id: \.self) { index in
           Capsule()
             .fill(tint)
-            .frame(width: barWidth, height: Self.barHeight(index, of: bars, level: value, time: time, max: height))
+            .frame(
+              width: barWidth,
+              height: Self.barHeight(index, of: bars, level: value, time: time, max: height)
+            )
         }
       }
       .frame(height: height)
@@ -42,7 +50,13 @@ public struct Waveform: View {
   }
 
   /// The height of one bar: taller in the middle, each bar on its own slow wave.
-  nonisolated static func barHeight(_ index: Int, of count: Int, level: Double, time: Double, max height: CGFloat) -> CGFloat {
+  nonisolated static func barHeight(
+    _ index: Int,
+    of count: Int,
+    level: Double,
+    time: Double,
+    max height: CGFloat
+  ) -> CGFloat {
     let rest = Swift.max(2, height / 7)
     let position = count > 1 ? Double(index) / Double(count - 1) : 0.5
     let envelope = 0.45 + 0.55 * sin(position * .pi)

@@ -35,7 +35,7 @@ import Testing
 }
 
 @Test func inMemoryLibraryStoresSearchesAndReportsChanges() async throws {
-  let library = InMemoryLibrary()
+  let library: any Library = InMemoryLibrary()
   var changes = library.changes().makeAsyncIterator()
   try await library.save(DictionaryWord(text: "Kubernetes"))
   #expect(await changes.next() == .words)
@@ -91,7 +91,7 @@ import Testing
 }
 
 @Test func updateMeetingChangesInPlaceAndNeverRevivesADeletedMeeting() async throws {
-  let library = InMemoryLibrary()
+  let library: any Library = InMemoryLibrary()
   let meeting = Meeting(title: "Sync")
   try await library.save(meeting)
   let updated = try await library.updateMeeting(meeting.id) { $0.tags = ["team"] }
