@@ -1,0 +1,66 @@
+name: Bug report
+description: Something does not work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Short and specific is best.
+
+        **Never paste your OpenAI API key, and remove private text from transcripts and logs before you share them.**
+        Found a security problem? Do not post it here. See [SECURITY.md](https://github.com/arjunkambj/open-wisper/blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what did you see?
+      placeholder: I held the dictation key in Notes, spoke a sentence, and no text appeared.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+      placeholder: |
+        1. Open ...
+        2. Hold ...
+        3. Say ...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where?
+      options:
+        - macOS app
+        - iOS app
+        - iOS keyboard
+        - "`wisper` command-line tool or MCP server"
+        - Building from source
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Your macOS or iOS version, and the Open Wisper version or commit.
+      placeholder: macOS 26.5, Open Wisper 0.1.0 (commit 3f8ff44)
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: AI server
+      description: OpenAI, or another OpenAI-compatible server? Which models? (No keys, no private addresses.)
+      placeholder: OpenAI, gpt-4o-mini-transcribe + gpt-4.1-mini
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Error messages, screenshots, the app you were typing into.

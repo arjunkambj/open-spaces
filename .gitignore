@@ -1,17 +1,30 @@
+# macOS
 .DS_Store
+
+# Node tooling (pnpm, Turbo)
 node_modules/
 .turbo/
+
+# Swift builds
 .build/
+.build-*/
 .swiftpm/
+Package.resolved
+
+# Xcode. The iOS project is made from apps/ios/project.yml by XcodeGen.
 DerivedData/
-build/
-dist/
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
 *.xcuserstate
-Package.resolved
+*.xcresult
+
+# Things the scripts make: app bundles, zips, logs
+build/
+dist/
+ios-logs/
+
+# Local settings and secrets. An API key never belongs in the repo.
 .env
 .env.*
 *.local
-.build-*/

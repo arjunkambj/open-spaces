@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# ios <generate|build|test>: work on the iOS app in apps/ios.
+#
+#   generate   make the Xcode project from apps/ios/project.yml (needs XcodeGen)
+#   build      generate, then build the app for the iOS Simulator, unsigned
+#   test       generate, then run the app's tests on a simulator
+#
+# The iOS app needs full Xcode. On a Mac that has only the Command Line Tools
+# this prints why it is skipping and exits 0, so `pnpm check` still passes.
+# On CI (the CI variable is set) a missing tool is an error instead.
+#
+# The raw xcodebuild log is kept in apps/ios/build/logs (IOS_LOG_DIR to move it).
+# IOS_SCHEME picks the scheme, IOS_DESTINATION the simulator.
+# IOS_SKIP=1 skips everything (CI's `check` job sets it, because the `ios-app`
+# job is the one that builds the iOS app).
+set -euo pipefail
+
+usage="usage: ios <generate|build|test>"
+cmd="${1:?$usage}"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+app_dir="$root/apps/ios"
+log_dir="${IOS_LOG_DIR:-$app_dir/build/logs}"
+
+skip() {
+  if [[ -n "${CI:-}" ]]; then
+    echo "error: cannot run the iOS $cmd: $1" >&2
+    exit 1
+  fi
+  echo "Skipping the iOS $cmd: $1"
+  exit 0
+}
+
+case "$cmd" in
+  generate | build | test) ;;
+  *)
+    echo "$usage" >&2
+    exit 2
+    ;;
+esac
+
+if [[ -n "${IOS_SKIP:-}" ]]; then
+  echo "Skipping the iOS $cmd: IOS_SKIP is set."
+  exit 0
+fi
+[[ -f "$app_dir/project.yml" ]] || skip "apps/ios/project.yml does not exist yet."
+command -v xcodegen >/dev/null 2>&1 || skip "XcodeGen is not installed. Install it with: brew install xcodegen"
+if [[ "$cmd" != generate ]]; then
+  xcodebuild -version >/dev/null 2>&1 \
+    || skip "full Xcode is not installed (the Command Line Tools alone cannot build iOS apps). CI builds it."
+fi
+
+(cd "$app_dir" && xcodegen generate --quiet)
+[[ "$cmd" == generate ]] && exit 0
+
+project="$(find "$app_dir" -maxdepth 1 -name '*.xcodeproj' | head -1)"
+[[ -n "$project" ]] || { echo "error: XcodeGen made no .xcodeproj in apps/ios" >&2; exit 1; }
+
+# The scheme to build: IOS_SCHEME, else the one named like the project, else
+# the first that is not a test or extension scheme.
+scheme="${IOS_SCHEME:-}"
+if [[ -z "$scheme" ]]; then
+  schemes="$(xcodebuild -list -project "$project" 2>/dev/null \
+    | awk '/^ *Schemes:/ {on = 1; next} on && NF {sub(/^ +/, ""); print}')"
+  wanted="$(basename "$project" .xcodeproj)"
+  scheme="$(grep -Fx "$wanted" <<<"$schemes" || true)"
+  [[ -n "$scheme" ]] || scheme="$(grep -Ev '(Tests|Keyboard|Extension)$' <<<"$schemes" | head -1 || true)"
+  [[ -n "$scheme" ]] || { echo "error: no scheme found in $project" >&2; exit 1; }
+fi
+
+# Runs xcodebuild, keeps the raw log, shows a short readable version, and on
+# failure repeats the errors at the end where they are easy to find.
+run_xcodebuild() {
+  local log="$log_dir/$cmd.log"
+  mkdir -p "$log_dir"
+  local pretty=(cat)
+  if command -v xcbeautify >/dev/null 2>&1; then
+    pretty=(xcbeautify)
+    [[ -n "${GITHUB_ACTIONS:-}" ]] && pretty+=(--renderer github-actions)
+  fi
+  echo "xcodebuild $* (raw log: $log)"
+  local status=0
+  xcodebuild "$@" 2>&1 | tee "$log" | "${pretty[@]}" || status=$?
+  if ((status != 0)); then
+    echo
+    echo "---- iOS $cmd failed. Errors from the raw log ($log): ----"
+    grep -E '(error:|fatal error|\*\* [A-Z ]+ FAILED \*\*|Testing failed|failed \()' "$log" | sort -u | head -80 || true
+    exit "$status"
+  fi
+}
+
+common=(
+  -project "$project"
+  -scheme "$scheme"
+  -configuration Debug
+  -derivedDataPath "$app_dir/build/DerivedData"
+  -skipMacroValidation
+  -skipPackagePluginValidation
+  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_REQUIRED=NO
+  CODE_SIGN_IDENTITY=
+)
+
+# Pick a simulator: IOS_DESTINATION, else the last iPhone that Xcode lists
+# (it belongs to the newest installed iOS version). Building for one real
+# simulator compiles for one kind of chip instead of two, so it is faster.
+destination="${IOS_DESTINATION:-}"
+if [[ -z "$destination" ]]; then
+  udid="$(xcrun simctl list devices available 2>/dev/null \
+    | sed -nE 's/^ +iPhone[^(]*\(([0-9A-Fa-f-]{36})\).*/\1/p' | tail -1 || true)"
+  if [[ -n "$udid" ]]; then
+    destination="platform=iOS Simulator,id=$udid"
+  elif [[ "$cmd" == build ]]; then
+    destination="generic/platform=iOS Simulator"
+  else
+    echo "error: no iPhone simulator is installed, so the tests cannot run" >&2
+    exit 1
+  fi
+fi
+
+if [[ "$cmd" == test ]] && ! grep -Eq 'bundle\.(unit-test|ui-testing)' "$app_dir/project.yml"; then
+  echo "No test target in apps/ios/project.yml. Nothing to test."
+  exit 0
+fi
+run_xcodebuild "$cmd" "${common[@]}" -destination "$destination"

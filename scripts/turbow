@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# turbow: run `turbo` for this repo. The root package.json scripts use it.
+#
+# Turbo skips a task when nothing it depends on has changed. It can see the
+# files, but not which Swift compiler is installed. This puts the compiler's
+# version into the environment (turbo.json lists WISPER_TOOLCHAIN), so after
+# an Xcode or Command Line Tools update everything is built and tested again.
+#
+# It also turns off Turbo's own usage reporting: nothing here phones home.
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+turbo="$root/node_modules/.bin/turbo"
+[[ -x "$turbo" ]] || { echo "turbo is not installed. Run: pnpm install" >&2; exit 1; }
+
+WISPER_TOOLCHAIN="$(swift --version 2>/dev/null | tr '\n' ' ' || true)"
+export WISPER_TOOLCHAIN
+export TURBO_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1
+exec "$turbo" "$@"

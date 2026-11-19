@@ -1,0 +1,23 @@
+# Keeps the GitHub Actions and the JavaScript tooling (Turbo) up to date.
+# There are no Swift dependencies to watch.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Wait a week before taking a new release, so a bad one can be pulled first.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build

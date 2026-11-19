@@ -22,6 +22,8 @@ packages/audio    WisperAudio    microphone + system-audio capture
 packages/engine   WisperEngine   DictationEngine, MeetingEngine, AppModel
 packages/ui       WisperUI       design tokens + SwiftUI components (both platforms)
 packages/agent    WisperAgent    MCP server + `wisper` command-line tool
+scripts           swiftw, ios, ci-try and other build helpers
+docs              agents.md (connecting an agent), data-format.md (files on disk)
 ```
 
 Turborepo (`turbo.json`) runs each package's `build`, `test` and `lint` scripts; pnpm workspaces declare the dependency graph. The code is Swift 6 with strict concurrency.
@@ -59,7 +61,9 @@ Always call `scripts/swiftw` instead of `swift` for build/test/run. It makes the
 
 Tests use **Swift Testing** (`import Testing`, `@Test`, `#expect`), not XCTest.
 
-The iOS app cannot be built without full Xcode. CI builds it. To build an uncommitted working tree in CI: `scripts/ci-try <name>` pushes a snapshot to the throwaway branch `ci/try-<name>`.
+The iOS app cannot be built without full Xcode: `scripts/ios <generate|build|test>` (also `pnpm ios:build`, `pnpm ios:test`) skips with a message when Xcode is missing, and CI builds it. To build an uncommitted working tree in CI: `scripts/ci-try <name>` pushes a snapshot to the throwaway branch `ci/try-<name>`; delete that branch when you are done (`git push origin --delete ci/try-<name>`).
+
+CI compiles with Xcode 26.6 (Swift 6.3), which can be older than your local Swift. Do not lean on behaviour that only the newest compiler has.
 
 ## Style
 

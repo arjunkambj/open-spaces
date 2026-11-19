@@ -1,0 +1,65 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the macOS app and attaches it to a GitHub
+# Release with that name. The app is not signed with an Apple developer
+# certificate; the release notes say how to open it.
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  XCODE_VERSION: "26.6"
+
+jobs:
+  macos:
+    name: Build and publish the macOS app
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write # to create the release and attach the zip
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_$XCODE_VERSION.app"
+          xcodebuild -version
+          swift --version
+      - name: Build the app bundle
+        working-directory: apps/macos
+        # The bundle script may read OPEN_WISPER_VERSION: the tag without its "v".
+        run: OPEN_WISPER_VERSION="${TAG#v}" ./scripts/bundle
+      - name: Check and zip the bundle
+        run: scripts/package-mac-app "Open-Wisper-$TAG-macOS.zip"
+      - name: Write the release notes
+        run: |
+          zip="Open-Wisper-$TAG-macOS.zip"
+          sed -e "s/{{TAG}}/$TAG/g" \
+              -e "s/{{ZIP}}/$zip/g" \
+              -e "s/{{SHA256}}/$(shasum -a 256 "$zip" | cut -d' ' -f1)/g" \
+              .github/release-notes.md > release-notes.md
+          cat release-notes.md
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip="Open-Wisper-$TAG-macOS.zip"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$zip" --clobber
+          else
+            prerelease=()
+            [[ "$TAG" == *-* ]] && prerelease=(--prerelease)
+            gh release create "$TAG" "$zip" --verify-tag --title "Open Wisper $TAG" \
+              --notes-file release-notes.md --generate-notes "${prerelease[@]}"
+          fi
