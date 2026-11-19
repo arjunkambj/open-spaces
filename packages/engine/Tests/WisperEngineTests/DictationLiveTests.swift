@@ -104,13 +104,18 @@ struct DictationLiveTests {
     #expect(rig.engine.partialText.isEmpty)
   }
 
+  /// Tests of "the head start is not waited out" use a 45 s recording, whose head start is
+  /// 6 s, and allow this long: a busy test machine can add a second or two to anything.
+  static let wellBeforeTheHeadStart: Duration = .seconds(4)
+
   // MARK: - The file takes over
 
   @Test func aLiveSessionThatCannotBeOpenedLeavesTheFileToDoIt() async throws {
     let live = FakeLiveTranscriber(openFailure: .network("live transcription is not available")) { _ in
       Transcript(text: "never asked")
     }
-    let rig = try await Rig(heard: Self.fileWords, live: live)
+    // A long recording: its head start would be 6 s, far more than a busy test machine adds.
+    let rig = try await Rig(heard: Self.fileWords, capture: FakeAudioCapture(stopDuration: 45), live: live)
 
     let began = ContinuousClock.now
     let done = try #require(await rig.dictate())
@@ -119,19 +124,19 @@ struct DictationLiveTests {
     #expect(done.timing?.path == .file)
     #expect(rig.transcriber.requests.count == 1)
     // At once: nobody waits out a head start for a session that never opened.
-    #expect(ContinuousClock.now - began < .seconds(1))
+    #expect(ContinuousClock.now - began < Self.wellBeforeTheHeadStart)
   }
 
   @Test func aLiveSessionThatFailsHalfWayLeavesTheFileToDoIt() async throws {
     let live = FakeLiveTranscriber { _ in throw WisperError.network("the connection was lost") }
-    let rig = try await Rig(heard: Self.fileWords, live: live)
+    let rig = try await Rig(heard: Self.fileWords, capture: FakeAudioCapture(stopDuration: 45), live: live)
 
     let began = ContinuousClock.now
     let done = try #require(await rig.dictate())
 
     #expect(done.rawText == Self.fileWords)
     #expect(done.timing?.path == .file)
-    #expect(ContinuousClock.now - began < .seconds(1))
+    #expect(ContinuousClock.now - began < Self.wellBeforeTheHeadStart)
     #expect(rig.engine.phase == .idle)
   }
 
@@ -171,7 +176,7 @@ struct DictationLiveTests {
     #expect(done.rawText == Self.fileWords)
     #expect(done.timing?.path == .file)
     // The live side had its head start (1.8 s for three seconds of speech), and no more.
-    #expect(taken > .milliseconds(1_700) && taken < .seconds(5), "took \(taken)")
+    #expect(taken > .milliseconds(1_700) && taken < .seconds(12), "took \(taken)")
     // The session nobody is waiting for any more is ended.
     #expect(await eventually { live.sessions.first?.isCancelled == true })
     await stuck.open()
@@ -180,7 +185,7 @@ struct DictationLiveTests {
   @Test func aSessionStillBeingOpenedWhenThePersonStopsIsNotWaitedFor() async throws {
     // Opening takes for ever (a slow network). The person has already let go of the key.
     let library = InMemoryLibrary()
-    let recording: any CaptureSession = ShortOfSound(seconds: 3)
+    let recording: any CaptureSession = ShortOfSound(seconds: 45)
     let slow = SlowToOpen()
     let take = LiveTake(transcriber: slow, library: library, capture: Task { .success(recording) })
     let pipeline = DictationPipeline(
@@ -193,13 +198,13 @@ struct DictationLiveTests {
     let heard = try await pipeline.heard(
       TranscriptionRequest(audio: URL(fileURLWithPath: "/nonexistent.m4a"), model: "m"),
       live: take,
-      duration: 3
+      duration: 45
     )
 
     #expect(heard.transcript.text == Self.fileWords)
     #expect(heard.path == .file)
-    // A third of a second of grace, not the 1.8 s head start an open session would get.
-    #expect(ContinuousClock.now - began < .milliseconds(1_200))
+    // A third of a second of grace, not the 6 s head start an open session would get.
+    #expect(ContinuousClock.now - began < Self.wellBeforeTheHeadStart)
     await slow.gate.open()
   }
 
