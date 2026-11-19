@@ -4,10 +4,10 @@ Open Wisper is an open-source voice dictation and meeting-notes app for macOS an
 
 ## Rules that never bend
 
-- **Everything is stored on the device.** Files under the data folder, the API key in the Keychain. No cloud, no analytics, no telemetry, no sign-up. The only network calls go to the OpenAI-compatible server the user configured.
+- **Everything is stored on the device.** Files under the data folder, the API key in the Keychain. No cloud, no analytics, no telemetry, no sign-up. The only network calls go to the OpenAI-compatible server the user configured, plus the Mac app's check for a new version on GitHub (about once a day; it sends no user data).
 - **One branch, one environment.** `main` is the base branch. There is no staging or dev environment. Work on a branch, open a PR into `main`.
 - **Original work only.** The layout and flows are inspired by popular dictation apps, but never copy another product's code, images, icons, sounds, name or wording.
-- **No third-party Swift dependencies** without a strong reason. Apple frameworks and the standard library cover what we need.
+- **No third-party Swift dependencies** without a strong reason. Apple frameworks and the standard library cover what we need. The one exception is Sparkle, the updater in the Mac app, imported in a single file (`AppUpdater.swift`).
 - The API key never goes into a file, a log, an error message or a test.
 
 ## Layout
@@ -38,6 +38,7 @@ Dependencies point one way: `domain` knows nothing; `store`, `ai`, `audio`, `eng
 - **Links.** A link that starts listening or stops a recording (`WisperLink.needsTrust`) is followed only with a redeemed `LinkTicket` or the user's yes. A sender of ours (the `wisper` tool, the iOS keyboard) attaches one with `LinkTicket.issue`. Without a ticket: starting a meeting asks first, dictation and stop links are ignored.
 - **Nothing said is lost.** A failed dictation keeps its audio and a history entry to retry. A meeting's audio stays on disk until all of it is transcribed, and `recoverUnfinished` rebuilds from it after a crash.
 - **Agent export.** `meetings export` writes only a new `.md` file. Keep the rules in `docs/agents.md` ("Safety") true.
+- **Updates.** The Mac app updates itself through Sparkle from GitHub Releases. Every release is signed with the same certificate and update key (`scripts/setup-signing`), so permissions survive an update and a tampered download is refused. A release is a `vX.Y.Z` tag that matches `apps/macos/package.json`; see CONTRIBUTING.md.
 - **Docs follow the code.** A change to a stored model updates `docs/data-format.md`. A change to a `wisper` tool updates the tables in `docs/agents.md`: paste the output of `wisper tools --markdown` between the markers (a test compares them).
 
 ## Design: deep modules
