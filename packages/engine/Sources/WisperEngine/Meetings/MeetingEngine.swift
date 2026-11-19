@@ -478,7 +478,7 @@ public final class MeetingEngine {
       problem = error
       failure =
         (nothingHeard ? MeetingEngine.transcriptFailed : MeetingEngine.partFailed) + " "
-        + error.localizedDescription
+        + MeetingEngine.words(for: error, settings)
     }
 
     do {
@@ -501,7 +501,7 @@ public final class MeetingEngine {
         } catch {
           let error = MeetingEngine.wisperError(error)
           problem = problem ?? error
-          failure = failure ?? MeetingEngine.notesFailed + " " + error.localizedDescription
+          failure = failure ?? MeetingEngine.notesFailed + " " + MeetingEngine.words(for: error, settings)
         }
       }
 
@@ -614,6 +614,12 @@ public final class MeetingEngine {
   /// When a meeting that was never stopped properly ended: where its audio or transcript ends.
   private nonisolated static func end(of meeting: Meeting, audio: TimeInterval) -> Date {
     meeting.startedAt.addingTimeInterval(max(audio, meeting.segments.map(\.end).max() ?? 0))
+  }
+
+  /// The message for a failed request, naming the user's own server when one is set.
+  private nonisolated static func words(for error: WisperError, _ settings: Settings) -> String {
+    guard let server = try? settings.apiServer() else { return error.localizedDescription }
+    return error.message(server: server)
   }
 
   private static func wisperError(_ error: any Error) -> WisperError {

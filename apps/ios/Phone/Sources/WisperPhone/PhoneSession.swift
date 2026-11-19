@@ -308,10 +308,8 @@ public final class PhoneSession {
     let secrets = KeychainSecretStore()
     let openAI = OpenAI(
       secrets: secrets,
-      baseURL: {
-        let address = (try? await library.settings())?.apiBaseURL ?? ""
-        return URL(string: address.trimmingCharacters(in: .whitespacesAndNewlines))
-      }
+      // The address goes through as typed: an unusable one is an error, never a quiet switch to OpenAI.
+      address: { try await library.settings().apiBaseURL }
     )
     return AppModel(
       AppModel.Dependencies(

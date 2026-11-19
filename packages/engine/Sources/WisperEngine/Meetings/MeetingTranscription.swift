@@ -241,10 +241,12 @@ actor MeetingTranscription {
     isAboutTheKey(error) || isRefusedByTheServer(error)
   }
 
-  /// There is no key, or it is not accepted: no chunk will get through until that is fixed.
+  /// There is no key, it is not accepted, or the server address cannot be used: no chunk will
+  /// get through until that is fixed.
   private static func isAboutTheKey(_ error: WisperError) -> Bool {
     switch error {
-    case .missingAPIKey, .invalidAPIKey: true
+    // An unusable server address is the same kind of problem: nothing gets through until Settings is fixed.
+    case .missingAPIKey, .invalidAPIKey, .invalidServerAddress: true
     default: false
     }
   }

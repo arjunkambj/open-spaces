@@ -35,8 +35,9 @@ the app and the tool must be given the same value to see the same data.
   dictation-audio/                 audio kept for dictations
   meetings/<ID>/meeting.json       one meeting
   meetings/<ID>/notes.md           the same meeting as Markdown, for reading
-  meetings/<ID>/audio/             the meeting's audio
+  meetings/<ID>/audio/             the meeting's audio (see below)
   .lock                            empty; used to take turns (see below)
+  .tickets/                        short-lived proof that a link came from the wisper tool
 ```
 
 Files and folders are readable by your user account only.
@@ -194,7 +195,13 @@ All four keys are required.
 - `audioFile` is the name of a file in `dictation-audio/`. It is a plain file name, never a
   path. When an entry is removed from this list, the app deletes its audio file too.
 - `failure` is present only when the dictation did not work. The audio is kept for a retry.
-- `appName`, `bundleID`, `audioFile` and `failure` are optional. The other keys are required.
+- An entry is written as soon as you stop speaking, with a `failure` that says it was not
+  finished, and is replaced when the text is ready. If the app closes in between, that entry
+  stays and you can retry it from Home.
+- `selection` is present only on a failed command: it is the text that was selected, kept so
+  a retry can rewrite the same text.
+- `appName`, `bundleID`, `audioFile`, `failure` and `selection` are optional. The other keys
+  are required.
 
 ### meetings/&lt;ID&gt;/meeting.json
 
@@ -261,6 +268,14 @@ All four keys are required.
 - `notes` holds the AI notes. It is missing until they have been written.
 - `userNotes` is your own free-form Markdown.
 - Only `id` and `startedAt` are required.
+
+### meetings/&lt;ID&gt;/audio/
+
+The app owns this folder. It holds the recording in pieces of about 30 seconds, one set per
+track: `microphone-0000.m4a`, `system-0000.m4a`, and so on. While a piece is being recorded
+there is also a `.wav` copy beside it, so the sound survives if the app closes suddenly; the
+copy is removed when the piece is finished. `manifest.json` lists the pieces and which have
+been turned into text. If it is lost, the app rebuilds it from the audio files.
 
 ### meetings/&lt;ID&gt;/notes.md
 
