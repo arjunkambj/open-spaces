@@ -86,11 +86,32 @@ extension Library {
 
 // MARK: - Secrets
 
-/// Holds the user's OpenAI API key. Never written to the library files.
+/// Holds the user's API key. Never written to the library files.
+///
+/// There is one key, and it belongs to one server: the host it was saved for
+/// (see `APIServer.host`). It is handed out only for that host, so a change to
+/// the server address in the settings file can never send the key somewhere
+/// its owner did not choose.
 public protocol SecretStore: Sendable {
-  func apiKey() async throws -> String?
-  /// Pass `nil` to remove the key.
-  func setAPIKey(_ key: String?) async throws
+  /// The saved key, when it was saved for `host`. `nil` when there is no key
+  /// or it belongs to another server. Host names are compared without regard
+  /// to case. A key saved before hosts were recorded counts as OpenAI's.
+  func apiKey(for host: String) async throws -> String?
+  /// Saves `key` as the key for `host`, replacing any key saved before.
+  /// Pass `nil` (or an empty key) to remove the saved key, whatever its host.
+  func setAPIKey(_ key: String?, host: String) async throws
+}
+
+extension SecretStore {
+  /// The saved key, when it was saved for OpenAI itself.
+  public func apiKey() async throws -> String? {
+    try await apiKey(for: APIServer.openAIHost)
+  }
+
+  /// Saves `key` as the key for OpenAI itself. Pass `nil` to remove the saved key.
+  public func setAPIKey(_ key: String?) async throws {
+    try await setAPIKey(key, host: APIServer.openAIHost)
+  }
 }
 
 // MARK: - Transcription
@@ -286,13 +307,16 @@ public enum Permission: String, Sendable, CaseIterable, Hashable {
 }
 
 /// The errors Open Wisper shows to people. Every seam throws these.
+///
+/// `errorDescription` words them for OpenAI. When the person uses a server
+/// of their own, show `message(server:)` instead, which names that server.
 public enum WisperError: Error, Sendable, Equatable, LocalizedError {
   case missingAPIKey
   case invalidAPIKey
   case rateLimited
-  /// The request never reached OpenAI (offline, timeout).
+  /// The request never reached the server (offline, timeout).
   case network(String)
-  /// OpenAI answered with an error.
+  /// The server answered with an error.
   case server(status: Int, message: String)
   case noSpeech
   case permissionDenied(Permission)
@@ -300,6 +324,10 @@ public enum WisperError: Error, Sendable, Equatable, LocalizedError {
   case notFound(String)
   case storage(String)
   case invalidResponse(String)
+  /// `Settings.apiBaseURL` is set, but is not a usable `http://` or `https://` address.
+  case invalidServerAddress
+  /// The language model answered a command with far more text than could be meant.
+  case replyTooLong
 
   public var errorDescription: String? {
     switch self {
@@ -315,6 +343,8 @@ public enum WisperError: Error, Sendable, Equatable, LocalizedError {
     case .notFound(let what): "\(what) was not found."
     case .storage(let detail): "Could not read or save your data: \(detail)"
     case .invalidResponse(let detail): "OpenAI sent a reply that could not be read: \(detail)"
+    case .invalidServerAddress: "The custom server address in Settings is not a valid web address."
+    case .replyTooLong: "The reply was far longer than expected, so it was not typed. Try the command again."
     }
   }
 }

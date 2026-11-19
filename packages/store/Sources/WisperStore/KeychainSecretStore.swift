@@ -8,6 +8,9 @@ import WisperDomain
 /// iCloud, and it can be read after the first unlock following a restart, so dictation
 /// works while the screen is locked.
 ///
+/// The host the key was saved for is kept on the same item, as its comment. An item with no
+/// comment was saved before hosts were recorded and counts as a key for OpenAI itself.
+///
 /// On macOS the item lives in the user's login keychain, because the newer kind of keychain
 /// is closed to apps that are not signed with a developer identity.
 public struct KeychainSecretStore: SecretStore {
@@ -22,23 +25,28 @@ public struct KeychainSecretStore: SecretStore {
     self.accessGroup = accessGroup
   }
 
-  public func apiKey() async throws -> String? {
+  public func apiKey(for host: String) async throws -> String? {
     try await KeychainSecretStore.offThePool { [self] in
       var query = itemQuery
       query[kSecReturnData] = true
+      query[kSecReturnAttributes] = true
       query[kSecMatchLimit] = kSecMatchLimitOne
       var found: CFTypeRef?
       let status = SecItemCopyMatching(query as CFDictionary, &found)
       if status == errSecItemNotFound { return nil }
       try KeychainSecretStore.check(status, "read")
-      guard let data = found as? Data, let key = String(data: data, encoding: .utf8), !key.isEmpty else {
-        return nil
-      }
-      return key
+      guard let item = found as? [String: Any], let data = item[kSecValueData as String] as? Data,
+        let key = String(data: data, encoding: .utf8), !key.isEmpty
+      else { return nil }
+      let comment =
+        (item[kSecAttrComment as String] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let savedFor = comment.isEmpty ? APIServer.openAIHost : comment
+      // A key is only ever handed out for the server it was saved for.
+      return APIServer.sameHost(savedFor, host) ? key : nil
     }
   }
 
-  public func setAPIKey(_ key: String?) async throws {
+  public func setAPIKey(_ key: String?, host: String) async throws {
     try await KeychainSecretStore.offThePool { [self] in
       let query = itemQuery
       guard let key, !key.isEmpty else {
@@ -46,11 +54,17 @@ public struct KeychainSecretStore: SecretStore {
         if status != errSecItemNotFound { try KeychainSecretStore.check(status, "removed") }
         return
       }
-      let value = [kSecValueData: Data(key.utf8)] as [CFString: Any]
+      // The key and its host are written in one step, so the item never pairs a key with
+      // the host of the key before it.
+      let value =
+        [
+          kSecValueData: Data(key.utf8),
+          kSecAttrComment: host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+        ] as [CFString: Any]
       var status = SecItemUpdate(query as CFDictionary, value as CFDictionary)
       if status == errSecItemNotFound {
         var item = query.merging(value) { $1 }
-        item[kSecAttrLabel] = "Open Wisper: OpenAI API key"
+        item[kSecAttrLabel] = "Open Wisper: API key"
         item[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlock
         status = SecItemAdd(item as CFDictionary, nil)
         // Somebody else added it in between. Theirs is replaced.

@@ -42,6 +42,9 @@ public actor FileLibrary: Library {
     self.layout = layout
     self.watchMode = watchMode
     self.lock = lock
+    // A data folder made by something else (or opened up later) is closed to other users
+    // again every time it is opened. A folder that is not there yet is made private later.
+    FileAccess.makePrivate(layout.root)
     settingsFile = JSONDocument(
       url: layout.file(FolderLayout.settings),
       lock: lock,
@@ -235,17 +238,22 @@ public actor FileLibrary: Library {
   ) throws -> Meeting? {
     // Read and write under one hold of the shared lock, so neither this process nor
     // another one can change the meeting in between.
-    let (result, changed): (Meeting?, Bool) = try lock.withLock {
-      guard let stored = try meetingIndex.meeting(id).meeting else { return (nil, false) }
+    let (result, saved, editedOutside): (Meeting?, Bool, Bool) = try lock.withLock {
+      // `outside` is true when somebody else changed the file since this library last looked.
+      let (found, outside) = try meetingIndex.meeting(id)
+      guard let stored = found else { return (nil, false, outside) }
       var meeting = stored
       change(&meeting)
       // The folder name decides the ID; a change cannot move the meeting.
       meeting.id = stored.id
-      guard meeting != stored else { return (stored, false) }
+      guard meeting != stored else { return (stored, false, outside) }
       try meetingIndex.save(meeting)
-      return (meeting, true)
+      return (meeting, true, outside)
     }
-    if changed { hub.send(.meetings) }
+    // Somebody else's edit is announced here even when this change changed nothing: this
+    // look has used up the "it changed" answer, so no later look would report it.
+    if saved || editedOutside { hub.send(.meetings) }
+    if editedOutside, !saved { meetingIndex.refreshNotes(for: [id]) }
     return result
   }
 

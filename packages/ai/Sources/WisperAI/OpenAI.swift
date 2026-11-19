@@ -7,17 +7,20 @@ import WisperDomain
 /// Nothing is cached between calls: the key and the server address are read
 /// again for every request, so a change in Settings takes effect at once.
 ///
-/// **The server address.** A custom address is taken as the folder that holds
-/// the API, and the endpoint is added to it: `https://example.com/api/v1`
-/// becomes `https://example.com/api/v1/chat/completions`. A trailing slash
-/// makes no difference, and anything after a `?` is kept. The one exception:
-/// an address with no path at all (`http://localhost:11434`) gets `/v1` added,
-/// because that is where every compatible server keeps its API. An address
-/// that is not `http` or `https` is ignored and OpenAI is used.
+/// **The server address.** `APIServer` holds the rule. In short: no address means OpenAI; a
+/// custom `http://` or `https://` address is taken as the folder that holds the API, and the
+/// endpoint is added to it. An address that is set but is not a usable web address makes
+/// every call throw `WisperError.invalidServerAddress` before anything is sent. It never
+/// falls back to OpenAI: the person chose another server.
 ///
-/// **The key.** OpenAI itself needs a key, so without one the calls throw
-/// `WisperError.missingAPIKey` before anything is sent. Any other server is
-/// called without a key when none is stored, because local servers need none.
+/// **The key.** A saved key belongs to the server it was saved for, and each request asks for
+/// the key of the server it is about to call. A key saved for another server is not sent.
+/// OpenAI itself needs a key, so without one the calls throw `WisperError.missingAPIKey`
+/// before anything is sent. Any other server is called without a key when none is saved for
+/// it, because local servers need none.
+///
+/// **Redirects.** A request follows a redirect only on the same host. Audio, text and the key
+/// are never passed on to a host the settings do not name.
 ///
 /// Every call throws `WisperError`, or `CancellationError` when its task is
 /// cancelled. Short network drops, rate limits and server hiccups are retried
@@ -27,27 +30,40 @@ public struct OpenAI: Sendable {
 
   /// - Parameters:
   ///   - secrets: Where the API key is read from, on every request.
-  ///   - baseURL: Returns the user's custom server address, or `nil` for
-  ///     `https://api.openai.com/v1`. Read on every request.
+  ///   - address: Returns `Settings.apiBaseURL` as it is stored: the text of the custom server
+  ///     address, or `nil` for OpenAI itself. Read on every request. Pass the text untouched,
+  ///     so an address that cannot be used is reported instead of ignored. An error it throws
+  ///     (the settings could not be read) fails the request: nothing is sent.
   ///   - session: The session that carries the requests.
+  public init(
+    secrets: any SecretStore,
+    address: @escaping @Sendable () async throws -> String?,
+    session: URLSession = .shared
+  ) {
+    self.init(secrets: secrets, address: address, session: session) { seconds in
+      try await Task.sleep(for: .seconds(seconds))
+    }
+  }
+
+  /// The earlier form of `init(secrets:address:session:)`, which takes the address already
+  /// made into a URL. Prefer the other one: text that could not be made into a URL arrives
+  /// here as `nil`, which means OpenAI, so that mistake cannot be reported.
   public init(
     secrets: any SecretStore,
     baseURL: @escaping @Sendable () async -> URL? = { nil },
     session: URLSession = .shared
   ) {
-    self.init(secrets: secrets, baseURL: baseURL, session: session) { seconds in
-      try await Task.sleep(for: .seconds(seconds))
-    }
+    self.init(secrets: secrets, address: { await baseURL()?.absoluteString }, session: session)
   }
 
   /// `pause` waits between retries. Tests pass one that returns at once.
   init(
     secrets: any SecretStore,
-    baseURL: @escaping @Sendable () async -> URL?,
+    address: @escaping @Sendable () async throws -> String?,
     session: URLSession,
     pause: @escaping @Sendable (TimeInterval) async throws -> Void
   ) {
-    client = Client(secrets: secrets, baseURL: baseURL, session: session, pause: pause)
+    client = Client(secrets: secrets, address: address, session: session, pause: pause)
   }
 
   /// Turns audio files into text with the model named in each request.

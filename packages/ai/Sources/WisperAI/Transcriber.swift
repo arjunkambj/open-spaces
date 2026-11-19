@@ -203,15 +203,25 @@ private struct Reply {
       guard let start = (item["start"] as? NSNumber)?.doubleValue,
         let end = (item["end"] as? NSNumber)?.doubleValue, let text = item["text"] as? String
       else { continue }
+      // Times come straight from the server. Anything that is not a real moment in the
+      // recording (negative, infinite, not a number) is pinned to one that is.
+      let from = Reply.moment(start) ?? 0
       pieces.append(
         Piece(
-          start: start,
-          end: end,
+          start: from,
+          end: max(from, Reply.moment(end) ?? from),
           text: text,
           noSpeech: (item["no_speech_prob"] as? NSNumber)?.doubleValue
         )
       )
     }
+  }
+
+  /// A time from the server as seconds from the start of the file: never negative, and never
+  /// past 100 hours (far longer than any file the API takes), so it is always safe to turn
+  /// into whole seconds. `nil` when it is not a number at all.
+  private static func moment(_ time: Double) -> TimeInterval? {
+    time.isFinite ? min(max(0, time), 359_999) : nil
   }
 
   /// The reply with made-up pieces taken out and white space trimmed.

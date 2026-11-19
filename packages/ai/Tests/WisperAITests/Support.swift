@@ -102,12 +102,18 @@ final class Server: @unchecked Sendable {
   }
 
   /// An `OpenAI` that talks to this server. Leave `baseURL` out to pretend to be OpenAI itself.
-  func openAI(key: String? = "sk-test-key", baseURL: String? = nil) -> OpenAI {
-    openAI(secrets: InMemorySecretStore(apiKey: key)) { baseURL.flatMap(URL.init(string:)) }
+  /// The key counts as saved for the server at `baseURL`, unless `savedFor` names another host.
+  func openAI(key: String? = "sk-test-key", baseURL: String? = nil, savedFor: String? = nil) -> OpenAI {
+    let host = savedFor ?? (try? APIServer(address: baseURL))?.host ?? APIServer.openAIHost
+    return openAI(secrets: InMemorySecretStore(apiKey: key, host: host)) { baseURL }
   }
 
-  func openAI(secrets: any SecretStore, baseURL: @escaping @Sendable () async -> URL? = { nil }) -> OpenAI {
-    OpenAI(secrets: secrets, baseURL: baseURL, session: session) { [weak self] seconds in
+  /// `address` returns the text of the custom server address, as the settings hold it.
+  func openAI(
+    secrets: any SecretStore,
+    address: @escaping @Sendable () async throws -> String? = { nil }
+  ) -> OpenAI {
+    OpenAI(secrets: secrets, address: address, session: session) { [weak self] seconds in
       try Task.checkCancellation()
       self?.lock.withLock { self?.waited.append(seconds) }
     }
@@ -115,7 +121,116 @@ final class Server: @unchecked Sendable {
 
   /// The shared request code on its own, for the few things only it can show.
   func client(key: String? = "sk-test-key") -> Client {
-    Client(secrets: InMemorySecretStore(apiKey: key), baseURL: { nil }, session: session) { _ in }
+    Client(secrets: InMemorySecretStore(apiKey: key), address: { nil }, session: session) { _ in }
+  }
+}
+
+/// A real, tiny web server on this machine (127.0.0.1 only), for what a pretend one cannot
+/// show: how the system's own networking treats a redirect.
+final class LocalServer: @unchecked Sendable {
+  struct Request: Sendable {
+    /// `POST /v1/chat/completions`
+    var line: String
+    var headers: [String: String]
+    var body: Data
+
+    var path: String { line.split(separator: " ").dropFirst().first.map(String.init) ?? "" }
+  }
+
+  let port: Int
+  private let listener: Int32
+  private let lock = NSLock()
+  private var seen: [Request] = []
+  private let answer: @Sendable (Request, Int) -> String
+
+  /// `answer` gets each request and this server's port, and returns the whole reply, head and body.
+  init(_ answer: @escaping @Sendable (Request, Int) -> String) throws {
+    self.answer = answer
+    let listener = socket(AF_INET, SOCK_STREAM, 0)
+    guard listener >= 0 else { throw CocoaError(.fileReadUnknown) }
+    var yes: Int32 = 1
+    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_addr.s_addr = inet_addr("127.0.0.1")
+    let length = socklen_t(MemoryLayout<sockaddr_in>.size)
+    let bound = withUnsafePointer(to: &address) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(listener, $0, length) }
+    }
+    var named = sockaddr_in()
+    var namedLength = length
+    let asked = withUnsafeMutablePointer(to: &named) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(listener, $0, &namedLength) }
+    }
+    guard bound == 0, asked == 0, listen(listener, 8) == 0 else {
+      close(listener)
+      throw CocoaError(.fileReadUnknown)
+    }
+    self.listener = listener
+    port = Int(UInt16(bigEndian: named.sin_port))
+    Thread.detachNewThread { [weak self, listener] in
+      while true {
+        let connection = accept(listener, nil, nil)
+        guard connection >= 0 else { return }
+        guard let self else {
+          close(connection)
+          return
+        }
+        self.serve(connection)
+      }
+    }
+  }
+
+  deinit { close(listener) }
+
+  var requests: [Request] { lock.withLock { seen } }
+
+  /// A reply with a JSON body.
+  static func ok(_ body: String) -> String {
+    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\n"
+      + "Connection: close\r\n\r\n" + body
+  }
+
+  /// A "go there instead" reply that asks for the same request to be sent again.
+  static func redirect(to location: String) -> String {
+    "HTTP/1.1 307 Temporary Redirect\r\nLocation: \(location)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+  }
+
+  private func serve(_ connection: Int32) {
+    defer { close(connection) }
+    var received = Data()
+    var buffer = [UInt8](repeating: 0, count: 16 * 1_024)
+    let blank = Data("\r\n\r\n".utf8)
+    var request: Request?
+    while request == nil {
+      let count = read(connection, &buffer, buffer.count)
+      guard count > 0 else { return }
+      received.append(buffer, count: count)
+      guard let split = received.range(of: blank) else { continue }
+      let lines = String(decoding: received[..<split.lowerBound], as: UTF8.self).components(
+        separatedBy: "\r\n"
+      )
+      var headers: [String: String] = [:]
+      for line in lines.dropFirst() {
+        guard let colon = line.firstIndex(of: ":") else { continue }
+        headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(
+          in: .whitespaces
+        )
+      }
+      let body = received[split.upperBound...]
+      guard body.count >= Int(headers["content-length"] ?? "0") ?? 0 else { continue }
+      request = Request(line: lines.first ?? "", headers: headers, body: Data(body))
+    }
+    guard let request else { return }
+    lock.withLock { seen.append(request) }
+    let reply = Array(answer(request, port).utf8)
+    var sent = 0
+    while sent < reply.count {
+      let count = reply[sent...].withUnsafeBytes { write(connection, $0.baseAddress, $0.count) }
+      guard count > 0 else { return }
+      sent += count
+    }
   }
 }
 

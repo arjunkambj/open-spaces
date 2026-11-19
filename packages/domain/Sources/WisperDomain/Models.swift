@@ -126,16 +126,18 @@ public struct Settings: Codable, Sendable, Equatable {
     language = try c.decodeIfPresent(String.self, forKey: .language)
     apiBaseURL = try c.decodeIfPresent(String.self, forKey: .apiBaseURL)
     smartFormatting = try c.decodeIfPresent(Bool.self, forKey: .smartFormatting) ?? d.smartFormatting
-    let rawStyles = try c.decodeIfPresent([String: WritingStyle].self, forKey: .styles) ?? [:]
+    // A style, shortcut or other choice this version does not know (the file was written by a
+    // newer one) is skipped, and the default applies. It never makes the whole file unreadable.
+    let rawStyles = try c.decodeIfPresent([String: IfKnown<WritingStyle>].self, forKey: .styles) ?? [:]
     var styles = d.styles
     for (key, value) in rawStyles {
-      if let category = AppCategory(rawValue: key) { styles[category] = value }
+      if let category = AppCategory(rawValue: key), let style = value.value { styles[category] = style }
     }
     self.styles = styles
-    let rawShortcuts = try c.decodeIfPresent([String: KeyCombo].self, forKey: .shortcuts) ?? [:]
+    let rawShortcuts = try c.decodeIfPresent([String: IfKnown<KeyCombo>].self, forKey: .shortcuts) ?? [:]
     var shortcuts = d.shortcuts
     for (key, value) in rawShortcuts {
-      if let action = ShortcutAction(rawValue: key) { shortcuts[action] = value }
+      if let action = ShortcutAction(rawValue: key), let combo = value.value { shortcuts[action] = combo }
     }
     self.shortcuts = shortcuts
     microphoneID = try c.decodeIfPresent(String.self, forKey: .microphoneID)
@@ -144,7 +146,8 @@ public struct Settings: Codable, Sendable, Equatable {
     launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
     keepDictationAudio = try c.decodeIfPresent(Bool.self, forKey: .keepDictationAudio) ?? d.keepDictationAudio
     historyRetention =
-      try c.decodeIfPresent(HistoryRetention.self, forKey: .historyRetention) ?? d.historyRetention
+      try c.decodeIfPresent(IfKnown<HistoryRetention>.self, forKey: .historyRetention)?.value
+      ?? d.historyRetention
     meetings = try c.decodeIfPresent(MeetingSettings.self, forKey: .meetings) ?? d.meetings
   }
 
@@ -173,6 +176,17 @@ public struct Settings: Codable, Sendable, Equatable {
     try c.encode(keepDictationAudio, forKey: .keepDictationAudio)
     try c.encode(historyRetention, forKey: .historyRetention)
     try c.encode(meetings, forKey: .meetings)
+  }
+}
+
+/// A stored value that may have been written by a newer version of the app. When this version
+/// cannot read it (an enum case it does not know, say), `value` is `nil` instead of the whole
+/// file failing to load.
+struct IfKnown<Value: Decodable>: Decodable {
+  var value: Value?
+
+  init(from decoder: any Decoder) throws {
+    value = try? Value(from: decoder)
   }
 }
 
@@ -410,6 +424,10 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
   public var audioFile: String?
   /// Set when processing failed. `text` is then empty and the audio is kept for a retry.
   public var failure: String?
+  /// For a failed command: the text that was selected when the command was spoken, so a retry
+  /// changes that same text. An empty string means nothing was selected. `nil` on every other
+  /// entry, and on failed commands saved before selections were kept.
+  public var selection: String?
 
   public init(
     id: UUID = UUID(),
@@ -421,7 +439,8 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
     appName: String? = nil,
     bundleID: String? = nil,
     audioFile: String? = nil,
-    failure: String? = nil
+    failure: String? = nil,
+    selection: String? = nil
   ) {
     self.id = id
     self.createdAt = createdAt
@@ -433,6 +452,27 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
     self.bundleID = bundleID
     self.audioFile = audioFile
     self.failure = failure
+    self.selection = selection
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id, createdAt, mode, rawText, text, duration, appName, bundleID, audioFile, failure, selection
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    id = try c.decode(UUID.self, forKey: .id)
+    createdAt = try c.decode(Date.self, forKey: .createdAt)
+    // A mode this version does not know (the file comes from a newer one) reads as plain dictation.
+    mode = try c.decodeIfPresent(IfKnown<DictationMode>.self, forKey: .mode)?.value ?? .dictation
+    rawText = try c.decode(String.self, forKey: .rawText)
+    text = try c.decode(String.self, forKey: .text)
+    duration = try c.decode(TimeInterval.self, forKey: .duration)
+    appName = try c.decodeIfPresent(String.self, forKey: .appName)
+    bundleID = try c.decodeIfPresent(String.self, forKey: .bundleID)
+    audioFile = try c.decodeIfPresent(String.self, forKey: .audioFile)
+    failure = try c.decodeIfPresent(String.self, forKey: .failure)
+    selection = try c.decodeIfPresent(String.self, forKey: .selection)
   }
 
   public var wordCount: Int { text.split(whereSeparator: \.isWhitespace).count }
@@ -685,7 +725,9 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Untitled meeting"
     startedAt = try c.decode(Date.self, forKey: .startedAt)
     endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
-    status = try c.decodeIfPresent(MeetingStatus.self, forKey: .status) ?? .ready
+    // A status this version does not know (the file comes from a newer one) reads as `ready`:
+    // nothing is recorded or retried for it, and the file is left as it is.
+    status = try c.decodeIfPresent(IfKnown<MeetingStatus>.self, forKey: .status)?.value ?? .ready
     failure = try c.decodeIfPresent(String.self, forKey: .failure)
     segments = try c.decodeIfPresent([TranscriptSegment].self, forKey: .segments) ?? []
     notes = try c.decodeIfPresent(MeetingNotes.self, forKey: .notes)

@@ -80,6 +80,58 @@ struct KeychainSecretStoreTests {
     #expect(storedItems() == 0)
   }
 
+  // MARK: The key belongs to one host
+
+  @Test func theKeyIsOnlyHandedOutForTheHostItWasSavedFor() async throws {
+    let store = KeychainSecretStore(service: service)
+    try await store.setAPIKey("test-key-gateway", host: "Gateway.Example.com")
+    #expect(try await store.apiKey(for: "gateway.example.com") == "test-key-gateway")
+    #expect(try await store.apiKey(for: "GATEWAY.example.COM") == "test-key-gateway")
+    #expect(try await store.apiKey(for: "api.openai.com") == nil)
+    #expect(try await store.apiKey() == nil)
+    #expect(try await store.apiKey(for: "example.com") == nil)
+    // Another store with the same name, as another process would be, sees the same host.
+    #expect(try await KeychainSecretStore(service: service).apiKey(for: "api.openai.com") == nil)
+    #expect(storedItems() == 1)
+
+    // Saving for another host replaces the key and its host together: still one item.
+    try await store.setAPIKey("test-key-openai", host: "api.openai.com")
+    #expect(try await store.apiKey(for: "gateway.example.com") == nil)
+    #expect(try await store.apiKey(for: "api.openai.com") == "test-key-openai")
+    #expect(try await store.apiKey() == "test-key-openai")
+    #expect(storedItems() == 1)
+
+    // Removing does not ask which host.
+    try await store.setAPIKey(nil, host: "somewhere.else")
+    #expect(try await store.apiKey(for: "api.openai.com") == nil)
+    #expect(storedItems() == 0)
+  }
+
+  @Test func aKeySavedBeforeHostsWereRecordedIsOpenAIs() async throws {
+    // The item as earlier versions wrote it: no host on it.
+    let item: [CFString: Any] = [
+      kSecClass: kSecClassGenericPassword,
+      kSecAttrService: service,
+      kSecAttrAccount: "openai-api-key",
+      kSecAttrSynchronizable: false,
+      kSecValueData: Data("test-key-old".utf8),
+    ]
+    try #require(SecItemAdd(item as CFDictionary, nil) == errSecSuccess)
+    let store = KeychainSecretStore(service: service)
+
+    #expect(try await store.apiKey(for: "api.openai.com") == "test-key-old")
+    #expect(try await store.apiKey() == "test-key-old")
+    #expect(try await store.apiKey(for: "localhost") == nil)
+
+    // Saving again records the host on the same item.
+    try await store.setAPIKey("test-key-new", host: "localhost")
+    #expect(try await store.apiKey(for: "localhost") == "test-key-new")
+    #expect(try await store.apiKey() == nil)
+    #expect(storedItems() == 1)
+    try await store.setAPIKey(nil)
+    #expect(storedItems() == 0)
+  }
+
   @Test func agreesWithTheInMemoryStore() async throws {
     let stores: [any SecretStore] = [InMemorySecretStore(), KeychainSecretStore(service: service)]
     for store in stores {
@@ -90,6 +142,15 @@ struct KeychainSecretStoreTests {
       #expect(try await store.apiKey() == nil)
       try await store.setAPIKey("test-key-again")
       try await store.setAPIKey(nil)
+      #expect(try await store.apiKey() == nil)
+
+      try await store.setAPIKey("test-key-local", host: "LocalHost")
+      #expect(try await store.apiKey(for: "localhost") == "test-key-local")
+      #expect(try await store.apiKey(for: "api.openai.com") == nil)
+      try await store.setAPIKey("test-key-back", host: "api.openai.com")
+      #expect(try await store.apiKey(for: "localhost") == nil)
+      #expect(try await store.apiKey() == "test-key-back")
+      try await store.setAPIKey("", host: "api.openai.com")
       #expect(try await store.apiKey() == nil)
     }
   }

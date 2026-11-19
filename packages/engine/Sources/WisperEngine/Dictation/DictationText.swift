@@ -137,9 +137,18 @@ enum DictationText {
     return cleaned
   }
 
-  /// A message a person can read for any error.
-  static func message(for error: any Error) -> String {
-    if let known = error as? WisperError, let text = known.errorDescription { return text }
+  /// A message a person can read for any error. `server` is where the requests went, so the
+  /// message names that server when it is not OpenAI.
+  static func message(for error: any Error, server: APIServer = .openAI) -> String {
+    if let known = error as? WisperError { return known.message(server: server) }
     return "Something went wrong. \(error.localizedDescription)"
   }
+
+  /// Shown on the history entry of a dictation the app never got to finish.
+  static let interrupted = "Open Wisper closed before this dictation was finished. Try it again."
+
+  /// Why a failed command from before selections were kept cannot be run again.
+  static let selectionNotKept =
+    "This command cannot be tried again, because the text it was for was not kept. "
+    + "Select the text and say the command again."
 }

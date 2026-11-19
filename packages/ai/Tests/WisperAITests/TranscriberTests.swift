@@ -399,4 +399,35 @@ import WisperDomain
 
     #expect(error == .invalidResponse("the transcript was missing"))
   }
+
+  @Test func timesFromTheServerAreMadeSafeBeforeUse() async throws {
+    // Negative, absurdly large, and ending before they begin. None may reach a caller as they are.
+    let server = Server(
+      .ok(
+        """
+        {"language": "english", "text": " One. Two. Three. Four. Five.",
+         "segments": [
+           {"start": -5, "end": 2, "text": " One."},
+           {"start": -1e300, "end": -3, "text": " Two."},
+           {"start": 4, "end": -1e300, "text": " Three."},
+           {"start": 6, "end": 1e300, "text": " Four."},
+           {"start": 1e300, "end": 8, "text": " Five."}]}
+        """
+      )
+    )
+
+    let transcript = try await server.openAI().transcriber.transcribe(
+      TranscriptionRequest(audio: try recordings.file(), model: "whisper-1")
+    )
+
+    #expect(transcript.segments.map(\.text) == ["One.", "Two.", "Three.", "Four.", "Five."])
+    for segment in transcript.segments {
+      #expect(segment.start.isFinite && segment.start >= 0, "\(segment)")
+      #expect(segment.end.isFinite && segment.end >= segment.start, "\(segment)")
+      // Safe to turn into whole seconds, which is what callers do with them.
+      #expect(Int(exactly: segment.end.rounded()) != nil)
+    }
+    #expect(transcript.segments.map(\.start) == [0, 0, 4, 6, 359_999])
+    #expect(transcript.segments.map(\.end) == [2, 0, 4, 359_999, 359_999])
+  }
 }

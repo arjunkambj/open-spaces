@@ -148,6 +148,7 @@ actor ScriptedTarget: TextTarget {
   }
 
   func fail(with failure: WisperError?) { self.failure = failure }
+  func select(_ text: String?) { selection = text }
 
   func context() -> DictationContext { current }
   func selectedText() -> String? { selection }
@@ -158,6 +159,118 @@ actor ScriptedTarget: TextTarget {
     if let failure { throw failure }
     inserted.append(text)
   }
+}
+
+/// A library that does what another one does, except where a test tells it to misbehave:
+/// fail a save, or hold a read of the settings open like a slow disk.
+actor ScriptedLibrary: Library {
+  private let inner: any Library
+  /// Says whether the save of a dictation fails, given its number (1 for the first save).
+  private var failsSave: @Sendable (Int) -> Bool = { _ in false }
+  private var failsSettingsWrites = false
+  private var settingsGate: Gate?
+  private(set) var dictationSaves = 0
+  /// The user name after each settings change that was stored, in the order they arrived.
+  private(set) var namesStored: [String] = []
+  /// Reads of the settings that have not returned yet.
+  private(set) var settingsReadsUnderWay = 0
+
+  static let refusal = WisperError.storage("The disk is full.")
+
+  init(_ inner: any Library = InMemoryLibrary()) { self.inner = inner }
+
+  func failDictationSaves(_ rule: @escaping @Sendable (Int) -> Bool) { failsSave = rule }
+  func failSettingsWrites(_ fails: Bool) { failsSettingsWrites = fails }
+  /// From now on a read of the settings takes the value and then waits at `gate` before it returns.
+  func holdSettingsReads(at gate: Gate?) { settingsGate = gate }
+
+  /// What is stored right now, read past any hold.
+  func storedName() async -> String { (try? await inner.settings().userName) ?? "" }
+
+  func settings() async throws -> Settings {
+    settingsReadsUnderWay += 1
+    defer { settingsReadsUnderWay -= 1 }
+    let value = try await inner.settings()
+    await settingsGate?.pass()
+    return value
+  }
+
+  func updateSettings(_ change: @Sendable (inout Settings) -> Void) async throws -> Settings {
+    if failsSettingsWrites { throw ScriptedLibrary.refusal }
+    let stored = try await inner.updateSettings(change)
+    namesStored.append(stored.userName)
+    return stored
+  }
+
+  func save(_ dictation: Dictation) async throws {
+    dictationSaves += 1
+    if failsSave(dictationSaves) { throw ScriptedLibrary.refusal }
+    try await inner.save(dictation)
+  }
+
+  func words() async throws -> [DictionaryWord] { try await inner.words() }
+  func save(_ word: DictionaryWord) async throws { try await inner.save(word) }
+  func deleteWord(_ id: DictionaryWord.ID) async throws { try await inner.deleteWord(id) }
+  func snippets() async throws -> [Snippet] { try await inner.snippets() }
+  func save(_ snippet: Snippet) async throws { try await inner.save(snippet) }
+  func deleteSnippet(_ id: Snippet.ID) async throws { try await inner.deleteSnippet(id) }
+  func dictations(search: String?, limit: Int?) async throws -> [Dictation] {
+    try await inner.dictations(search: search, limit: limit)
+  }
+  func deleteDictations(_ ids: Set<Dictation.ID>) async throws { try await inner.deleteDictations(ids) }
+  func deleteAllDictations() async throws { try await inner.deleteAllDictations() }
+  func dictationAudioDirectory() async throws -> URL { try await inner.dictationAudioDirectory() }
+  func meetings(search: String?) async throws -> [Meeting] { try await inner.meetings(search: search) }
+  func meeting(_ id: Meeting.ID) async throws -> Meeting? { try await inner.meeting(id) }
+  func save(_ meeting: Meeting) async throws { try await inner.save(meeting) }
+  func updateMeeting(
+    _ id: Meeting.ID,
+    _ change: @Sendable (inout Meeting) -> Void
+  ) async throws -> Meeting? {
+    try await inner.updateMeeting(id, change)
+  }
+  func deleteMeeting(_ id: Meeting.ID) async throws { try await inner.deleteMeeting(id) }
+  func audioDirectory(forMeeting id: Meeting.ID) async throws -> URL {
+    try await inner.audioDirectory(forMeeting: id)
+  }
+  nonisolated func changes() -> AsyncStream<LibraryChange> { inner.changes() }
+}
+
+/// A folder under the system's temporary folder, removed when the test ends.
+final class TemporaryFolder: Sendable {
+  let url: URL
+
+  init() {
+    url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("open-wisper-engine-tests-\(UUID().uuidString)", isDirectory: true)
+  }
+
+  deinit { try? FileManager.default.removeItem(at: url) }
+
+  /// A copy of the folder as it is right now: what the next launch would find if the app
+  /// were quit at this moment.
+  func snapshot() throws -> TemporaryFolder {
+    let copy = TemporaryFolder()
+    try FileManager.default.copyItem(at: url, to: copy.url)
+    return copy
+  }
+
+  /// Names of the dictation recordings on disk.
+  var audioFiles: [String] {
+    let folder = url.appendingPathComponent("dictation-audio")
+    return ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).sorted()
+  }
+}
+
+/// Waits until `condition` holds. False when it never does.
+@MainActor
+func eventually(_ condition: @MainActor () async -> Bool) async -> Bool {
+  let deadline = ContinuousClock.now + patience
+  while ContinuousClock.now < deadline {
+    if await condition() { return true }
+    try? await Task.sleep(for: .milliseconds(5))
+  }
+  return await condition()
 }
 
 /// A language model that sends back the transcript it was given, unchanged.
@@ -175,6 +288,7 @@ func transcript(in prompt: String) -> String? {
 }
 
 /// An engine wired to fakes, plus what a test needs to look at afterwards.
+/// `through` puts another library in front of the in-memory one, to make it misbehave.
 @MainActor
 final class Rig {
   let library: InMemoryLibrary
@@ -197,7 +311,8 @@ final class Rig {
     captureGate: Gate? = nil,
     transcriber: FakeTranscriber? = nil,
     model: FakeLanguageModel? = nil,
-    target: any TextTarget = FakeTextTarget()
+    target: any TextTarget = FakeTextTarget(),
+    through wrap: (InMemoryLibrary) -> any Library = { $0 }
   ) async throws {
     library = InMemoryLibrary(settings: settings, words: words, snippets: snippets, dictations: dictations)
     self.capture = capture
@@ -206,7 +321,7 @@ final class Rig {
     audioFolder = try await library.dictationAudioDirectory()
     slowCapture = captureGate.map { SlowCapture(inner: capture, gate: $0) }
     engine = DictationEngine(
-      library: library,
+      library: wrap(library),
       capture: slowCapture ?? capture,
       transcriber: self.transcriber,
       languageModel: self.model,

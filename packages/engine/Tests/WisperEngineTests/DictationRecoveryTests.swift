@@ -184,7 +184,8 @@ struct DictationRecoveryTests {
       text: "",
       duration: 4,
       audioFile: "kept.m4a",
-      failure: "x"
+      failure: "x",
+      selection: ""
     )
     let rig = try await Rig(
       dictations: [failed],

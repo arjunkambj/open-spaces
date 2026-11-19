@@ -30,9 +30,8 @@ import WisperDomain
       // What follows a "?" is kept.
       ("https://example.com/v1/?version=2", "https://example.com/v1/chat/completions?version=2"),
       ("HTTPS://Example.COM:8443", "https://example.com:8443/v1/chat/completions"),
-      // Not a web address: fall back to OpenAI rather than send audio somewhere odd.
-      ("not a url", "https://api.openai.com/v1/chat/completions"),
-      ("ftp://example.com/v1", "https://api.openai.com/v1/chat/completions"),
+      // Only white space: nothing was set.
+      ("  \n", "https://api.openai.com/v1/chat/completions"),
     ] as [(String?, String)]
   )
   func buildsTheAddressFromTheCustomServer(custom: String?, expected: String) async throws {
@@ -43,14 +42,66 @@ import WisperDomain
     #expect(server.requests.first?.url.absoluteString == expected)
   }
 
+  @Test(arguments: ["127.0.0.1:63570/v1", "not a url", "ftp://example.com/v1", "localhost:11434", "http://"])
+  func anAddressThatIsSetButUnusableIsAnErrorAndNothingIsSentAnywhere(address: String) async throws {
+    let server = Server(Self.hello)
+    // A key for OpenAI is saved, so a quiet fallback to OpenAI would have everything it needs.
+    let openAI = server.openAI(secrets: InMemorySecretStore(apiKey: "sk-openai")) { address }
+    let audio = try recordings.file()
+
+    let chat = await wisperError { _ = try await openAI.languageModel.complete(Self.prompt) }
+    let speech = await wisperError {
+      _ = try await openAI.transcriber.transcribe(TranscriptionRequest(audio: audio, model: "gpt-transcribe"))
+    }
+    let check = await wisperError { try await openAI.check(key: "sk-new") }
+
+    #expect(chat == .invalidServerAddress)
+    #expect(speech == .invalidServerAddress)
+    #expect(check == .invalidServerAddress)
+    #expect(server.requests.isEmpty)
+  }
+
+  @Test func settingsThatCannotBeReadSendNothing() async throws {
+    let server = Server(Self.hello)
+    let openAI = server.openAI(secrets: InMemorySecretStore(apiKey: "sk-openai")) {
+      throw WisperError.storage("settings.json could not be opened.")
+    }
+
+    let error = await wisperError { _ = try await openAI.languageModel.complete(Self.prompt) }
+
+    #expect(error == .storage("settings.json could not be opened."))
+    #expect(server.requests.isEmpty)
+  }
+
+  @Test func theEarlierURLEntryPointStillWorksAndStillRefusesABadAddress() async throws {
+    let server = Server(Self.hello)
+    let secrets = InMemorySecretStore(apiKey: "sk-local", host: "localhost")
+    let address = Address()
+    await address.set("http://localhost:11434")
+    let openAI = OpenAI(
+      secrets: secrets,
+      baseURL: { await address.text.flatMap(URL.init(string:)) },
+      session: server.session
+    )
+
+    _ = try await openAI.languageModel.complete(Self.prompt)
+    #expect(server.requests.map(\.url.absoluteString) == ["http://localhost:11434/v1/chat/completions"])
+    #expect(server.requests.first?.header("Authorization") == "Bearer sk-local")
+
+    await address.set("ftp://example.com/v1")
+    let error = await wisperError { _ = try await openAI.languageModel.complete(Self.prompt) }
+    #expect(error == .invalidServerAddress)
+    #expect(server.requests.count == 1)
+  }
+
   @Test func readsTheServerAndTheKeyAgainForEveryRequest() async throws {
     let server = Server(Self.hello)
     let secrets = InMemorySecretStore(apiKey: "sk-first")
     let address = Address()
-    let model = server.openAI(secrets: secrets) { await address.url }.languageModel
+    let model = server.openAI(secrets: secrets) { await address.text }.languageModel
 
     _ = try await model.complete(Self.prompt)
-    await secrets.setAPIKey("sk-second")
+    await secrets.setAPIKey("sk-second", host: "localhost")
     await address.set("http://localhost:9000/v1")
     _ = try await model.complete(Self.prompt)
 
@@ -59,8 +110,103 @@ import WisperDomain
   }
 
   actor Address {
-    var url: URL?
-    func set(_ text: String) { url = URL(string: text) }
+    var text: String?
+    func set(_ text: String?) { self.text = text }
+  }
+
+  // MARK: The key goes only to the server it was saved for
+
+  @Test func aKeySavedForOpenAIIsNotSentToAnotherServerAndComesBackWithTheSetting() async throws {
+    let server = Server(Self.hello)
+    let address = Address()
+    let openAI = server.openAI(secrets: InMemorySecretStore(apiKey: "sk-openai")) { await address.text }
+    let audio = try recordings.file()
+
+    _ = try await openAI.languageModel.complete(Self.prompt)
+    // One line changed in the settings file: another server.
+    await address.set("https://collector.example.net/v1")
+    _ = try await openAI.languageModel.complete(Self.prompt)
+    _ = try? await openAI.transcriber.transcribe(TranscriptionRequest(audio: audio, model: "gpt-transcribe"))
+    // And changed back.
+    await address.set(nil)
+    _ = try await openAI.languageModel.complete(Self.prompt)
+
+    #expect(
+      server.requests.map(\.url.host) == [
+        "api.openai.com", "collector.example.net", "collector.example.net", "api.openai.com",
+      ]
+    )
+    #expect(
+      server.requests.map { $0.header("Authorization") } == [
+        "Bearer sk-openai", nil, nil, "Bearer sk-openai",
+      ]
+    )
+    for request in server.requests where request.url.host == "collector.example.net" {
+      #expect(!request.headers.values.contains { $0.contains("sk-openai") })
+      #expect(!String(decoding: request.body, as: UTF8.self).contains("sk-openai"))
+      #expect(!request.url.absoluteString.contains("sk-openai"))
+    }
+  }
+
+  @Test func aKeySavedForACustomServerIsSentOnlyThere() async throws {
+    let server = Server(Self.hello)
+    let address = Address()
+    await address.set("https://Gateway.Example.com/v1")
+    let secrets = InMemorySecretStore(apiKey: "sk-gateway", host: "gateway.example.com")
+    let openAI = server.openAI(secrets: secrets) { await address.text }
+
+    _ = try await openAI.languageModel.complete(Self.prompt)
+    #expect(server.requests.last?.header("Authorization") == "Bearer sk-gateway")
+
+    // Another custom server, a look-alike host, and the same name on another level: no key.
+    for other in [
+      "http://localhost:11434", "https://gateway.example.com.evil.example/v1", "https://example.com/v1",
+    ] {
+      await address.set(other)
+      _ = try await openAI.languageModel.complete(Self.prompt)
+      #expect(server.requests.last?.url.host != "gateway.example.com")
+      #expect(server.requests.last?.header("Authorization") == nil)
+    }
+
+    // The settings forget the custom server (a damaged settings file recovers to the defaults):
+    // OpenAI gets nothing at all, because the only key there is belongs to another host.
+    await address.set(nil)
+    let before = server.requests.count
+    let audio = try recordings.file()
+    let chat = await wisperError { _ = try await openAI.languageModel.complete(Self.prompt) }
+    let speech = await wisperError {
+      _ = try await openAI.transcriber.transcribe(TranscriptionRequest(audio: audio, model: "gpt-transcribe"))
+    }
+    #expect(chat == .missingAPIKey)
+    #expect(speech == .missingAPIKey)
+    #expect(server.requests.count == before)
+  }
+
+  @Test func aCustomServerThatWantsAKeySaysSoWhenTheSavedKeyBelongsElsewhere() async throws {
+    let server = Server(.error(401, "Missing bearer token."))
+    let openAI = server.openAI(
+      key: "sk-openai",
+      baseURL: "https://gateway.example.com/v1",
+      savedFor: "api.openai.com"
+    )
+
+    let error = await wisperError { _ = try await openAI.languageModel.complete(Self.prompt) }
+
+    // Not "your key was not accepted": no key was sent.
+    #expect(error == .missingAPIKey)
+    #expect(server.requests.count == 1)
+    #expect(server.requests.first?.header("Authorization") == nil)
+    let message = try #require(error?.message(server: APIServer(address: "https://gateway.example.com/v1")))
+    #expect(message == "gateway.example.com asked for an API key. Add the key for this server in Settings.")
+  }
+
+  @Test func aKeyBeingTriedOutGoesToTheServerTheSettingsName() async throws {
+    let server = Server(.ok(#"{"object": "list", "data": []}"#))
+
+    try await server.openAI(key: nil, baseURL: "https://gateway.example.com/v1").check(key: "sk-new")
+
+    #expect(server.requests.map(\.url.absoluteString) == ["https://gateway.example.com/v1/models"])
+    #expect(server.requests.first?.header("Authorization") == "Bearer sk-new")
   }
 
   // MARK: The key
@@ -132,14 +278,15 @@ import WisperDomain
     #expect(server.requests.isEmpty)
   }
 
+  /// Hands out its key for OpenAI only.
   struct FixedSecrets: SecretStore {
     var key: String?
     var failure: WisperError?
-    func apiKey() async throws -> String? {
+    func apiKey(for host: String) async throws -> String? {
       if let failure { throw failure }
-      return key
+      return host == APIServer.openAIHost ? key : nil
     }
-    func setAPIKey(_ key: String?) async throws {}
+    func setAPIKey(_ key: String?, host: String) async throws {}
   }
 
   // MARK: Errors
@@ -243,6 +390,81 @@ import WisperDomain
       }
       #expect(!server.requests.isEmpty)
     }
+  }
+
+  @Test func hidesAKeyThatSitsAcrossTheLengthLimit() async throws {
+    let key = "sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnop"
+    // The key starts just before the 300th character, so a cut made first would split it.
+    for lead in [270, 280, 290, 299, 300] {
+      let filler = String(repeating: "x", count: lead)
+      let server = Server(.error(400, "\(filler) bad key \(key) given"))
+
+      let error = await wisperError {
+        _ = try await server.openAI(key: key).languageModel.complete(Self.prompt)
+      }
+
+      guard case .server(400, let message) = error else {
+        Issue.record("Expected the server's message, got \(String(describing: error))")
+        continue
+      }
+      #expect(message.count <= 300)
+      #expect(!message.contains("sk-proj"), "\(message.suffix(40))")
+      #expect(!message.contains(key.prefix(12)))
+    }
+  }
+
+  // MARK: Redirects
+
+  @Test func doesNotFollowARedirectToAnotherHost() async throws {
+    // Two real servers on this machine. The second one stands for a host nobody chose.
+    let other = try LocalServer { _, _ in LocalServer.ok(#"{"text": "Stolen."}"#) }
+    let first = try LocalServer { request, _ in
+      LocalServer.redirect(to: "http://localhost:\(other.port)\(request.path)")
+    }
+    let openAI = OpenAI(
+      secrets: InMemorySecretStore(apiKey: "sk-local", host: "127.0.0.1"),
+      address: { "http://127.0.0.1:\(first.port)/v1" },
+      session: URLSession(configuration: .ephemeral)
+    )
+    let audio = try recordings.file(bytes: Data("the audio".utf8))
+
+    let speech = await wisperError {
+      _ = try await openAI.transcriber.transcribe(TranscriptionRequest(audio: audio, model: "gpt-transcribe"))
+    }
+    let chat = await wisperError { _ = try await openAI.languageModel.complete(Self.prompt) }
+
+    // The audio, the prompt and the key went to the server that was asked, and no further.
+    #expect(other.requests.isEmpty)
+    #expect(first.requests.map(\.path) == ["/v1/audio/transcriptions", "/v1/chat/completions"])
+    #expect(first.requests.allSatisfy { $0.headers["authorization"] == "Bearer sk-local" })
+    let expected = WisperError.server(
+      status: 307,
+      message:
+        "The server tried to pass the request on to another address (localhost). Nothing was sent there."
+    )
+    #expect(speech == expected)
+    #expect(chat == expected)
+  }
+
+  @Test func followsARedirectOnTheSameHost() async throws {
+    let server = try LocalServer { request, port in
+      request.path.hasPrefix("/moved")
+        ? LocalServer.ok(#"{"choices": [{"message": {"role": "assistant", "content": "Hello."}}]}"#)
+        : LocalServer.redirect(to: "http://127.0.0.1:\(port)/moved\(request.path)")
+    }
+    let openAI = OpenAI(
+      secrets: InMemorySecretStore(apiKey: "sk-local", host: "127.0.0.1"),
+      address: { "http://127.0.0.1:\(server.port)/v1" },
+      session: URLSession(configuration: .ephemeral)
+    )
+
+    let text = try await openAI.languageModel.complete(Self.prompt)
+
+    #expect(text == "Hello.")
+    #expect(server.requests.map(\.path) == ["/v1/chat/completions", "/moved/v1/chat/completions"])
+    // The question went along to the new place.
+    #expect(server.requests.last?.body == server.requests.first?.body)
+    #expect(server.requests.last?.body.isEmpty == false)
   }
 
   // MARK: Retries
@@ -362,7 +584,7 @@ import WisperDomain
     let reached = Signal()
     let openAI = OpenAI(
       secrets: InMemorySecretStore(apiKey: "sk-test-key"),
-      baseURL: { nil },
+      address: { nil },
       session: server.session
     ) {
       _ in

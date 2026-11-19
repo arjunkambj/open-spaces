@@ -14,6 +14,10 @@ import WisperDomain
 /// - Words are never lost. When text cannot be made, a failed entry with its
 ///   audio goes into history and `retry` can run it again. When text was made
 ///   but could not be inserted, it is saved to history as a normal entry.
+///   The failed entry is on disk before the slow work starts, so a quit or a
+///   crash in the middle leaves a dictation that can be tried again.
+///   (With history turned off nothing is kept: `recoverUnfinished` removes
+///   what such a quit left behind.)
 /// - The inserted text is exactly `Dictation.text`. No space is added after
 ///   it: the engine cannot see what is around the cursor, and a stray space
 ///   is wrong in a search field, a message box or after a pasted link.
@@ -44,6 +48,12 @@ public final class DictationEngine {
   /// for hours. Read when `start` is called. `.infinity` means no limit.
   @ObservationIgnored public var recordingLimit: TimeInterval = 600
 
+  /// The longest the tidying of a dictation may take, in seconds. When the
+  /// language model has not answered by then, the words are inserted as they
+  /// were heard: they are ready, and nobody should wait on a slow server for
+  /// polish. Commands are not affected (they have no text without the model).
+  @ObservationIgnored public var cleanUpLimit: TimeInterval = 12
+
   /// Recordings shorter than this hold no speech.
   static let shortestRecording: TimeInterval = 0.3
 
@@ -64,6 +74,11 @@ public final class DictationEngine {
   /// The newest finished dictation when it could not be stored (history is
   /// off, or saving failed). `pasteLast` uses it.
   @ObservationIgnored private var unsaved: Dictation?
+  /// The tidying after a quit, while it runs. A new recording waits for it.
+  @ObservationIgnored private var tidying: Task<Void, Never>?
+  /// The new dictation being turned into text. Its place-holder entry in the
+  /// history ("not finished") is not something to show while the work is going well.
+  @ObservationIgnored private(set) var unfinished: Dictation.ID?
 
   public init(
     library: any Library,
@@ -75,12 +90,7 @@ public final class DictationEngine {
     self.library = library
     self.capture = capture
     self.target = target
-    pipeline = DictationPipeline(
-      library: library,
-      transcriber: transcriber,
-      languageModel: languageModel,
-      target: target
-    )
+    pipeline = DictationPipeline(library: library, transcriber: transcriber, languageModel: languageModel)
   }
 
   /// Changes what the recording in progress is, without interrupting it:
@@ -104,9 +114,12 @@ public final class DictationEngine {
     let library = library
     let capture = capture
     let earlier = previous
+    let tidying = tidying
     let starting = Task { () -> Take.Started in
-      // Let the last recording let go of the microphone first.
+      // Let the last recording let go of the microphone first, and let the tidying after a
+      // quit finish, so it can never take a new recording for an old one.
       await earlier?.ended()
+      await tidying?.value
       do {
         let settings = try await library.settings()
         let request = CaptureRequest(
@@ -248,6 +261,30 @@ public final class DictationEngine {
     if case .failed = phase { phase = .idle }
   }
 
+  /// Tidies up after a quit or a crash in the middle of a dictation. Call it
+  /// once at launch (`AppModel.load` does).
+  ///
+  /// A dictation that was being turned into text is already in the history as
+  /// a failed entry that `retry` can run. What this removes is audio in the
+  /// dictation folder that no history entry points at: a recording that was
+  /// cut off, or, with history turned off, one that was still being worked
+  /// on. Does nothing while a dictation is being recorded or processed.
+  public func recoverUnfinished() async {
+    guard take == nil, work == nil, tidying == nil else { return }
+    let library = library
+    let job = Task {
+      // If the history cannot be read, nothing is known to be unused, so nothing is deleted.
+      guard let history = try? await library.dictations(),
+        let folder = try? await library.dictationAudioDirectory()
+      else { return }
+      let inUse = history.compactMap(\.audioFile).map { URL(fileURLWithPath: $0).lastPathComponent }
+      await DictationAudio.sweep(folder, keeping: Set(inUse))
+    }
+    tidying = job
+    await job.value
+    tidying = nil
+  }
+
   public var isRecording: Bool {
     if case .recording = phase { return true }
     return false
@@ -266,6 +303,12 @@ public final class DictationEngine {
     var audio: URL
     /// The failed history entry being tried again, or `nil` for a new recording.
     var original: Dictation?
+    /// For a command: the text it is to change. Empty when nothing was selected.
+    var selection = ""
+    /// Whether a place-holder entry for this recording is in the history.
+    var noted = false
+
+    var isNew: Bool { original == nil }
 
     func dictation(from draft: DictationPipeline.Draft) -> Dictation {
       Dictation(
@@ -336,7 +379,7 @@ public final class DictationEngine {
       }
       guard epoch == self.epoch else { return nil }
       phase = .processing(mode: original.mode)
-      let entry = Entry(
+      var entry = Entry(
         id: original.id,
         createdAt: original.createdAt,
         mode: original.mode,
@@ -344,6 +387,15 @@ public final class DictationEngine {
         audio: audio,
         original: original
       )
+      if original.mode == .command {
+        // The command is run on the text it was spoken for. When that text was not kept,
+        // there is nothing to run it on, and writing something new instead would be made up.
+        guard let selection = original.selection else {
+          settle(.failed(message: DictationText.selectionNotKept), epoch: epoch)
+          return nil
+        }
+        entry.selection = selection
+      }
       return await process(entry, insert: insert, epoch: epoch)
     } catch {
       settle(.failed(message: DictationText.message(for: error)), epoch: epoch)
@@ -352,10 +404,28 @@ public final class DictationEngine {
   }
 
   private func process(_ entry: Entry, insert: Bool = true, epoch: Int) async -> Dictation? {
-    let outcome = await pipeline.run(audio: entry.audio, mode: entry.mode)
+    var entry = entry
+    let context = await target.context()
+    if entry.isNew {
+      // Read the selection now, while the app the person spoke into is still in front.
+      if entry.mode == .command { entry.selection = await target.selectedText() ?? "" }
+      unfinished = entry.id
+      entry.noted = await note(entry, context: context)
+      guard epoch == self.epoch else {
+        await forget(entry)
+        return nil
+      }
+    }
+    let outcome = await pipeline.run(
+      audio: entry.audio,
+      mode: entry.mode,
+      context: context,
+      selection: entry.selection,
+      cleanUpLimit: cleanUpLimit
+    )
     guard epoch == self.epoch else {
       // Cancelled while the text was being made. A retry keeps its audio: the failed entry still needs it.
-      if entry.original == nil { await DictationAudio.delete([entry.audio]) }
+      if entry.isNew { await forget(entry) }
       return nil
     }
     switch outcome {
@@ -363,6 +433,38 @@ public final class DictationEngine {
     case .failed(let draft, let error): return await keepForRetry(entry, draft, error, epoch: epoch)
     case .written(let draft): return await deliver(entry, draft, insert: insert, epoch: epoch)
     }
+  }
+
+  /// Puts a failed entry that points at the audio into the history before the slow work
+  /// starts, so a quit or a crash in the middle leaves something `retry` can run. The real
+  /// entry replaces it at the end (same `id`). Returns whether the entry was stored.
+  private func note(_ entry: Entry, context: DictationContext) async -> Bool {
+    // With history turned off nothing about a dictation may be on disk (and saving the
+    // entry would make the library delete the audio it points at).
+    guard let settings = try? await library.settings(), settings.historyRetention != .never else {
+      return false
+    }
+    let pending = Dictation(
+      id: entry.id,
+      createdAt: entry.createdAt,
+      mode: entry.mode,
+      rawText: "",
+      text: "",
+      duration: entry.duration,
+      appName: context.appName,
+      bundleID: context.bundleID,
+      audioFile: entry.audio.lastPathComponent,
+      failure: DictationText.interrupted,
+      selection: entry.mode == .command ? entry.selection : nil
+    )
+    return (try? await library.save(pending)) != nil
+  }
+
+  /// Removes everything about a new recording: its place-holder entry and its audio.
+  private func forget(_ entry: Entry) async {
+    if unfinished == entry.id { unfinished = nil }
+    if entry.noted { try? await library.deleteDictations([entry.id]) }
+    await DictationAudio.delete([entry.audio])
   }
 
   /// Inserts the text and saves the dictation.
@@ -383,11 +485,12 @@ public final class DictationEngine {
     }
     if insertProblem != nil, epoch != self.epoch {
       // Cancelled before the text went in: throw the dictation away, as asked.
-      if entry.original == nil { await DictationAudio.delete([entry.audio]) }
+      if entry.isNew { await forget(entry) }
       return nil
     }
 
     dictation.audioFile = draft.keepsAudio ? entry.audio.lastPathComponent : nil
+    if unfinished == entry.id { unfinished = nil }
     var saveProblem: String?
     do {
       // Saved even when history is off, so the library can apply that setting.
@@ -395,8 +498,10 @@ public final class DictationEngine {
     } catch {
       saveProblem = DictationText.message(for: error)
     }
-    // The audio stays only while a history entry points at it: this one, or the failed one a retry came from.
-    let audioInUse = saveProblem == nil ? dictation.audioFile != nil : entry.original != nil
+    // The audio stays only while a history entry points at it. When the save failed, the
+    // audio is the one copy of what was said that is on disk, so it stays too (unless history
+    // is off): the failed entry a retry came from, or the place-holder entry, still points at it.
+    let audioInUse = saveProblem == nil ? dictation.audioFile != nil : draft.keepsHistory || !entry.isNew
     if !audioInUse {
       await DictationAudio.delete([entry.audio])
       dictation.audioFile = nil
@@ -428,17 +533,20 @@ public final class DictationEngine {
     _ error: any Error,
     epoch: Int
   ) async -> Dictation? {
-    let message = DictationText.message(for: error)
+    let message = DictationText.message(for: error, server: draft.server)
     if draft.keepsHistory {
       var failed = entry.dictation(from: draft)
       failed.text = ""
       failed.audioFile = entry.audio.lastPathComponent
       failed.failure = message
+      // Kept so that a retry changes the same text, wherever the person is by then.
+      failed.selection = entry.mode == .command ? entry.selection : nil
+      if unfinished == entry.id { unfinished = nil }
       // If even this cannot be saved, the audio file is left in the folder rather than deleted.
       try? await library.save(failed)
-    } else if entry.original == nil {
+    } else if entry.isNew {
       // History is off: nothing about a dictation may stay on disk.
-      await DictationAudio.delete([entry.audio])
+      await forget(entry)
     }
     settle(.failed(message: message), epoch: epoch)
     return nil
@@ -446,7 +554,7 @@ public final class DictationEngine {
 
   private func heardNothing(_ entry: Entry, epoch: Int) async -> Dictation? {
     guard var original = entry.original else {
-      await DictationAudio.delete([entry.audio])
+      await forget(entry)
       settle(.idle, epoch: epoch)
       return nil
     }

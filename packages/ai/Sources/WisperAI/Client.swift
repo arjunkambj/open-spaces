@@ -3,24 +3,25 @@ import WisperDomain
 
 /// Sends one request to the user's server and brings back the reply body.
 ///
-/// Everything the two adapters share lives here: the address rule, the key,
-/// timeouts, retries, turning failures into `WisperError`, and leaving out
-/// optional settings a server does not accept.
+/// Everything the two adapters share lives here: where a request goes (the
+/// rule itself is `APIServer`), the key, timeouts, retries, turning failures
+/// into `WisperError`, and leaving out optional settings a server does not accept.
 struct Client: Sendable {
   private let secrets: any SecretStore
-  private let baseURL: @Sendable () async -> URL?
+  private let address: @Sendable () async throws -> String?
   private let session: URLSession
   private let pause: @Sendable (TimeInterval) async throws -> Void
   private let memory = Memory()
 
+  /// - Parameter address: the text of the custom server address, or `nil` for OpenAI itself.
   init(
     secrets: any SecretStore,
-    baseURL: @escaping @Sendable () async -> URL?,
+    address: @escaping @Sendable () async throws -> String?,
     session: URLSession,
     pause: @escaping @Sendable (TimeInterval) async throws -> Void
   ) {
     self.secrets = secrets
-    self.baseURL = baseURL
+    self.address = address
     self.session = session
     self.pause = pause
   }
@@ -81,6 +82,10 @@ struct Client: Sendable {
             throw refusal.asWisperError(hiding: server.key)
           }
           leftOut.insert(name)
+        } catch WisperError.invalidAPIKey where server.key == nil {
+          // No key was sent (none is saved for this server), so none was turned down:
+          // the server wants one.
+          throw WisperError.missingAPIKey
         }
       }
     }
@@ -88,7 +93,7 @@ struct Client: Sendable {
 
   /// Whether requests go to OpenAI itself rather than to a server the user set.
   func usesOpenAI() async -> Bool {
-    Client.root(for: await baseURL()).host == Client.openAI.host
+    (try? await server())?.isOpenAI ?? false
   }
 
   // MARK: Where and who
@@ -99,32 +104,31 @@ struct Client: Sendable {
     var key: String?
   }
 
-  static let openAI = URL(string: "https://api.openai.com/v1")!
-
-  /// The folder that holds the API for a custom address. See `OpenAI` for the rule.
-  static func root(for custom: URL?) -> URL {
-    guard let custom, var parts = URLComponents(url: custom, resolvingAgainstBaseURL: true),
-      let scheme = parts.scheme?.lowercased(), scheme == "http" || scheme == "https",
-      let host = parts.host, !host.isEmpty
-    else { return openAI }
-    parts.scheme = scheme
-    parts.host = host.lowercased()
-    parts.fragment = nil
-    var path = parts.path
-    while path.hasSuffix("/") { path.removeLast() }
-    parts.path = path.isEmpty ? "/v1" : path
-    return parts.url ?? openAI
+  /// The server the settings name right now. An address that is set but unusable is an
+  /// error: it must never quietly mean OpenAI.
+  private func server() async throws -> APIServer {
+    do {
+      return try APIServer(address: try await address())
+    } catch let error as WisperError {
+      throw error
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      throw WisperError.storage("the server address could not be read")
+    }
   }
 
   private func resolve(_ key: Key) async throws -> Server {
-    let root = Client.root(for: await baseURL())
+    let server = try await server()
     let raw: String?
     switch key {
     case .given(let value):
       raw = value
     case .stored:
       do {
-        raw = try await secrets.apiKey()
+        // Asked for by host: a key saved for another server is not handed out, so it
+        // cannot be sent to this one.
+        raw = try await secrets.apiKey(for: server.host)
       } catch let error as WisperError {
         throw error
       } catch {
@@ -134,14 +138,14 @@ struct Client: Sendable {
     // A pasted key often carries a stray space or line break.
     let key = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     guard !key.isEmpty else {
-      if root.host == Client.openAI.host { throw WisperError.missingAPIKey }
-      return Server(root: root, key: nil)
+      if server.isOpenAI { throw WisperError.missingAPIKey }
+      return Server(root: server.root, key: nil)
     }
     // Anything else cannot travel in a header, so no server would take it.
     guard key.unicodeScalars.allSatisfy({ $0.isASCII && $0.value > 32 && $0.value < 127 }) else {
       throw WisperError.invalidAPIKey
     }
-    return Server(root: root, key: key)
+    return Server(root: server.root, key: key)
   }
 
   // MARK: Sending, with retries
@@ -181,11 +185,12 @@ struct Client: Sendable {
   }
 
   private func perform(_ request: URLRequest, body: Call.Body) async throws -> (Data, URLResponse) {
+    let guide = SameHostRedirects()
     do {
       switch body {
-      case .none: return try await session.data(for: request)
-      case .json(let data): return try await session.upload(for: request, from: data)
-      case .file(let url, _): return try await session.upload(for: request, fromFile: url)
+      case .none: return try await session.data(for: request, delegate: guide)
+      case .json(let data): return try await session.upload(for: request, from: data, delegate: guide)
+      case .file(let url, _): return try await session.upload(for: request, fromFile: url, delegate: guide)
       }
     } catch let error as URLError {
       throw error
@@ -216,6 +221,33 @@ struct Client: Sendable {
     case .file(_, let contentType): request.setValue(contentType, forHTTPHeaderField: "Content-Type")
     }
     return request
+  }
+}
+
+// MARK: - Redirects
+
+/// Lets a request follow a redirect only while it stays with the server it was sent to.
+///
+/// A redirect to another host (or from `https` down to `http`) would hand the recording, the
+/// prompt and perhaps the key to a server nobody chose. Such a redirect is not followed: the
+/// redirect answer itself comes back, and is reported as an error.
+private final class SameHostRedirects: NSObject, URLSessionTaskDelegate {
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    willPerformHTTPRedirection response: HTTPURLResponse,
+    newRequest request: URLRequest
+  ) async -> URLRequest? {
+    guard let from = task.originalRequest?.url, let to = request.url,
+      SameHostRedirects.staysWithTheServer(from: from, to: to)
+    else { return nil }
+    return request
+  }
+
+  static func staysWithTheServer(from: URL, to: URL) -> Bool {
+    guard let host = from.host, let next = to.host, APIServer.sameHost(host, next) else { return false }
+    let downgraded = from.scheme?.lowercased() == "https" && to.scheme?.lowercased() != "https"
+    return !downgraded
   }
 }
 
@@ -268,6 +300,14 @@ private struct Failure {
     case 408, 500...:
       error = refusal
       transient = true
+    case 300..<400:
+      // A redirect that was not followed, because it led away from the server.
+      let target = response.value(forHTTPHeaderField: "Location").flatMap { URL(string: $0)?.host }
+      error = WisperError.server(
+        status: status,
+        message: "The server tried to pass the request on to another address"
+          + (target.map { " (\($0))" } ?? "") + ". Nothing was sent there."
+      )
     default:
       error = refusal
     }
@@ -284,7 +324,8 @@ private struct Failure {
 /// An error answer from the server. OpenAI's look like `{"error": {"message", "type", "param", "code"}}`.
 struct Refusal: Error {
   var status: Int
-  var message: String
+  /// What the server said, on one line. May repeat the key back: show `asWisperError` instead.
+  private var message: String
   private var parameter: String?
   private var code: String?
   private var type: String?
@@ -305,10 +346,14 @@ struct Refusal: Error {
       // Other servers keep it simpler: {"error": "..."}, {"message": "..."} or {"detail": "..."}.
       message = ["error", "message", "detail"].lazy.compactMap { json?[$0] as? String }.first
     }
-    let line = (message ?? "").split(whereSeparator: \.isNewline).joined(separator: " ")
+    // Kept whole here. It is cut to length only after the key has been hidden, so a key that
+    // sits across the cut cannot leave its first half behind.
+    self.message = (message ?? "").split(whereSeparator: \.isNewline).joined(separator: " ")
       .trimmingCharacters(in: .whitespaces)
-    self.message = line.isEmpty ? "The server gave no details." : String(line.prefix(300))
   }
+
+  /// The longest message passed on to a person.
+  static let longestMessage = 300
 
   /// Out of credit or over a spending limit. Trying again will not help.
   var isOutOfCredit: Bool {
@@ -344,7 +389,8 @@ struct Refusal: Error {
   func asWisperError(hiding key: String?) -> WisperError {
     var text = message
     if let key, !key.isEmpty { text = text.replacingOccurrences(of: key, with: "(key hidden)") }
-    return .server(status: status, message: text)
+    text = String(text.prefix(Refusal.longestMessage))
+    return .server(status: status, message: text.isEmpty ? "The server gave no details." : text)
   }
 }
 

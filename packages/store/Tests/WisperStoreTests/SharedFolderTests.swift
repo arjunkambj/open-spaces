@@ -96,6 +96,36 @@ struct SharedFolderTests {
     #expect(!folder.exists("meetings/\(meeting.id.uuidString)/meeting.json"))
   }
 
+  @Test func anEditByAnotherProcessIsAnnouncedEvenWhenAnUpdateThatChangesNothingSeesItFirst() async throws {
+    // Polling far apart, so nothing but the update itself can notice the edit.
+    let app = FileLibrary(root: folder.url, watching: .polling(interval: 3_600))
+    let tool = FileLibrary(root: folder.url, watching: .polling(interval: 3_600))
+    let meeting = Meeting(title: "One", startedAt: ago(100), status: .ready)
+    try await app.save(meeting)
+    #expect(try await app.meetings().map(\.title) == ["One"])
+    let heard = ChangeRecorder(app.changes())
+    // Past the looks a new listener sets off.
+    try await Task.sleep(for: .milliseconds(300))
+    let before = heard.count(of: .meetings)
+
+    try await tool.updateMeeting(meeting.id) { $0.title = "Renamed by the tool" }
+    // What the tool wrote into the Markdown copy is undone, to show the app puts it right.
+    let notes = folder.file("meetings/\(meeting.id.uuidString)/notes.md")
+    try Data("stale".utf8).write(to: notes)
+
+    // The app's first look at the meeting is an update that changes nothing.
+    let seen = try await app.updateMeeting(meeting.id) { _ in }
+    #expect(seen?.title == "Renamed by the tool")
+    #expect(await heard.saw(.meetings, times: before + 1, within: 2))
+    #expect(try String(contentsOf: notes, encoding: .utf8) == seen?.markdown())
+
+    // A meeting the tool deleted is announced the same way.
+    let count = heard.count(of: .meetings)
+    try await tool.deleteMeeting(meeting.id)
+    #expect(try await app.updateMeeting(meeting.id) { $0.title = "Back" } == nil)
+    #expect(await heard.saw(.meetings, times: count + 1, within: 2))
+  }
+
   @Test(arguments: Watching.allCases)
   func aPlainWriteFromOutsideIsNoticed(_ watching: Watching) async throws {
     let library = FileLibrary(root: folder.url, watching: watching.mode)

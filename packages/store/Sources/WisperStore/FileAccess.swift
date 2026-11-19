@@ -132,10 +132,10 @@ enum FileAccess {
     fcntl(descriptor, F_BARRIERFSYNC) == 0 || fsync(descriptor) == 0
   }
 
-  /// Creates the folder (and the ones above it) when it is not there yet.
+  /// Creates the folder (and the ones above it) when it is not there yet. Either way the
+  /// folder ends up closed to other users of this computer.
   static func createFolder(_ url: URL) throws {
-    var isFolder: ObjCBool = false
-    if FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), isFolder.boolValue { return }
+    if makePrivate(url) { return }
     do {
       try FileManager.default.createDirectory(
         at: url,
@@ -148,6 +148,17 @@ enum FileAccess {
       )
     }
     protect(url)
+  }
+
+  /// Makes the folder at `url` one that only its owner can open (mode 0700), when it is not
+  /// already. Returns false when there is no folder there.
+  @discardableResult
+  static func makePrivate(_ url: URL) -> Bool {
+    var info = stat()
+    guard stat(url.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else { return false }
+    // A folder that cannot be changed (it belongs to somebody else) is used as it is.
+    if info.st_mode & 0o777 != 0o700 { chmod(url.path, 0o700) }
+    return true
   }
 
   /// Deletes a file or a folder with everything in it. Nothing there is not an error.

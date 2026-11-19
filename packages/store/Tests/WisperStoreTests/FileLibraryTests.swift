@@ -237,16 +237,110 @@ struct FileLibraryTests {
   @Test func settingsWithOneBadValueKeepTheRest() async throws {
     try folder.writeFromOutside(
       """
-      {"userName": "Alex", "historyRetention": "a fortnight", "playSounds": false, "someFutureKey": 1}
+      {"userName": "Alex", "showPill": "sometimes", "playSounds": false, "someFutureKey": 1}
       """,
       to: "settings.json"
     )
     let settings = try await FileLibrary(root: folder.url).settings()
     #expect(settings.userName == "Alex")
     #expect(!settings.playSounds)
-    #expect(settings.historyRetention == .forever)
+    #expect(settings.showPill)
     #expect(folder.names().contains { $0.hasPrefix("settings.json.corrupt-") })
     #expect(try text("settings.json").contains("\"userName\" : \"Alex\""))
+  }
+
+  // MARK: Files written by a newer version
+
+  @Test func settingsWithAChoiceThisVersionDoesNotKnowAreLeftAsTheyAre() async throws {
+    let written = """
+      {"userName": "Alex", "historyRetention": "a fortnight", "playSounds": false,
+       "styles": {"email": "poetic"}, "apiBaseURL": "http://localhost:11434/v1"}
+      """
+    try folder.writeFromOutside(written, to: "settings.json")
+    let settings = try await FileLibrary(root: folder.url).settings()
+    #expect(settings.userName == "Alex")
+    #expect(!settings.playSounds)
+    #expect(settings.historyRetention == .forever)
+    #expect(settings.apiBaseURL == "http://localhost:11434/v1")
+    // Nothing is moved aside and nothing is rewritten.
+    #expect(folder.names() == ["settings.json"])
+    #expect(try text("settings.json") == written)
+  }
+
+  @Test func aMeetingWithAStatusThisVersionDoesNotKnowIsLeftAsItIs() async throws {
+    let library = FileLibrary(root: folder.url)
+    let meeting = Meeting(
+      title: "Future",
+      startedAt: ago(100),
+      status: .ready,
+      segments: [TranscriptSegment(speaker: .me, start: 1, end: 2, text: "Still here.")],
+      userNotes: "keep me"
+    )
+    try await library.save(meeting)
+    let path = "meetings/\(meeting.id.uuidString)/meeting.json"
+    let written = try text(path).replacingOccurrences(of: "\"ready\"", with: "\"paused\"")
+    #expect(written.contains("\"paused\""))
+    try folder.writeFromOutside(written, to: path)
+
+    // A fresh library, as after a restart, and the one that was already running.
+    for reader in [FileLibrary(root: folder.url), library] {
+      let read = try #require(try await reader.meeting(meeting.id))
+      #expect(read.status == .ready)
+      #expect(read.userNotes == "keep me")
+      #expect(read.segments == meeting.segments)
+      #expect(try await reader.meetings().map(\.id) == [meeting.id])
+    }
+    // The file is not moved aside and not rewritten: the newer version finds its status again.
+    #expect(folder.names(in: "meetings/\(meeting.id.uuidString)") == ["meeting.json", "notes.md"])
+    #expect(try text(path) == written)
+  }
+
+  @Test func aDictationWithAModeThisVersionDoesNotKnowStaysInTheHistory() async throws {
+    let id = UUID()
+    let written = """
+      [{"id": "\(id.uuidString)", "createdAt": "\(Timestamp.string(from: ago(60)))", "mode": "translate",
+        "rawText": "hola", "text": "hello", "duration": 2}]
+      """
+    try folder.writeFromOutside(written, to: "dictations.json")
+    let history = try await FileLibrary(root: folder.url).dictations()
+    #expect(history.map(\.id) == [id])
+    #expect(history.first?.text == "hello")
+    #expect(folder.names() == ["dictations.json"])
+    #expect(try text("dictations.json") == written)
+  }
+
+  // MARK: The folder is private
+
+  @Test func anExistingDataFolderIsClosedToOtherUsersWhenItIsOpened() async throws {
+    func mode(_ path: String = "") throws -> Int {
+      let attributes = try FileManager.default.attributesOfItem(atPath: folder.file(path).path)
+      return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
+    }
+    // A folder made by something else, open to everybody.
+    try FileManager.default.createDirectory(
+      at: folder.file("dictation-audio"),
+      withIntermediateDirectories: true,
+      attributes: [.posixPermissions: 0o755]
+    )
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.url.path)
+    #expect(try mode() == 0o755)
+
+    // Opening is enough: nothing has to be written first.
+    let library = FileLibrary(root: folder.url)
+    #expect(try mode() == 0o700)
+    _ = try await library.dictationAudioDirectory()
+    #expect(try mode("dictation-audio") == 0o700)
+
+    // Opened up again while the app is not running: closed again at the next start.
+    try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: folder.url.path)
+    _ = FileLibrary(root: folder.url)
+    #expect(try mode() == 0o700)
+
+    // A folder the library makes itself is private from the start.
+    let fresh = TemporaryFolder()
+    try await FileLibrary(root: fresh.url).updateSettings { $0.userName = "Alex" }
+    let made = try FileManager.default.attributesOfItem(atPath: fresh.url.path)[.posixPermissions]
+    #expect((made as? NSNumber)?.intValue == 0o700)
   }
 
   @Test func settingsFromAnOlderVersionLoadWithDefaults() async throws {
