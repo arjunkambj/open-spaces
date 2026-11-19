@@ -32,6 +32,7 @@ public struct Page<Toolbar: View, Content: View>: View {
   private let subtitle: String?
   private let width: PageWidth
   private var onBack: (() -> Void)?
+  private var accessory: AnyView?
   private let toolbar: Toolbar
   private let content: Content
 
@@ -58,11 +59,19 @@ public struct Page<Toolbar: View, Content: View>: View {
     return page
   }
 
+  /// Puts a view under the title, where the subtitle goes. For a line that needs more than
+  /// plain text, such as key caps.
+  public func titleAccessory(@ViewBuilder _ view: () -> some View) -> Page {
+    var page = self
+    page.accessory = AnyView(view())
+    return page
+  }
+
   public var body: some View {
     let phone = idiom == .phone
     GeometryReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: phone ? Wisper.Space.xl : 28) {
+        VStack(alignment: .leading, spacing: Wisper.Space.xl) {
           header
           VStack(alignment: .leading, spacing: Wisper.Space.xl) { content }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -100,6 +109,7 @@ public struct Page<Toolbar: View, Content: View>: View {
       if let subtitle {
         Text(subtitle).wisperText(.body, color: Wisper.Color.textSecondary)
       }
+      if let accessory { accessory }
     }
   }
 }

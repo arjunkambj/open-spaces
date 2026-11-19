@@ -5,7 +5,7 @@ import WisperMac
 import WisperUI
 
 /// The content of the main window: first-run setup until it is done, then the
-/// sidebar and the selected screen, with Settings as a card on top.
+/// sidebar and the selected screen side by side, with Settings as a card on top.
 ///
 /// Reads `AppModel` and `MacControls` from the environment. Give it a window
 /// whose content runs under a transparent title bar.
@@ -39,40 +39,48 @@ public struct HubView: View {
     GeometryReader { proxy in
       // The window's title bar is see-through and sits over the top of this view.
       let strip = max(proxy.safeAreaInsets.top, HubMetrics.minimumStrip)
-      VStack(spacing: 0) {
+      // Two flat columns that run the full height of the window, a hairline between them.
+      HStack(spacing: 0) {
+        if !navigation.sidebarHidden {
+          HStack(spacing: 0) {
+            Sidebar(navigation: navigation)
+              .padding(.top, strip)
+              .frame(width: HubMetrics.sidebarWidth)
+            Rectangle()
+              .fill(Wisper.Color.border)
+              .frame(width: Wisper.Stroke.hairline)
+              .accessibilityHidden(true)
+          }
+          .transition(.move(edge: .leading).combined(with: .opacity))
+        }
+        panel
+          .padding(.top, strip)
+          .background(Wisper.Color.panel)
+      }
+      .overlay(alignment: .top) {
         TitleStrip(navigation: navigation)
           .frame(height: strip)
-        HStack(spacing: 0) {
-          if !navigation.sidebarHidden {
-            Sidebar(navigation: navigation)
-              .frame(width: HubMetrics.sidebarWidth)
-              .transition(.move(edge: .leading).combined(with: .opacity))
-          }
-          panel
-            .padding(.leading, navigation.sidebarHidden ? Wisper.Space.s : 0)
-            .padding([.trailing, .bottom], Wisper.Space.s)
-        }
       }
       .ignoresSafeArea(edges: .top)
       .animation(Wisper.Motion.smooth, value: navigation.sidebarHidden)
     }
     .modal(isPresented: $navigation.showsSettings) {
-      SettingsScreen(shortcuts: AnyView(ShortcutsEditor()), onClose: { navigation.showsSettings = false })
-        .frame(maxWidth: HubMetrics.settingsSize.width, maxHeight: HubMetrics.settingsSize.height)
-        .modalSurface()
+      SettingsScreen(
+        shortcuts: AnyView(ShortcutsEditor()),
+        onClose: { navigation.showsSettings = false },
+        appearance: AnyView(AppearanceRow(navigation: navigation))
+      )
+      .frame(maxWidth: HubMetrics.settingsSize.width, maxHeight: HubMetrics.settingsSize.height)
+      .modalSurface()
     }
   }
 
   private var panel: some View {
-    let shape = RoundedRectangle(cornerRadius: Wisper.Radius.panel, style: .continuous)
-    return VStack(spacing: 0) {
+    VStack(spacing: 0) {
       notices
       screen
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .background(Wisper.Color.panel, in: shape)
-    .clipShape(shape)
-    .overlay { shape.strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline) }
   }
 
   @ViewBuilder private var screen: some View {
@@ -130,9 +138,8 @@ enum HubMetrics {
   static let windowButtons: CGFloat = 76
 }
 
-/// The strip across the top of the hub, level with the window buttons: the
-/// sidebar switch on the left and the theme choice on the right. The rest of
-/// it is empty, so the window can be dragged by it.
+/// The strip across the top of the hub, level with the window buttons: only the sidebar
+/// switch. The rest of it is empty, so the window can be dragged by it.
 struct TitleStrip: View {
   @Bindable var navigation: HubNavigation
 
@@ -147,37 +154,15 @@ struct TitleStrip: View {
       }
       .padding(.leading, navigation.isFullScreen ? Wisper.Space.m : HubMetrics.windowButtons)
       Spacer()
-      Menu {
-        Picker("Theme", selection: $navigation.theme) {
-          ForEach(HubNavigation.Theme.allCases) { theme in
-            Label(theme.title, systemImage: theme.symbol).tag(theme)
-          }
-        }
-        .pickerStyle(.inline)
-        .labelsHidden()
-      } label: {
-        Image(systemName: navigation.theme.symbol)
-          .wisperText(.caption, color: Wisper.Color.textPrimary)
-          .frame(width: 26, height: 26)
-          .hoverHighlight(radius: Wisper.Radius.small)
-      }
-      .menuStyle(.button)
-      .buttonStyle(.plain)
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .help("Theme")
-      .accessibilityLabel("Theme")
-      .padding(.trailing, Wisper.Space.m)
     }
     .frame(maxHeight: .infinity)
   }
 }
 
-/// The left column of the hub: the name, the sections, a tip, Settings and Help.
+/// The left column of the hub: the name, the sections, and Settings at the foot.
 struct Sidebar: View {
   @Environment(AppModel.self) private var model
   @Bindable var navigation: HubNavigation
-  @State private var showsHelp = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: Wisper.Space.xxs) {
@@ -196,86 +181,26 @@ struct Sidebar: View {
         }
       }
       Spacer(minLength: Wisper.Space.l)
-      if let tipKeys {
-        SidebarCard(keys: tipKeys, navigation: navigation)
-          .padding(.bottom, Wisper.Space.s)
-      }
-      Hairline().padding(.bottom, Wisper.Space.xs)
       NavItem("Settings", systemImage: "gearshape", isSelected: false) { navigation.showsSettings = true }
-      NavItem("Help", systemImage: "questionmark.circle", isSelected: false) { showsHelp = true }
-        .popover(isPresented: $showsHelp, arrowEdge: .trailing) {
-          HelpMenu(navigation: navigation) { showsHelp = false }
-        }
     }
     .padding(.horizontal, Wisper.Space.m)
     .padding(.bottom, Wisper.Space.m)
   }
-
-  /// The hands-free tip, until it is dismissed. (A missing key is the Home screen's and the pill's to say.)
-  private var tipKeys: [String]? {
-    guard !navigation.tipDismissed, let combo = model.settings.shortcut(for: .handsFree), !combo.isEmpty
-    else {
-      return nil
-    }
-    return combo.keyCaps
-  }
 }
 
-/// The small card above Settings in the sidebar: a tip about dictating hands-free.
-struct SidebarCard: View {
-  /// The key caps of the hands-free shortcut.
-  let keys: [String]
-  let navigation: HubNavigation
+/// The row of Settings that chooses light, dark or the Mac's own look. The hub hands it to the
+/// settings screen, which shows it under "App".
+struct AppearanceRow: View {
+  @Bindable var navigation: HubNavigation
 
   var body: some View {
-    let shape = RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous)
-    VStack(alignment: .leading, spacing: Wisper.Space.s) {
-      HStack(alignment: .top) {
-        Text("Talk hands-free").wisperText(.bodyStrong)
-        Spacer(minLength: Wisper.Space.xs)
-        IconButton("xmark", label: "Dismiss this tip", size: .small) { navigation.tipDismissed = true }
-          .padding([.top, .trailing], -Wisper.Space.xs)
-      }
-      KeyCapRow(keys)
-      Text("Press once to start dictating. Press again when you are done.")
-        .wisperText(.caption)
-        .fixedSize(horizontal: false, vertical: true)
-      Button("See all shortcuts") { navigation.showsSettings = true }
-        .buttonStyle(.wisper(.secondary, size: .small))
-        .padding(.top, Wisper.Space.xs)
+    SettingRow("Appearance") {
+      Dropdown(
+        "Appearance",
+        selection: $navigation.theme,
+        options: HubNavigation.Theme.allCases,
+        title: \.title
+      )
     }
-    .padding(Wisper.Space.l)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Wisper.Color.raised, in: shape)
-    .overlay { shape.strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline) }
-  }
-}
-
-/// The few places Help leads to.
-private struct HelpMenu: View {
-  @Environment(AppModel.self) private var model
-  let navigation: HubNavigation
-  let close: () -> Void
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: Wisper.Space.xxs) {
-      NavItem("Shortcuts and settings", systemImage: "keyboard", isSelected: false) {
-        close()
-        navigation.showsSettings = true
-      }
-      if let folder = model.host.dataFolder {
-        NavItem("Show my data in Finder", systemImage: "folder", isSelected: false) {
-          close()
-          model.host.reveal(folder)
-        }
-      }
-      NavItem("Show the tip again", systemImage: "lightbulb", isSelected: false) {
-        close()
-        navigation.tipDismissed = false
-      }
-    }
-    .padding(Wisper.Space.s)
-    .frame(width: 260)
-    .environment(\.wisperIdiom, .mac)
   }
 }

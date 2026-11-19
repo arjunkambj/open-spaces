@@ -5,8 +5,8 @@ import WisperDomain
 /// Where the hub window is: the open section, the open meeting, whether
 /// Settings is up, and the few choices about the window itself.
 ///
-/// The section, the sidebar, the theme and the dismissed tip are remembered
-/// between launches when the hub is given a `UserDefaults`.
+/// The section, the sidebar and the theme are remembered between launches
+/// when the hub is given a `UserDefaults`.
 @MainActor
 @Observable
 public final class HubNavigation {
@@ -29,7 +29,7 @@ public final class HubNavigation {
     /// The SF Symbol shown beside the title.
     public var symbol: String {
       switch self {
-      case .home: "square.grid.2x2"
+      case .home: "house"
       case .meetings: "record.circle"
       case .dictionary: "character.book.closed"
       case .snippets: "text.quote"
@@ -82,10 +82,6 @@ public final class HubNavigation {
   public var theme: Theme {
     didSet { defaults?.set(theme.rawValue, forKey: Key.theme) }
   }
-  /// The small card at the bottom of the sidebar was closed.
-  public var tipDismissed: Bool {
-    didSet { defaults?.set(tipDismissed, forKey: Key.tipDismissed) }
-  }
   /// Set by the window: in full screen there are no window buttons to leave room for.
   public var isFullScreen = false
 
@@ -95,7 +91,6 @@ public final class HubNavigation {
     static let section = "hub.section"
     static let sidebarHidden = "hub.sidebarHidden"
     static let theme = "hub.theme"
-    static let tipDismissed = "hub.tipDismissed"
   }
 
   /// - defaults: where the choices are remembered, or `nil` to remember nothing (demo, snapshots).
@@ -104,7 +99,6 @@ public final class HubNavigation {
     section = defaults?.string(forKey: Key.section).flatMap(Section.init(rawValue:)) ?? .home
     sidebarHidden = defaults?.bool(forKey: Key.sidebarHidden) ?? false
     theme = defaults?.string(forKey: Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
-    tipDismissed = defaults?.bool(forKey: Key.tipDismissed) ?? false
   }
 
   /// Goes to a section and closes Settings.

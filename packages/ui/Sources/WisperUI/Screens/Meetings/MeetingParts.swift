@@ -21,6 +21,8 @@ enum MeetingsMetrics {
   /// The inline field a new tag is typed into, and the height of a tag.
   static let tagField: CGFloat = 110
   static func tagHeight(_ idiom: Wisper.Idiom) -> CGFloat { idiom == .phone ? 32 : 24 }
+  /// The side padding of a small button, by which the row of suggested questions is pulled left.
+  static func suggestionInset(_ idiom: Wisper.Idiom) -> CGFloat { idiom == .phone ? 14 : 11 }
   /// The least height of a checklist row.
   static func checklistRow(_ idiom: Wisper.Idiom) -> CGFloat { idiom == .phone ? 56 : 48 }
   static func editorHeight(_ idiom: Wisper.Idiom) -> CGFloat { idiom == .phone ? 340 : 400 }
@@ -34,8 +36,6 @@ struct MeetingsPreset {
   var query = ""
   /// Text in the find field of the transcript.
   var find = ""
-  /// Overrides whether the explainer card shows. `nil` follows what the user chose.
-  var showsExplainer: Bool?
   /// Opens the delete dialog: for the first meeting on the list, or for the open meeting.
   var confirmsDelete = false
   var editsTags = false

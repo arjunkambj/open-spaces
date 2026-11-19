@@ -5,10 +5,8 @@ extension Wisper {
   public enum TextStyle: Sendable, CaseIterable {
     /// The big title at the top of a page.
     case pageTitle
-    /// A serif headline for hero areas and dialogs that deserve one.
+    /// A larger headline, for the steps of first-run setup.
     case hero
-    /// A large serif numeral, for stats.
-    case statNumber
     /// The title of a card or dialog.
     case cardTitle
     /// Normal reading text.
@@ -19,7 +17,7 @@ extension Wisper {
     case caption
     /// Small text with weight: field labels, small buttons, badges.
     case captionStrong
-    /// A small uppercase label with letter spacing, above a group.
+    /// A small, quiet label above a group.
     case sectionLabel
     /// Fixed-width text: paths, commands, keys.
     case mono
@@ -35,18 +33,15 @@ extension Wisper.TextStyle {
     var design: Font.Design = .default
     var tracking: CGFloat = 0
     var lineSpacing: CGFloat = 0
-    var uppercase = false
   }
 
   func metrics(_ idiom: Wisper.Idiom) -> Metrics {
     let phone = idiom == .phone
     switch self {
     case .pageTitle:
-      return Metrics(size: phone ? 32 : 28, weight: phone ? .bold : .semibold, tracking: -0.5)
+      return Metrics(size: phone ? 32 : 26, weight: phone ? .bold : .semibold, tracking: -0.5)
     case .hero:
-      return Metrics(size: phone ? 30 : 32, weight: .regular, design: .serif, tracking: -0.6)
-    case .statNumber:
-      return Metrics(size: 30, weight: .regular, design: .serif, tracking: -0.4)
+      return Metrics(size: phone ? 30 : 32, weight: phone ? .bold : .semibold, tracking: -0.7)
     case .cardTitle:
       return Metrics(size: phone ? 18 : 17, weight: .semibold, tracking: -0.2)
     case .body:
@@ -58,7 +53,7 @@ extension Wisper.TextStyle {
     case .captionStrong:
       return Metrics(size: phone ? 14 : 13, weight: .medium)
     case .sectionLabel:
-      return Metrics(size: phone ? 13 : 12, weight: .medium, tracking: 1.3, uppercase: true)
+      return Metrics(size: phone ? 14 : 13, weight: .medium)
     case .mono:
       return Metrics(size: phone ? 14 : 13, weight: .regular, design: .monospaced)
     case .keyCap:
@@ -69,7 +64,7 @@ extension Wisper.TextStyle {
   /// The Dynamic Type style this one grows and shrinks with.
   var relativeTo: Font.TextStyle {
     switch self {
-    case .pageTitle, .hero, .statNumber: .largeTitle
+    case .pageTitle, .hero: .largeTitle
     case .cardTitle: .headline
     case .body, .bodyStrong: .body
     case .caption, .captionStrong, .sectionLabel, .mono, .keyCap: .footnote
@@ -102,13 +97,12 @@ private struct TextStyleModifier: ViewModifier {
       .font(.system(size: metrics.size * scale, weight: metrics.weight, design: metrics.design))
       .tracking(metrics.tracking)
       .lineSpacing(metrics.lineSpacing)
-      .textCase(metrics.uppercase ? .uppercase : nil)
       .foregroundStyle(color ?? style.defaultColor)
   }
 }
 
 extension View {
-  /// Applies a named text style: font, letter spacing, case and colour.
+  /// Applies a named text style: font, letter spacing and colour.
   ///
   /// Sizes follow the idiom (Mac or iPhone) and Dynamic Type.
   /// - color: replaces the style's own colour (secondary for captions and section labels, primary otherwise).

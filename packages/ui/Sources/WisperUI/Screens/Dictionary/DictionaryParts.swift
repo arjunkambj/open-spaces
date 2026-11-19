@@ -109,18 +109,21 @@ private struct RowKeys: ViewModifier {
   let delete: () -> Void
 
   @FocusState private var isFocused: Bool
+  @Environment(\.rowSetting) private var setting
 
   func body(content: Content) -> some View {
     #if os(macOS)
       // Focus works as it does for a button: Tab reaches the row when the Mac's keyboard
       // navigation is on, and a click does not leave a focus mark behind. The mark is drawn
-      // inside the row, because the list clips what is outside it.
+      // by us, because a boxed list clips what is outside the row.
       content
         .overlay {
           if isFocused {
             RoundedRectangle(cornerRadius: Wisper.Radius.control, style: .continuous)
               .strokeBorder(Wisper.Color.textPrimary, lineWidth: Wisper.Stroke.focus)
-              .padding(Wisper.Space.xs)
+              // Inside a box the mark stays inside the row; on the page it sits where the hover fill does.
+              .padding(.horizontal, setting == .open ? -RowMetrics.reach : Wisper.Space.xs)
+              .padding(.vertical, setting == .open ? 0 : Wisper.Space.xs)
               .allowsHitTesting(false)
           }
         }

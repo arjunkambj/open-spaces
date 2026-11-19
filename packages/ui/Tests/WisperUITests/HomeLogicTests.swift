@@ -107,11 +107,9 @@ private func dictation(_ text: String, at created: Date, app: String? = nil, raw
 }
 
 @Suite struct HomeTextTests {
-  @Test func greetsByNameWhenThereIsOne() {
-    #expect(HomeText.greeting(name: "Alex") == "Welcome back, Alex")
-    #expect(HomeText.greeting(name: "  Alex \n") == "Welcome back, Alex")
-    #expect(HomeText.greeting(name: "") == "Welcome back")
-    #expect(HomeText.greeting(name: "   ") == "Welcome back")
+  @Test func theTitleIsTheNameOfThePlace() {
+    #expect(HomeText.title(.mac) == "Home")
+    #expect(HomeText.title(.phone) == "History")
   }
 
   @Test(arguments: [
@@ -123,22 +121,17 @@ private func dictation(_ text: String, at created: Date, app: String? = nil, raw
     #expect(HomeText.compact(count) == expected)
   }
 
-  @Test func timeSavedComparesSpeakingWithTyping() {
-    // 6,000 words: 150 minutes of typing at 40 a minute, 40 minutes of speaking at 150.
-    let stats = DictationStats(totalWords: 6_000, wordsPerMinute: 150, dayStreak: 3, dictationCount: 80)
-    #expect(HomeText.timeSaved(stats) == "1.8 hours")
-    #expect(HomeText.timeSaved(DictationStats(totalWords: 800, wordsPerMinute: 160)) == "15 minutes")
-    #expect(HomeText.timeSaved(DictationStats(totalWords: 80, wordsPerMinute: 130)) == "1 minute")
-    #expect(HomeText.timeSaved(DictationStats(totalWords: 3_200, wordsPerMinute: 160)) == "1 hour")
-    #expect(HomeText.timeSaved(DictationStats(totalWords: 9_600, wordsPerMinute: 160)) == "3 hours")
+  @Test func theNumbersAreOneQuietLine() {
+    let stats = DictationStats(totalWords: 12_440, wordsPerMinute: 136, dayStreak: 3, dictationCount: 90)
+    #expect(HomeText.summary(stats) == "12.4K words dictated · 136 words a minute")
+    #expect(HomeText.summary(DictationStats(totalWords: 1, dictationCount: 1)) == "1 word dictated")
+    #expect(HomeText.summary(DictationStats(totalWords: 40, dictationCount: 2)) == "40 words dictated")
   }
 
-  @Test func timeSavedIsLeftOutWhenThereIsNothingToSay() {
-    #expect(HomeText.timeSaved(DictationStats()) == nil)
-    // Slower than typing: nothing saved.
-    #expect(HomeText.timeSaved(DictationStats(totalWords: 500, wordsPerMinute: 30)) == nil)
-    // Too little to count.
-    #expect(HomeText.timeSaved(DictationStats(totalWords: 12, wordsPerMinute: 120)) == nil)
+  @Test func thereAreNoNumbersBeforeTheFirstDictation() {
+    #expect(HomeText.summary(DictationStats()) == nil)
+    // A failed dictation has no words to count.
+    #expect(HomeText.summary(DictationStats(dictationCount: 1)) == nil)
   }
 
   @Test func shortcutsBecomeKeyLabels() {

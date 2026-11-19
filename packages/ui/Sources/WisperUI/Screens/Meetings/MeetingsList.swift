@@ -11,7 +11,6 @@ struct MeetingsList: View {
 
   @Environment(AppModel.self) private var model
   @Environment(\.wisperIdiom) private var idiom
-  @AppStorage("meetings.explainerDismissed") private var explainerDismissed = false
 
   @State private var query: String
   /// The meetings the search found. `nil` while nothing is being searched for.
@@ -50,8 +49,6 @@ struct MeetingsList: View {
         } onStop: {
           Task { await model.meetings.stop() }
         }
-      } else if preset.showsExplainer ?? !explainerDismissed {
-        explainer
       }
       if idiom == .phone, hasPastMeetings(liveID: live?.meetingID) {
         SearchField(text: $query, placeholder: "Search meetings")
@@ -112,7 +109,7 @@ struct MeetingsList: View {
       onOpen: { selection = meeting.id },
       onCopy: {
         MeetingActions.copy(meeting.markdown())
-        toast = Toast("Copied as Markdown")
+        toast = Toast("Copied")
       },
       onDelete: { deleting = meeting },
       onFix: { remedy in MeetingActions.fix(remedy, meeting.id, in: model) }
@@ -216,24 +213,6 @@ struct MeetingsList: View {
     return permission
   }
 
-  private var explainer: some View {
-    let sound =
-      idiom == .phone
-      ? "Open Wisper records your microphone. An iPhone cannot record the sound of other apps, so put "
-        + "a call on speaker."
-      : "Open Wisper records your microphone and the sound your Mac plays, so both sides of a call "
-        + "are captured."
-    return HeroCard(
-      "Every meeting, written down.",
-      message: sound
-        + " The recording goes to OpenAI with your own key to become text. The transcript and notes "
-        + "are stored only on this device. Tell people before you record them."
-    ) {
-      startButton(.primary)
-    }
-    .onDismiss { explainerDismissed = true }
-  }
-
   @ViewBuilder
   private func emptyState(isLive: Bool) -> some View {
     if found != nil {
@@ -248,10 +227,7 @@ struct MeetingsList: View {
           .buttonStyle(.wisper(.tertiary))
       }
     } else if !isLive {
-      EmptyState(
-        "No meetings yet",
-        message: "Record a meeting and its transcript and notes show up here."
-      ) {
+      EmptyState("No meetings yet", message: MeetingsLogic.firstMeetingHint(idiom)) {
         SymbolTile("waveform.and.mic")
       }
     }
@@ -289,37 +265,35 @@ private struct MeetingRow: View {
           .wisperText(.caption, color: Wisper.Color.textTertiary)
           .lineLimit(1)
         about(problem)
-        if phone {
-          MeetingFlow { badges(problem) }
-            .padding(.top, Wisper.Space.xs)
+        if phone, problem != nil || !meeting.tags.isEmpty {
+          MeetingFlow {
+            badge(problem)
+            tags
+          }
+          .padding(.top, Wisper.Space.xxs)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       if !phone {
-        HStack(spacing: Wisper.Space.xs) { badges(problem) }
-          .layoutPriority(1)
+        badge(problem).layoutPriority(1)
       }
       if !phone, let problem, let remedy = problem.remedy, problem.isSevere || phase == .interrupted {
         Button(problem.actionTitle) { onFix(remedy) }
           .buttonStyle(.wisper(.tertiary, size: .small))
       }
-      HStack(spacing: Wisper.Space.xxs) {
-        if !phone { IconButton("doc.on.doc", label: "Copy as Markdown", action: onCopy) }
-        OverflowMenu(label: "More for \(meeting.title)") {
-          Button("Open", action: onOpen)
-          if let problem, let remedy = problem.remedy { Button(problem.actionTitle) { onFix(remedy) } }
-          Button("Copy as Markdown", action: onCopy)
-          Divider()
-          Button("Delete", role: .destructive, action: onDelete)
-        }
+      let showsActions = phone || hovered || isFocused || actionIsFocused
+      // The tags rest where the actions show, as the app's name does on the history list.
+      ZStack(alignment: .trailing) {
+        if !phone { tags.opacity(showsActions ? 0 : 1) }
+        actions(problem)
+          // Tab reaches the actions even while they are unseen, so they show for the keyboard too.
+          .focused($actionIsFocused)
+          .opacity(showsActions ? 1 : 0)
+          .padding(.trailing, phone ? -Wisper.Space.s : -Wisper.Space.xs)
       }
-      // Tab reaches the actions even while they are unseen, so they show for the keyboard too.
-      .focused($actionIsFocused)
-      .opacity(phone || hovered || isFocused || actionIsFocused ? 1 : 0)
     }
-    .padding(.horizontal, Wisper.Space.l)
     .padding(.vertical, Wisper.Space.m)
-    .background(hovered ? Wisper.Color.surfaceHover : .clear)
+    .rowChrome(isHighlighted: hovered)
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
     .animation(Wisper.Motion.quick, value: isHovered)
@@ -337,10 +311,37 @@ private struct MeetingRow: View {
     .accessibilityAction(.default, onOpen)
   }
 
+  private func actions(_ problem: MeetingProblem?) -> some View {
+    HStack(spacing: Wisper.Space.xxs) {
+      if idiom == .mac { IconButton("doc.on.doc", label: "Copy", action: onCopy) }
+      OverflowMenu(label: "More for \(meeting.title)") {
+        Button("Open", action: onOpen)
+        if let problem, let remedy = problem.remedy { Button(problem.actionTitle) { onFix(remedy) } }
+        Button("Copy", action: onCopy)
+        Divider()
+        Button("Delete", role: .destructive, action: onDelete)
+      }
+    }
+  }
+
   private var facts: String {
-    [MeetingsLogic.when(meeting.startedAt), MeetingsLogic.length(meeting.duration)]
-      .compactMap { $0 }
-      .joined(separator: " · ")
+    let open = MeetingsLogic.openActionItems(in: meeting)
+    return [
+      MeetingsLogic.when(meeting.startedAt), MeetingsLogic.length(meeting.duration),
+      open > 0 ? "\(open) to do" : nil,
+    ]
+    .compactMap { $0 }
+    .joined(separator: " · ")
+  }
+
+  /// The tags as one quiet line of text. They are for finding a meeting, not for reading the list.
+  @ViewBuilder private var tags: some View {
+    if !meeting.tags.isEmpty {
+      Text(MeetingsLogic.tagLine(meeting.tags))
+        .wisperText(.caption, color: Wisper.Color.textTertiary)
+        .lineLimit(1)
+        .accessibilityLabel("Tags: \(meeting.tags.joined(separator: ", "))")
+    }
   }
 
   /// The third line: what is happening to the meeting, what went wrong, or what it was about.
@@ -362,8 +363,9 @@ private struct MeetingRow: View {
     }
   }
 
+  /// The one badge a row can have: something went wrong with this meeting.
   @ViewBuilder
-  private func badges(_ problem: MeetingProblem?) -> some View {
+  private func badge(_ problem: MeetingProblem?) -> some View {
     if let problem {
       if problem.isSevere {
         Badge("Could not finish", tone: .danger)
@@ -373,10 +375,6 @@ private struct MeetingRow: View {
         Badge(problem.remedy == .writeNotes ? "No notes" : "Part missing", tone: .warning)
       }
     }
-    let open = MeetingsLogic.openActionItems(in: meeting)
-    if open > 0 { Badge("\(open) to do", tone: .accent) }
-    ForEach(meeting.tags.prefix(3), id: \.self) { tag in Badge(tag) }
-    if meeting.tags.count > 3 { Badge("+\(meeting.tags.count - 3)") }
   }
 }
 

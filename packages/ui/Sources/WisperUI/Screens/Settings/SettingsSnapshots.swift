@@ -200,7 +200,9 @@ enum SetupSnapshotModels {
       : HostActions(
         agentToolPath: "/Applications/Open Wisper.app/Contents/MacOS/wisper",
         dataFolder: URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-          .appendingPathComponent("Library/Application Support/Open Wisper", isDirectory: true)
+          .appendingPathComponent("Library/Application Support/Open Wisper", isDirectory: true),
+        // So the About section shows its button in a picture. It does nothing here.
+        checkForUpdates: {}
       )
     return AppModel(
       AppModel.Dependencies(

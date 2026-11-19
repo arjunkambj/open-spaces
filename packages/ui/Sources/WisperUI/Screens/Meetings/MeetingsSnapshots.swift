@@ -13,10 +13,10 @@ enum MeetingsSnapshots {
       SnapshotCase("meetings", model: { model() }) { screen() },
       SnapshotCase("meetings-phone", canvas: .phone, model: { model() }) { screen() },
       SnapshotCase("meetings-list", model: { model(MeetingSamples.many) }) {
-        screen(preset: MeetingsPreset(showsExplainer: false))
+        screen(preset: MeetingsPreset())
       },
       SnapshotCase("meetings-list-phone", canvas: .phone, model: { model(MeetingSamples.many) }) {
-        screen(preset: MeetingsPreset(showsExplainer: false))
+        screen(preset: MeetingsPreset())
       },
       SnapshotCase("meetings-empty", model: { model([]) }) { screen() },
       SnapshotCase("meetings-empty-phone", canvas: .phone, model: { model([]) }) { screen() },
@@ -31,25 +31,25 @@ enum MeetingsSnapshots {
         model: { recording(microphoneOnly: true) }
       ) { screen() },
       SnapshotCase("meetings-search", model: { model(MeetingSamples.many) }) {
-        screen(preset: MeetingsPreset(query: "billing", showsExplainer: false))
+        screen(preset: MeetingsPreset(query: "billing"))
       },
       SnapshotCase("meetings-search-none", model: { model(MeetingSamples.many) }) {
-        screen(preset: MeetingsPreset(query: "zebra", showsExplainer: false))
+        screen(preset: MeetingsPreset(query: "zebra"))
       },
       SnapshotCase("meetings-delete", model: { model() }) {
-        screen(preset: MeetingsPreset(showsExplainer: false, confirmsDelete: true))
+        screen(preset: MeetingsPreset(confirmsDelete: true))
       },
       SnapshotCase("meetings-delete-phone", canvas: .phone, model: { model() }) {
-        screen(preset: MeetingsPreset(showsExplainer: false, confirmsDelete: true))
+        screen(preset: MeetingsPreset(confirmsDelete: true))
       },
       SnapshotCase("meetings-no-microphone", model: { model(hasAPIKey: false, microphone: .denied) }) {
         screen(
-          preset: MeetingsPreset(showsExplainer: false, startFailure: .permissionDenied(.microphone))
+          preset: MeetingsPreset(startFailure: .permissionDenied(.microphone))
         )
       },
       SnapshotCase("meetings-no-microphone-phone", canvas: .phone, model: { model(microphone: .denied) }) {
         screen(
-          preset: MeetingsPreset(showsExplainer: false, startFailure: .permissionDenied(.microphone))
+          preset: MeetingsPreset(startFailure: .permissionDenied(.microphone))
         )
       },
     ]
@@ -134,7 +134,7 @@ enum MeetingsSnapshots {
   @MainActor
   private static func screen(
     _ meeting: Meeting.ID? = nil,
-    preset: MeetingsPreset = MeetingsPreset(showsExplainer: true)
+    preset: MeetingsPreset = MeetingsPreset()
   ) -> some View {
     MeetingsScreen(selection: .constant(meeting), preset: preset)
   }

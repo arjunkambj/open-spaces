@@ -112,17 +112,18 @@ private let schemes: [ColorScheme] = [.light, .dark]
   }
 }
 
-@Test func textStylesAreLargerOnPhoneAndSerifWhereMeant() {
+@Test func textStylesAreLargerOnPhoneAndSpeakWithOneVoice() {
   for style in Wisper.TextStyle.allCases {
     let mac = style.metrics(.mac)
     let phone = style.metrics(.phone)
     #expect(mac.size >= 11, "\(style) is too small to read")
     #expect(phone.size >= mac.size || style == .hero, "\(style) shrinks on iPhone")
   }
-  #expect(Wisper.TextStyle.statNumber.metrics(.mac).design == .serif)
-  #expect(Wisper.TextStyle.hero.metrics(.phone).design == .serif)
+  // One type voice: the system sans everywhere, and fixed-width only for code.
+  for style in Wisper.TextStyle.allCases where style != .mono {
+    #expect(style.metrics(.mac).design == .default && style.metrics(.phone).design == .default)
+  }
   #expect(Wisper.TextStyle.mono.metrics(.mac).design == .monospaced)
-  #expect(Wisper.TextStyle.sectionLabel.metrics(.mac).uppercase)
 }
 
 @Test func waveformBarsStayInsideTheirHeight() {

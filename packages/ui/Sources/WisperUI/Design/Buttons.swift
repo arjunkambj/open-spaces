@@ -353,10 +353,10 @@ public struct NavItem: View {
     Button(action: action) {
       HStack(spacing: Wisper.Space.m) {
         Image(systemName: systemImage)
-          .font(.system(size: idiom == .phone ? 18 : 15, weight: .medium))
-          .foregroundStyle(Wisper.Color.textPrimary)
+          .font(.system(size: idiom == .phone ? 18 : 15, weight: isSelected ? .medium : .regular))
+          .foregroundStyle(isSelected ? Wisper.Color.textPrimary : Wisper.Color.textSecondary)
           .frame(width: 22)
-        Text(title).wisperText(.bodyStrong)
+        Text(title).wisperText(isSelected ? .bodyStrong : .body)
         Spacer(minLength: Wisper.Space.s)
         if let badge { Badge(badge, tone: .accent) }
       }

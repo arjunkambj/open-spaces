@@ -87,7 +87,6 @@ public struct PillView: View {
       stop: { controls.finish() },
       cancel: { controls.cancel() },
       tapNotice: { controls.fixNotice() },
-      startMeeting: { controls.toggleMeeting() },
       stopMeeting: { controls.toggleMeeting() },
       openMeeting: {
         if let id = model.meetings.live?.meetingID { controls.open(.meeting(id)) }
@@ -99,7 +98,7 @@ public struct PillView: View {
 /// Sizes of the pill's parts, in points.
 private enum PillMetrics {
   static let resting = CGSize(width: 40, height: 8)
-  static let hover = CGSize(width: 50, height: 30)
+  static let hover = CGSize(width: 64, height: 30)
   static let height: CGFloat = 32
   static let holdWidth: CGFloat = 92
   static let workingWidth: CGFloat = 64
@@ -130,16 +129,6 @@ struct PillBody: View {
       HStack(spacing: Wisper.Space.xs) {
         if state.look != .hidden {
           capsule.transition(.opacity)
-        }
-        if case .hint = state.look, state.meetingSince == nil {
-          PillRoundButton(
-            symbol: "record.circle",
-            label: "Start a meeting recording",
-            size: PillMetrics.hover.height
-          ) {
-            actions.startMeeting()
-          }
-          .transition(.opacity.combined(with: .scale(scale: 0.6)))
         }
         if let since = state.meetingSince {
           MeetingChip(since: since, now: previewNow, open: actions.openMeeting, stop: actions.stopMeeting)
@@ -330,31 +319,23 @@ private struct PillHint: View {
 private struct PillRoundButton: View {
   let symbol: String
   let label: String
-  var size = PillMetrics.roundButton
   var isRecordingRed = false
   let action: @MainActor () -> Void
 
   var body: some View {
     Button(action: action) {
       Image(systemName: symbol)
-        .wisperText(size > PillMetrics.roundButton ? .bodyStrong : .caption, color: Wisper.Color.onInverse)
-        .frame(width: size, height: size)
-        .background(background, in: Circle())
-        .overlay {
-          if size > PillMetrics.roundButton {
-            Circle().strokeBorder(Wisper.Color.onInverse.opacity(0.2), lineWidth: Wisper.Stroke.hairline)
-          }
-        }
+        .wisperText(.caption, color: Wisper.Color.onInverse)
+        .frame(width: PillMetrics.roundButton, height: PillMetrics.roundButton)
+        .background(
+          isRecordingRed ? Wisper.Color.recording : Wisper.Color.onInverse.opacity(0.16),
+          in: Circle()
+        )
         .contentShape(Circle())
     }
     .buttonStyle(.plain)
     .help(label)
     .accessibilityLabel(label)
-  }
-
-  private var background: SwiftUI.Color {
-    if isRecordingRed { return Wisper.Color.recording }
-    return size > PillMetrics.roundButton ? Wisper.Color.inverse : Wisper.Color.onInverse.opacity(0.16)
   }
 }
 

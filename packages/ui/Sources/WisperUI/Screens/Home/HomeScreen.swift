@@ -2,11 +2,11 @@ import SwiftUI
 import WisperDomain
 import WisperEngine
 
-/// Home: greeting, stats and the dictation history. Reads `AppModel` from the environment.
+/// Home: how to dictate, the numbers in one line, and the dictation history.
+/// Reads `AppModel` from the environment.
 public struct HomeScreen: View {
   @Environment(AppModel.self) private var model
   @Environment(\.wisperIdiom) private var idiom
-  @AppStorage("home.tipDismissed") private var tipDismissed = false
 
   @State private var query: String
   @State private var player: HomeAudioPlayer
@@ -15,13 +15,7 @@ public struct HomeScreen: View {
   @State private var retryingID: Dictation.ID?
   @State private var limit = HomeHistory.pageSize
   @State private var toast: Toast?
-  /// The width the content has. Decides whether the stats fit beside the history.
-  @State private var width: CGFloat = HomeScreen.sideColumnBreakpoint
   private let preview: HomePreview
-
-  /// The stats sit in a column beside the history from this content width up.
-  private static let sideColumnBreakpoint: CGFloat = 720
-  private static let sideColumnWidth: CGFloat = 250
 
   public init() {
     self.init(preview: HomePreview())
@@ -37,32 +31,15 @@ public struct HomeScreen: View {
   }
 
   public var body: some View {
-    Page(title: HomeText.greeting(name: model.settings.userName), width: .wide) {
-      Group {
-        if idiom == .mac && width >= Self.sideColumnBreakpoint {
-          HStack(alignment: .top, spacing: Wisper.Space.xl) {
-            VStack(alignment: .leading, spacing: Wisper.Space.xl) {
-              notice
-              history
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            HomeStats(layout: .card).frame(width: Self.sideColumnWidth)
-          }
-        } else {
-          VStack(alignment: .leading, spacing: Wisper.Space.xl) {
-            notice
-            HomeStats(layout: .row)
-            history
-          }
-        }
+    Page(title: HomeText.title(idiom)) {
+      if idiom == .mac, model.isLoaded, !model.dictations.isEmpty {
+        SearchField(text: $query, placeholder: "Search your dictations")
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      .onGeometryChange(for: CGFloat.self) {
-        $0.size.width
-      } action: {
-        width = $0
-      }
+    } content: {
+      notice
+      history
     }
+    .titleAccessory { HomeSummary() }
     .toast($toast)
     .dialog(
       isPresented: $isConfirmingDelete,
@@ -87,7 +64,7 @@ public struct HomeScreen: View {
 
   // MARK: - Notice
 
-  /// The key warning when there is no key, otherwise the how-to tip until it is dismissed.
+  /// Said only while it is true: without a key nothing can be turned into text.
   @ViewBuilder private var notice: some View {
     if model.isLoaded && KeyNeed.isMissing(hasKey: model.hasAPIKey, settings: model.settings) {
       Banner(
@@ -95,33 +72,6 @@ public struct HomeScreen: View {
         title: "Add your OpenAI key to start dictating",
         message: "Open Settings, choose OpenAI and paste your key. It stays on this device."
       )
-    } else if !tipDismissed {
-      tip
-    }
-  }
-
-  @ViewBuilder private var tip: some View {
-    let keys = HomeText.keyLabels(model.settings.shortcut(for: .pushToTalk))
-    if idiom == .phone {
-      HeroCard(
-        "Talk instead of typing",
-        message: "Tap the record button and speak. Your words come out as clean text."
-      )
-      .onDismiss { tipDismissed = true }
-    } else if keys.isEmpty {
-      HeroCard(
-        "Talk instead of typing",
-        message: "Choose a push-to-talk shortcut in Settings. Then hold it and speak in any app."
-      )
-      .onDismiss { tipDismissed = true }
-    } else {
-      HeroCard("Talk instead of typing") {
-        Text("Hold").wisperText(.body, color: Wisper.Color.textSecondary)
-        KeyCapRow(keys)
-        Text("and speak in any app.").wisperText(.body, color: Wisper.Color.textSecondary)
-      }
-      .onDismiss { tipDismissed = true }
-      .accessibilityElement(children: .contain)
     }
   }
 
@@ -143,31 +93,17 @@ public struct HomeScreen: View {
       if idiom == .phone {
         SearchField(text: $query, placeholder: "Search your dictations")
       }
-      // The first day is laid out by hand so the search field keeps its place (and the
-      // cursor) while the results under it change.
-      VStack(alignment: .leading, spacing: Wisper.Space.m) {
-        HStack(spacing: Wisper.Space.s) {
-          SectionLabel(days.first?.title ?? "No matches")
-          Spacer(minLength: 0)
-          if idiom == .mac {
-            SearchField(text: $query, placeholder: "Search your dictations")
-          }
-        }
-        .frame(minHeight: idiom == .mac ? Self.headerHeight : nil)
-        if let first = days.first {
-          rows(first)
-        } else {
-          EmptyState(
-            "Nothing matches “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”",
-            message: "Try another word, or the name of the app you were in."
-          ) {
-            SymbolTile("magnifyingglass")
-          } action: {
-            Button("Clear search") { query = "" }.buttonStyle(.wisper(.tertiary))
-          }
+      if days.isEmpty {
+        EmptyState(
+          "Nothing matches “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”",
+          message: "Try another word, or the name of the app you were in."
+        ) {
+          SymbolTile("magnifyingglass")
+        } action: {
+          Button("Clear search") { query = "" }.buttonStyle(.wisper(.tertiary))
         }
       }
-      ForEach(days.dropFirst()) { day in
+      ForEach(days) { day in
         PageSection(day.title) { rows(day) }
       }
       if matching.count > limit {
@@ -178,13 +114,10 @@ public struct HomeScreen: View {
     }
   }
 
-  /// The height of a section header that holds a control, as in the kit's `PageSection`.
-  private static let headerHeight: CGFloat = 32
-
   private func rows(_ day: HomeHistoryDay) -> some View {
     let canRetry = !isWorking(model.dictation.phase)
     let hovered = preview.hoveredRow.flatMap { day.entries.indices.contains($0) ? day.entries[$0].id : nil }
-    return CardList(day.entries, style: .filled) { dictation in
+    return CardList(day.entries) { dictation in
       HomeDictationRow(
         dictation: dictation,
         player: player,
@@ -216,7 +149,7 @@ public struct HomeScreen: View {
     if model.settings.historyRetention == .never {
       EmptyState(
         "History is off",
-        message: "Your dictations are not being kept. You can change this in Settings, under Privacy & data."
+        message: "Your dictations are not being kept. You can change this in Settings, under Privacy."
       ) {
         SymbolTile("clock.badge.xmark")
       }
@@ -229,14 +162,14 @@ public struct HomeScreen: View {
 
   private var firstDictationHint: String {
     if idiom == .phone {
-      return "Tap the record button and speak. What you say is saved here."
+      return "What you dictate shows up here."
     }
     let keys = HomeText.keyLabels(model.settings.shortcut(for: .pushToTalk))
     if keys.isEmpty {
-      return "Choose a push-to-talk shortcut in Settings, then hold it and speak. What you say is saved here."
+      return "Choose a push-to-talk shortcut in Settings, then hold it and speak. What you say shows up here."
     }
-    return
-      "Click where you want to type, hold \(keys.joined(separator: " ")) and speak. What you say is saved here."
+    return "Click where you want to type, hold \(keys.joined(separator: " ")) and speak. "
+      + "What you say shows up here."
   }
 
   // MARK: - Actions
@@ -297,4 +230,60 @@ struct HomePreview {
   /// The entry whose delete question is open.
   var deleting: Dictation?
   var player: HomeAudioPlayer?
+}
+
+/// The line under the title: how to dictate on a Mac, and the numbers so far.
+///
+/// It is its own view so the numbers are worked out when the history changes, not on every
+/// key typed into the search field.
+private struct HomeSummary: View {
+  @Environment(AppModel.self) private var model
+  @Environment(\.wisperIdiom) private var idiom
+
+  var body: some View {
+    let numbers = model.isLoaded ? HomeText.summary(model.stats) : nil
+    if idiom == .phone {
+      if let numbers { Text(numbers).wisperText(.body, color: Wisper.Color.textSecondary) }
+    } else {
+      // Side by side when they fit; the numbers go under the hint in a narrow window.
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .center, spacing: Wisper.Space.l) {
+          hint
+          Spacer(minLength: Wisper.Space.l)
+          if let numbers { Text(numbers).wisperText(.caption, color: Wisper.Color.textTertiary).fixedSize() }
+        }
+        VStack(alignment: .leading, spacing: Wisper.Space.s) {
+          hint
+          if let numbers { Text(numbers).wisperText(.caption, color: Wisper.Color.textTertiary) }
+        }
+      }
+    }
+  }
+
+  /// "Hold fn to dictate in any app", with the keys drawn as keys. It follows the shortcuts.
+  @ViewBuilder private var hint: some View {
+    let hold = HomeText.keyLabels(model.settings.shortcut(for: .pushToTalk))
+    let handsFree = HomeText.keyLabels(model.settings.shortcut(for: .handsFree))
+    if hold.isEmpty && handsFree.isEmpty {
+      Text("Choose a shortcut in Settings to start dictating.")
+        .wisperText(.body, color: Wisper.Color.textSecondary)
+    } else {
+      HStack(spacing: Wisper.Space.s) {
+        if !hold.isEmpty {
+          Text("Hold").wisperText(.body, color: Wisper.Color.textSecondary)
+          KeyCapRow(hold)
+          Text(handsFree.isEmpty ? "and speak in any app." : "and speak, or press")
+            .wisperText(.body, color: Wisper.Color.textSecondary)
+        } else {
+          Text("Press").wisperText(.body, color: Wisper.Color.textSecondary)
+        }
+        if !handsFree.isEmpty {
+          KeyCapRow(handsFree)
+          Text("to talk hands-free.").wisperText(.body, color: Wisper.Color.textSecondary)
+        }
+      }
+      .fixedSize()
+      .accessibilityElement(children: .combine)
+    }
+  }
 }

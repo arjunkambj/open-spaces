@@ -73,7 +73,6 @@ struct PillActions {
   var stop: @MainActor () -> Void = {}
   var cancel: @MainActor () -> Void = {}
   var tapNotice: @MainActor () -> Void = {}
-  var startMeeting: @MainActor () -> Void = {}
   var stopMeeting: @MainActor () -> Void = {}
   var openMeeting: @MainActor () -> Void = {}
 }

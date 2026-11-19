@@ -2,7 +2,7 @@ import SwiftUI
 import WisperDomain
 
 /// One writing style to pick: its name, its rule and a sample of how a message comes out.
-/// The chosen one has an accent ring and a tick.
+/// The chosen one has an accent ring and a tick; the others have no border at all.
 struct StyleOptionCard: View {
   let style: WritingStyle
   let category: AppCategory
@@ -38,8 +38,8 @@ struct StyleOptionCard: View {
       .background(hovered && !isSelected ? Wisper.Color.surfaceHover : Wisper.Color.surface, in: shape)
       .overlay {
         shape.strokeBorder(
-          isSelected ? Wisper.Color.accent : Wisper.Color.border,
-          lineWidth: isSelected ? Wisper.Stroke.focus : Wisper.Stroke.hairline
+          isSelected ? Wisper.Color.accent : .clear,
+          lineWidth: Wisper.Stroke.focus
         )
       }
       .contentShape(shape)
@@ -78,7 +78,6 @@ private struct StyleSample: View {
     .padding(Wisper.Space.m)
     .frame(maxWidth: .infinity, alignment: .topLeading)
     .background(Wisper.Color.raised, in: shape)
-    .overlay { shape.strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline) }
   }
 
   private var sample: some View {

@@ -7,20 +7,12 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
   case openAI = "openai"
   case agents, privacy, permissions, about
 
-  /// The labelled groups the sections are listed under.
+  /// The two groups the sections are listed in, with a gap between them and no labels:
+  /// what you set up, then what the app keeps and is.
   enum Group: String, CaseIterable, Identifiable, Sendable {
-    case settings, connections, privacy, app
+    case setup, app
 
     var id: String { rawValue }
-
-    var title: String {
-      switch self {
-      case .settings: "Settings"
-      case .connections: "Connections"
-      case .privacy: "Privacy"
-      case .app: "Open Wisper"
-      }
-    }
   }
 
   var id: String { rawValue }
@@ -32,7 +24,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case .meetings: "Meetings"
     case .openAI: "OpenAI"
     case .agents: "Agents"
-    case .privacy: "Privacy & data"
+    case .privacy: "Privacy"
     case .permissions: "Permissions"
     case .about: "About"
     }
@@ -53,10 +45,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
 
   var group: Group {
     switch self {
-    case .general, .shortcuts, .meetings: .settings
-    case .openAI, .agents: .connections
-    case .privacy, .permissions: .privacy
-    case .about: .app
+    case .general, .shortcuts, .meetings, .openAI, .agents: .setup
+    case .privacy, .permissions, .about: .app
     }
   }
 

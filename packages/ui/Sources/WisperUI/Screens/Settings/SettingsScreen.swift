@@ -9,8 +9,11 @@ import WisperEngine
 /// that section with a back button. Changes are saved as they are made.
 /// - shortcuts: the platform's keyboard-shortcut editor (macOS), or `nil` to leave that section out.
 /// - onClose: called by the close button; `nil` hides the button.
+/// - appearance: a control the platform supplies for its own look, such as light or dark (macOS).
+///   It is shown as a row of General, under "App". `nil` leaves the row out.
 public struct SettingsScreen: View {
   private let shortcuts: AnyView?
+  private let appearance: AnyView?
   private let onClose: (() -> Void)?
   private let preview: SettingsPreview
 
@@ -22,13 +25,19 @@ public struct SettingsScreen: View {
   @State private var opened: SettingsSection?
   @State private var dialog: SettingsDialog?
 
-  public init(shortcuts: AnyView? = nil, onClose: (() -> Void)? = nil) {
-    self.init(shortcuts: shortcuts, onClose: onClose, preview: SettingsPreview())
+  public init(shortcuts: AnyView? = nil, onClose: (() -> Void)? = nil, appearance: AnyView? = nil) {
+    self.init(shortcuts: shortcuts, onClose: onClose, appearance: appearance, preview: SettingsPreview())
   }
 
   /// Opens on a given section and dialog, so snapshots can show each state.
-  init(shortcuts: AnyView? = nil, onClose: (() -> Void)? = nil, preview: SettingsPreview) {
+  init(
+    shortcuts: AnyView? = nil,
+    onClose: (() -> Void)? = nil,
+    appearance: AnyView? = nil,
+    preview: SettingsPreview
+  ) {
     self.shortcuts = shortcuts
+    self.appearance = appearance
     self.onClose = onClose
     self.preview = preview
     _selection = State(initialValue: preview.section ?? .general)
@@ -97,7 +106,7 @@ public struct SettingsScreen: View {
       ScrollView {
         VStack(alignment: .leading, spacing: Wisper.Space.xl) {
           Text(selection.title)
-            .wisperText(.hero)
+            .wisperText(.pageTitle)
             .accessibilityAddTraits(.isHeader)
           content(for: selection)
         }
@@ -119,27 +128,22 @@ public struct SettingsScreen: View {
   }
 
   private var navigation: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      ScrollView {
-        VStack(alignment: .leading, spacing: Wisper.Space.xxs) {
-          ForEach(SettingsSection.Group.allCases) { group in
-            SectionLabel(group.title)
-              .padding(.horizontal, Wisper.Space.m)
-              .padding(.top, group == .settings ? Wisper.Space.s : Wisper.Space.xl)
-              .padding(.bottom, Wisper.Space.s)
-            ForEach(sections(in: group)) { section in
-              NavItem(section.title, systemImage: section.systemImage, isSelected: section == selection) {
-                selection = section
-              }
+    ScrollView {
+      VStack(alignment: .leading, spacing: Wisper.Space.xxs) {
+        ForEach(SettingsSection.Group.allCases) { group in
+          // A gap, not a label, sets the groups apart.
+          if group != SettingsSection.Group.allCases.first {
+            SwiftUI.Color.clear.frame(height: Wisper.Space.l).accessibilityHidden(true)
+          }
+          ForEach(sections(in: group)) { section in
+            NavItem(section.title, systemImage: section.systemImage, isSelected: section == selection) {
+              selection = section
             }
           }
         }
-        .padding(Wisper.Space.m)
       }
-      Text("Open Wisper \(AppVersion.text())")
-        .wisperText(.caption)
-        .padding(.horizontal, Wisper.Space.xl)
-        .padding(.vertical, Wisper.Space.l)
+      .padding(Wisper.Space.m)
+      .padding(.top, Wisper.Space.s)
     }
   }
 
@@ -160,16 +164,8 @@ public struct SettingsScreen: View {
           }
         } content: {
           ForEach(SettingsSection.Group.allCases) { group in
-            if group == .settings {
-              // The page title already says "Settings".
-              sectionList(group)
-            } else {
-              PageSection(group.title) { sectionList(group) }
-            }
+            sectionList(group)
           }
-          Text("Open Wisper \(AppVersion.text())")
-            .wisperText(.caption)
-            .frame(maxWidth: .infinity)
         }
         .transition(push(from: .leading))
       }
@@ -213,7 +209,7 @@ public struct SettingsScreen: View {
 
   @ViewBuilder private func content(for section: SettingsSection) -> some View {
     switch section {
-    case .general: GeneralSettings()
+    case .general: GeneralSettings(appearance: appearance)
     case .shortcuts: if let shortcuts { shortcuts }
     case .meetings: MeetingSettingsSection(open: open)
     case .openAI: OpenAISettings(dialog: $dialog)

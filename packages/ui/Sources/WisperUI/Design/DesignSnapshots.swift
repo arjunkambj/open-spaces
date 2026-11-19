@@ -108,7 +108,6 @@ private struct FoundationsGallery: View {
           Text("Page title").wisperText(.pageTitle)
           Text("A calmer way to write").wisperText(.hero)
           HStack(alignment: .firstTextBaseline, spacing: Wisper.Space.xl) {
-            Text("12,480").wisperText(.statNumber)
             Text("Card title").wisperText(.cardTitle)
             Text("Body strong").wisperText(.bodyStrong)
             Text("Body text").wisperText(.body)
@@ -256,7 +255,7 @@ private struct ControlsGallery: View {
       GalleryGroup(title: "Navigation items") {
         HStack(alignment: .top, spacing: Wisper.Space.l) {
           VStack(spacing: Wisper.Space.xxs) {
-            NavItem("Home", systemImage: "square.grid.2x2", isSelected: true) {}
+            NavItem("Home", systemImage: "house", isSelected: true) {}
             NavItem("Meetings", systemImage: "record.circle", isSelected: false, badge: "New") {}
             NavItem("Dictionary", systemImage: "character.book.closed", isSelected: false) {}
               .environment(\.simulatedHover, true)
@@ -338,16 +337,8 @@ private struct PageGallery: View {
       } trailing: {
         SearchField(text: $query)
       }
-      HeroCard(
-        "Teach it your words.",
-        message: "Add a name or a term once, and it is spelled right in every dictation and meeting note."
-      ) {
-        Button("Add a word") {}.buttonStyle(.wisper(.primary))
-        Button("How it works") {}.buttonStyle(.wisper(.ghost))
-      }
-      .onDismiss {}
       PageSection("Today") {
-        CardList(sampleRows, style: .filled) { row in
+        CardList(sampleRows) { row in
           ListRow(row.text) {
             Text(row.time)
               .wisperText(.caption, color: Wisper.Color.textTertiary)
@@ -362,7 +353,7 @@ private struct PageGallery: View {
           .environment(\.simulatedHover, row.id == 1)
         }
       }
-      CardList(sampleRows.prefix(2)) { row in
+      CardList(sampleRows.prefix(2), style: .filled) { row in
         ListRow(row.text, subtitle: "Added \(row.time)") {
           SymbolTile("character.book.closed", size: 36)
         } trailing: {
@@ -455,7 +446,7 @@ private struct SettingsSheetGallery: View {
           .background(Wisper.Color.window)
           VStack(alignment: .leading, spacing: Wisper.Space.xl) {
             HStack {
-              Text("General").wisperText(.hero)
+              Text("General").wisperText(.pageTitle)
               Spacer()
               IconButton("xmark", label: "Close") {}
             }
@@ -485,27 +476,13 @@ private struct FeedbackGallery: View {
         }
         Banner(.success, title: "Microphone access is on")
       }
-      GalleryGroup(title: "Stats and progress") {
-        HStack(alignment: .top, spacing: Wisper.Space.l) {
-          Card {
-            VStack(alignment: .leading, spacing: Wisper.Space.s) {
-              StatTile("12.4K", label: "words spoken")
-              StatTile("148", label: "words a minute")
-              StatTile("6", label: "day streak")
-            }
-          }
-          Card {
-            VStack(alignment: .leading, spacing: Wisper.Space.l) {
-              StatTile("3h 20m", label: "Time saved", layout: .stacked)
-              VStack(alignment: .leading, spacing: Wisper.Space.s) {
-                ProgressBar(value: 0.62)
-                Text("62% of this week's goal").wisperText(.caption)
-              }
-              ProgressBar(value: 0.2, tint: Wisper.Color.textPrimary)
-              ProgressBar(value: 0)
-            }
-          }
+      GalleryGroup(title: "Progress") {
+        VStack(alignment: .leading, spacing: Wisper.Space.l) {
+          ProgressBar(value: 0.62)
+          ProgressBar(value: 0.2, tint: Wisper.Color.textPrimary)
+          ProgressBar(value: 0)
         }
+        .frame(width: 320)
       }
       GalleryGroup(title: "Toasts") {
         HStack(spacing: Wisper.Space.m) {
@@ -618,17 +595,8 @@ private struct HubGallery: View {
     HStack(spacing: 0) {
       sidebar
         .frame(width: 228)
-      content
-        .background(
-          Wisper.Color.panel,
-          in: RoundedRectangle(cornerRadius: Wisper.Radius.panel, style: .continuous)
-        )
-        .overlay {
-          RoundedRectangle(cornerRadius: Wisper.Radius.panel, style: .continuous)
-            .strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Wisper.Radius.panel, style: .continuous))
-        .padding([.vertical, .trailing], Wisper.Space.s)
+      Rectangle().fill(Wisper.Color.border).frame(width: Wisper.Stroke.hairline)
+      content.background(Wisper.Color.panel)
     }
     .background(Wisper.Color.window)
   }
@@ -639,80 +607,36 @@ private struct HubGallery: View {
         .padding(.horizontal, Wisper.Space.m)
         .padding(.top, 44)
         .padding(.bottom, Wisper.Space.xl)
-      NavItem("Home", systemImage: "square.grid.2x2", isSelected: true) {}
-      NavItem("Meetings", systemImage: "record.circle", isSelected: false, badge: "New") {}
+      NavItem("Home", systemImage: "house", isSelected: true) {}
+      NavItem("Meetings", systemImage: "record.circle", isSelected: false, badge: "Live") {}
       NavItem("Dictionary", systemImage: "character.book.closed", isSelected: false) {}
       NavItem("Snippets", systemImage: "text.quote", isSelected: false) {}
       NavItem("Style", systemImage: "textformat", isSelected: false) {}
       Spacer()
-      VStack(alignment: .leading, spacing: Wisper.Space.s) {
-        HStack {
-          Text("Open Wisper on iPhone").wisperText(.bodyStrong)
-          Spacer()
-          IconButton("xmark", label: "Dismiss", size: .small) {}
-        }
-        Text("Dictate into any app with the keyboard.").wisperText(.caption)
-        Button("Learn how") {}.buttonStyle(.wisper(.secondary, size: .small))
-          .padding(.top, Wisper.Space.xs)
-      }
-      .padding(Wisper.Space.l)
-      .background(
-        Wisper.Color.raised,
-        in: RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous)
-      )
-      .overlay {
-        RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous)
-          .strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline)
-      }
-      .padding(.bottom, Wisper.Space.s)
-      Hairline().padding(.bottom, Wisper.Space.xs)
       NavItem("Settings", systemImage: "gearshape", isSelected: false) {}
-      NavItem("Help", systemImage: "questionmark.circle", isSelected: false) {}
     }
     .padding(.horizontal, Wisper.Space.m)
     .padding(.bottom, Wisper.Space.m)
   }
 
   private var content: some View {
-    Page(title: "Good morning, Sam", width: .wide) {
-      HStack(alignment: .top, spacing: Wisper.Space.xl) {
-        VStack(alignment: .leading, spacing: Wisper.Space.xl) {
-          HeroCard("Speak. It types.", message: "Hold fn in any app and say what you mean.") {
-            Button("Try it now") {}.buttonStyle(.wisper(.primary))
+    Page(title: "Home", subtitle: "12,480 words dictated · 148 words a minute") {
+      IconButton("magnifyingglass", label: "Search") {}
+    } content: {
+      PageSection("Today") {
+        CardList(sampleRows) { row in
+          ListRow(row.text) {
+            Text(row.time)
+              .wisperText(.caption, color: Wisper.Color.textTertiary)
+              .frame(width: 64, alignment: .leading)
+          } hoverActions: {
+            IconButton("doc.on.doc", label: "Copy") {}
+            OverflowMenu { Button("Delete", role: .destructive) {} }
           }
-          .onDismiss {}
-          PageSection("Today's dictations") {
-            CardList(sampleRows, style: .filled) { row in
-              ListRow(row.text) {
-                Text(row.time)
-                  .wisperText(.caption, color: Wisper.Color.textTertiary)
-                  .frame(width: 64, alignment: .leading)
-              } hoverActions: {
-                IconButton("doc.on.doc", label: "Copy") {}
-                OverflowMenu { Button("Delete", role: .destructive) {} }
-              }
-              .onTap {}
-              .lineLimit(1)
-              .environment(\.simulatedHover, row.id == 0)
-            }
-          } trailing: {
-            IconButton("magnifyingglass", label: "Search") {}
-          }
+          .onTap {}
+          .lineLimit(1)
+          .environment(\.simulatedHover, row.id == 0)
         }
-        Card {
-          VStack(alignment: .leading, spacing: Wisper.Space.s) {
-            StatTile("12.4K", label: "words spoken")
-            StatTile("148", label: "words a minute")
-            StatTile("6", label: "day streak")
-          }
-          Hairline().padding(.vertical, Wisper.Space.l)
-          VStack(alignment: .leading, spacing: Wisper.Space.s) {
-            Text("This week").wisperText(.cardTitle)
-            Text("You saved about three hours of typing.").wisperText(.caption)
-            ProgressBar(value: 0.62).padding(.top, Wisper.Space.xs)
-          }
-        }
-        .frame(width: 250)
       }
     }
   }
@@ -734,7 +658,7 @@ private struct PhonePageGallery: View {
         Button("Add key") {}.buttonStyle(.wisper(.tertiary, size: .small))
       }
       PageSection("Today") {
-        CardList(sampleRows.prefix(3), style: .filled) { row in
+        CardList(sampleRows.prefix(3)) { row in
           ListRow(row.text, subtitle: row.time) {
           } hoverActions: {
             OverflowMenu { Button("Delete", role: .destructive) {} }

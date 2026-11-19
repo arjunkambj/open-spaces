@@ -2,13 +2,15 @@
 
 The one page to read before building a screen. Everything here is `public` in the module `WisperUI` and works on macOS 14.4+ and iOS 17+.
 
-The look: warm, calm, paper-like. A warm off-white window, a slightly lighter content panel, warm-grey cards with hairline borders, no heavy shadows. Sans text (SF), serif (New York) only for stat numbers and hero headlines. Near-black primary buttons. One accent colour, a deep pine green, used sparingly. Dark mode is warm near-black.
+The look: a quiet tool on warm paper. A warm off-white window, a slightly lighter page, and as few boxes as possible: lists sit right on the page with hairlines between their rows, and only groups of settings and things that are live get a soft warm-grey fill. One type voice, the system sans (SF), with size, weight and space doing the work that colour and borders would. Near-black primary buttons. One accent colour, a deep pine green, used sparingly. Dark mode is warm near-black.
 
 ## Rules
 
 - **No literals in screens.** No `Color(...)`, `.font(.system(...))`, raw paddings or corner radii. Use `Wisper.Color`, `.wisperText`, `Wisper.Space`, `Wisper.Radius`. If a token is missing, add it to the kit, not to the screen.
 - **Start every screen with `Page`.** It gives the title, the width, the scrolling and the paddings on both platforms.
 - **Build from the kit.** A list is a `CardList` of `ListRow`s. A settings group is a `Card(padding: 0)` of `SettingRow`s and `ToggleRow`s. An empty list is an `EmptyState`. A form in a popup is a `.dialog`.
+- **A box needs a reason.** Never a fill and a border together. Content lists are plain (no box). A fill groups settings or marks something live. A border is for things you type or choose in, and for the one item set apart on a page.
+- **Nothing that sells.** No banners that introduce a feature, no numbers shown off, no tips that must be dismissed. Say how a thing works in the empty state, or in one quiet line under the title.
 - **One primary button per screen or dialog.** Everything else is secondary, tertiary or ghost.
 - **Accent is rare.** Links, a badge, a progress bar, the live waveform. Never large fills.
 - **Never read the platform with `#if os(...)` for layout.** Read `@Environment(\.wisperIdiom)` (`.mac` or `.phone`). The snapshot tool sets it, which is how iPhone layouts are drawn on a Mac. Use `#if os(...)` only for APIs that do not exist on the other platform.
@@ -44,17 +46,16 @@ RoundedRectangle(cornerRadius: Wisper.Radius.card).fill(Wisper.Color.surface)
 
 ### Text: `.wisperText(_ style:, color:)`
 
-Sets font, letter spacing, case and colour. Sizes follow the idiom and Dynamic Type.
+Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. (The name "Open Wisper" in `Wordmark` is the one place rounded letters are used, to go with the rounded bars of the mark.) Sizes follow the idiom and Dynamic Type.
 
 | Style | Mac / iPhone | Use |
 | --- | --- | --- |
-| `.pageTitle` | 28 semibold / 32 bold | Page titles (`Page` does this) |
-| `.hero` | 32 / 30 serif | Hero headlines |
-| `.statNumber` | 30 serif | Big numbers (`StatTile` does this) |
+| `.pageTitle` | 26 semibold / 32 bold | Page titles (`Page` does this) |
+| `.hero` | 32 semibold / 30 bold | The headline of a first-run step |
 | `.cardTitle` | 17 / 18 semibold | Titles of cards and dialogs |
 | `.body`, `.bodyStrong` | 15 / 17 | Reading text; row titles that matter |
 | `.caption`, `.captionStrong` | 13 / 14 | Helper text (secondary colour); field labels |
-| `.sectionLabel` | 12 / 13 uppercase, spaced | Labels above groups (`SectionLabel` does this) |
+| `.sectionLabel` | 13 / 14 medium, secondary colour | Labels above groups (`SectionLabel` does this) |
 | `.mono` | 13 / 14 fixed-width | Paths, commands |
 | `.keyCap` | 13 / 14 medium | Inside key caps |
 
@@ -92,7 +93,8 @@ withAnimation(Wisper.Motion.spring) { isOpen = true }
 ```swift
 Page(title: String, subtitle: String? = nil, width: PageWidth = .regular,   // .regular 780, .wide 1080
      toolbar: () -> Toolbar = { EmptyView() }, content: () -> Content)
-  .onBack { }      // optional back button
+  .onBack { }                    // optional back button
+  .titleAccessory { anyView }    // a line under the title that needs more than text, e.g. key caps
 
 Page(title: "Dictionary", subtitle: "Words Open Wisper should know.") {
   Button("Add word") { adding = true }.buttonStyle(.wisper(.primary))
@@ -109,7 +111,7 @@ The content is a leading-aligned column with 24 points between children. It is a
 PageSection(_ title: String, content:, trailing: = EmptyView)   // SectionLabel + optional control + content
 SectionLabel(_ text: String)
 Card(_ style: CardStyle = .filled, padding: CGFloat = 20) { ... }   // .filled or .outlined
-CardList(_ data, style: CardStyle = .outlined) { item in row }       // hairlines between rows, lazy
+CardList(_ data, style: CardStyle = .plain) { item in row }          // hairlines between rows, lazy
 ListRow(_ title: String, subtitle: String? = nil, leading:, trailing:, hoverActions:)
   .onTap { }       // must come before other modifiers
 Hairline()
@@ -117,7 +119,7 @@ Hairline()
 
 ```swift
 PageSection("Today") {
-  CardList(dictations, style: .filled) { dictation in
+  CardList(dictations) { dictation in
     ListRow(dictation.text) {
       Text(time(dictation)).wisperText(.caption, color: Wisper.Color.textTertiary)
     } hoverActions: {
@@ -132,7 +134,15 @@ PageSection("Today") {
 }
 ```
 
-`hoverActions` show while the pointer is over the row on a Mac, and while the keyboard is on the row or on one of the actions; always on iPhone. A row you draw yourself must do the same: Tab reaches an action even while it is unseen, so show the actions when one of them has focus (`.focused` on the group of actions). Use `.filled` cards for a few rows that read as one block, `.outlined` for long lists.
+`hoverActions` show while the pointer is over the row on a Mac, and while the keyboard is on the row or on one of the actions; always on iPhone. A row you draw yourself must do the same: Tab reaches an action even while it is unseen, so show the actions when one of them has focus (`.focused` on the group of actions).
+
+The three styles:
+
+- `.plain` (the default for `CardList`): no box. Rows line up with the page title, and the hover fill is a rounded shape that reaches a little into the page margin. For every list of content: dictations, meetings, words, snippets.
+- `.filled`: a warm-grey fill, no border. For a group of settings, a short menu of places (the iPhone settings list), or something live (the recording card).
+- `.outlined`: a hairline border, no fill. For one thing set apart on a page, such as an answer.
+
+A row you draw yourself ends with `.rowChrome(isHighlighted:)` (after its vertical padding) instead of its own side padding and hover background. That gives it the right inset and hover shape in whichever list it is put.
 
 ### Buttons
 
@@ -218,9 +228,7 @@ The row takes labels, not key codes; the Mac app turns a `KeyCombo` into labels.
 
 ```swift
 EmptyState(_ title: String, message: String? = nil, illustration:, action:)
-SymbolTile(_ systemName: String, size: = 64, tint: = textPrimary)   // our simple illustration
-HeroCard(_ title: String, message: String? = nil) { buttons }.onDismiss { }
-StatTile(_ value: String, label: String, layout: = .inline)          // .inline or .stacked
+SymbolTile(_ systemName: String, size: = 64, tint: = textSecondary) // one quiet symbol, no box
 ProgressBar(value: Double, tint: = accent)                           // 0...1
 Banner(_ tone: NoticeTone = .info, title: String, message: String? = nil) { action }
 Toast(_ message: String, tone: = .success)   and   .toast(_ toast: Binding<Toast?>)
@@ -241,7 +249,7 @@ Banner(.warning, title: "No API key yet", message: "Add your OpenAI key to start
 content.toast($toast)          // then: toast = Toast("Copied")
 ```
 
-`HeroCard` is the one loud, dark card with a serif headline at the top of a feature's screen. It is always dark, so `.primary` inside it is the light button. Use at most one per screen.
+A `Banner` is a soft fill in its tone's colour, with no border. Use one only for something the person must act on or know now (a missing key, a permission, an error), never to introduce a feature.
 
 Show `AppModel.errorMessage` as a `Banner(.error, ...)` or a `Toast(..., tone: .error)`, and set it to `nil` afterwards.
 
@@ -298,13 +306,13 @@ WisperGlyph(size: = 20, tint: = textPrimary) // the mark alone
 
 ## Recipes
 
-**A standard page**: `Page` → optional `Tabs` → optional `Banner` → `PageSection`s holding a `CardList` or `Card`.
+**A standard page**: `Page` → optional `Tabs` → optional `Banner` → `PageSection`s holding a `CardList` or `Card`. Search and the one primary button go in the page's toolbar.
 
 **A list of rows**: `CardList(items) { ListRow(...) }`. When it is empty, show `EmptyState` instead of the list.
 
 **A settings group**: `PageSection("Name") { Card(padding: 0) { rows with Hairline().padding(.horizontal, 20) between } }`.
 
-**A side column on a Mac**: `Page(title:, width: .wide)` with an `HStack(alignment: .top, spacing: Wisper.Space.xl)` of the main column and a fixed-width `Card`. On `.phone`, stack them.
+**Something extra on a row**: put quiet text (the app's name, a meeting's tags) at the trailing end and let the hover actions take its place, as the history and meetings lists do. Keep badges for problems.
 
 ## Snapshots
 

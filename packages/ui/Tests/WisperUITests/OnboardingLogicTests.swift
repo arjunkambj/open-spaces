@@ -76,6 +76,13 @@ import WisperEngine
   #expect(OnboardingCopy.allSetTitle(name: "  ") == "You are all set.")
 }
 
+@Test func theFirstAndLastStepsSayHowItWorksOnEachDevice() {
+  #expect(OnboardingCopy.welcome(.mac).contains("Hold a key"))
+  #expect(OnboardingCopy.welcome(.phone).contains("Tap"))
+  #expect(OnboardingCopy.allSet(.mac).contains("shortcut"))
+  #expect(OnboardingCopy.allSet(.phone).contains("keyboard"))
+}
+
 @Test func thePermissionsButtonSaysSkipWhileSomethingIsMissing() {
   #expect(OnboardingCopy.permissionsButton(allAllowed: true) == "Continue")
   #expect(OnboardingCopy.permissionsButton(allAllowed: false) == "Skip for now")

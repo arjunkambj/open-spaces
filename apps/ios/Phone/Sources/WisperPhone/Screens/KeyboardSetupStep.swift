@@ -94,11 +94,7 @@ private struct KeyboardSetupGuide: View {
       VStack(alignment: .leading, spacing: Wisper.Space.s) {
         SectionLabel("What it looks like")
         KeyboardPanel(model: .sample)
-          .background(Wisper.Color.window, in: RoundedRectangle(cornerRadius: Wisper.Radius.card))
-          .overlay {
-            RoundedRectangle(cornerRadius: Wisper.Radius.card)
-              .strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline)
-          }
+          .background(Wisper.Color.surface, in: RoundedRectangle(cornerRadius: Wisper.Radius.card))
           // A picture of the keyboard, not the keyboard.
           .allowsHitTesting(false)
           .accessibilityHidden(true)

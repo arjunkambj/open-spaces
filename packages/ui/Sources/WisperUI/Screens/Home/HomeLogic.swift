@@ -98,12 +98,17 @@ enum HomeHistory {
 
 /// The words and numbers on the home screen.
 enum HomeText {
-  /// How fast most people type, in words a minute. Used to estimate the time saved.
-  static let typingSpeed = 40
+  /// The page title: the name of the place, as the sidebar and the tab bar say it.
+  static func title(_ idiom: Wisper.Idiom) -> String {
+    idiom == .phone ? "History" : "Home"
+  }
 
-  static func greeting(name: String) -> String {
-    let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    return name.isEmpty ? "Welcome back" : "Welcome back, \(name)"
+  /// The numbers in one quiet line: "1.2K words dictated · 136 words a minute".
+  /// `nil` before the first dictation. The pace is left out until it is known.
+  static func summary(_ stats: DictationStats) -> String? {
+    guard stats.dictationCount > 0, stats.totalWords > 0 else { return nil }
+    let words = stats.totalWords == 1 ? "1 word dictated" : "\(compact(stats.totalWords)) words dictated"
+    return stats.wordsPerMinute > 0 ? "\(words) · \(stats.wordsPerMinute) words a minute" : words
   }
 
   /// A count in a short form: 950, 1.2K, 14.4K, 120K, 2.5M.
@@ -118,20 +123,6 @@ enum HomeText {
   private static func scaled(_ count: Int, by unit: Int) -> String {
     let tenths = count / (unit / 10)
     return tenths % 10 == 0 || tenths >= 1_000 ? "\(tenths / 10)" : "\(tenths / 10).\(tenths % 10)"
-  }
-
-  /// How much typing the dictations saved, such as "12 minutes" or "1.5 hours".
-  /// `nil` when there is nothing to show yet.
-  static func timeSaved(_ stats: DictationStats, typingSpeed: Int = HomeText.typingSpeed) -> String? {
-    guard stats.totalWords > 0, typingSpeed > 0, stats.wordsPerMinute > typingSpeed else { return nil }
-    let words = Double(stats.totalWords)
-    let minutes = words / Double(typingSpeed) - words / Double(stats.wordsPerMinute)
-    let whole = Int(minutes.rounded())
-    guard whole >= 1 else { return nil }
-    if whole < 60 { return whole == 1 ? "1 minute" : "\(whole) minutes" }
-    let tenths = Int((minutes / 6).rounded())
-    if tenths == 10 { return "1 hour" }
-    return tenths % 10 == 0 ? "\(tenths / 10) hours" : "\(tenths / 10).\(tenths % 10) hours"
   }
 
   /// The labels of the keys of a shortcut, in the order they are shown: `["fn"]`, `["⌃", "⌘", "V"]`.

@@ -115,34 +115,17 @@ public struct OnboardingFlow: View {
   }
 
   private var welcome: some View {
-    OnboardingPage(title: "Speak instead of typing, in any app.") {
-      Wordmark(size: 22)
+    OnboardingPage(title: "Speak instead of typing", message: OnboardingCopy.welcome(idiom)) {
+      WisperGlyph(size: 40, tint: Wisper.Color.accent)
     } content: {
-      VStack(alignment: .leading, spacing: Wisper.Space.l) {
-        SetupFact(
-          "text.cursor",
-          title: "Works everywhere you type",
-          detail: "Hold a key, speak, and clean text lands where your cursor is."
-        )
-        SetupFact(
-          "record.circle",
-          title: "Records and summarises meetings",
-          detail: "Get a transcript, a summary and the action items."
-        )
-        SetupFact(
-          "lock.shield",
-          title: "Everything stays on your device",
-          detail: "No account and no tracking. You bring your own OpenAI key."
-        )
-      }
-      .frame(maxWidth: OnboardingMetrics.factsWidth)
+      EmptyView()
     }
   }
 
   private var nameStep: some View {
     OnboardingPage(
       title: "What should we call you?",
-      message: "Used to greet you, and so your name is spelled right when you dictate it."
+      message: "So your name is spelled right when you say it."
     ) {
       WisperTextField(text: $name, placeholder: "Your name")
         .focused($nameIsFocused)
@@ -247,35 +230,10 @@ public struct OnboardingFlow: View {
   }
 
   private var doneStep: some View {
-    OnboardingPage(title: OnboardingCopy.allSetTitle(name: name)) {
-      SymbolTile("checkmark", size: 56, tint: Wisper.Color.accent)
+    OnboardingPage(title: OnboardingCopy.allSetTitle(name: name), message: OnboardingCopy.allSet(idiom)) {
+      SymbolTile("checkmark.circle.fill", size: 72, tint: Wisper.Color.accent)
     } content: {
-      VStack(alignment: .leading, spacing: Wisper.Space.l) {
-        if idiom == .phone {
-          SetupFact(
-            "keyboard",
-            title: "Dictate from the keyboard",
-            detail: "In any app, switch to the Open Wisper keyboard, tap the microphone and speak."
-          )
-        } else {
-          SetupFact(
-            "keyboard",
-            title: "Hold your shortcut and speak",
-            detail: "Let go, and the text is typed where your cursor is."
-          )
-        }
-        SetupFact(
-          "record.circle",
-          title: "Record a meeting",
-          detail: "Start one from Meetings. The notes are written when it ends."
-        )
-        SetupFact(
-          "character.book.closed",
-          title: "Teach it your words",
-          detail: "Add names and terms to the Dictionary so they are spelled your way."
-        )
-      }
-      .frame(maxWidth: OnboardingMetrics.factsWidth)
+      EmptyView()
     }
   }
 
@@ -384,7 +342,6 @@ struct OnboardingPreview {
 enum OnboardingMetrics {
   /// The widest a headline and its message get.
   static let textWidth: CGFloat = 460
-  static let factsWidth: CGFloat = 400
   static let fieldWidth: CGFloat = 320
   static let formWidth: CGFloat = 440
   static let listWidth: CGFloat = 560
@@ -392,7 +349,7 @@ enum OnboardingMetrics {
   static let buttonWidth: CGFloat = 280
 }
 
-/// One step: something small on top, a serif headline, a sentence, then the step's own content,
+/// One step: something small on top, a headline, a sentence, then the step's own content,
 /// all centred. Scrolls when the content is taller than the window.
 private struct OnboardingPage<Top: View, Content: View>: View {
   private let title: String
@@ -418,8 +375,8 @@ private struct OnboardingPage<Top: View, Content: View>: View {
     GeometryReader { proxy in
       ScrollView {
         VStack(spacing: Wisper.Space.xxl) {
-          VStack(spacing: Wisper.Space.l) {
-            top
+          VStack(spacing: Wisper.Space.m) {
+            top.padding(.bottom, Wisper.Space.s)
             Text(title)
               .wisperText(.hero)
               .multilineTextAlignment(.center)

@@ -202,7 +202,8 @@ func anythingElseIsNotAServerAddress(text: String) {
   #expect(OpenAICopy.keyStatus(hasKey: true, customHost: "localhost").contains("sent to localhost"))
   #expect(OpenAICopy.keyStatus(hasKey: false, customHost: "localhost").contains("No key is saved"))
   #expect(OpenAICopy.keyStatus(hasKey: false, customHost: nil).contains("Add your key"))
-  #expect(PrivacyCopy.destinationTitle(customServer: true).contains("custom server"))
+  #expect(PrivacyCopy.promise(customServer: true).contains("only to your custom server"))
+  #expect(PrivacyCopy.promise(customServer: false).contains("only to OpenAI"))
 }
 
 // MARK: The key belongs to a server

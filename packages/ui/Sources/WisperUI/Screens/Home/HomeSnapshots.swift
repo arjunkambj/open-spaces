@@ -27,7 +27,7 @@ enum HomeSnapshots {
             hasAPIKey: false
           )
         }
-      ) { HomeScreen().defaultAppStorage(ScreenSamples.tipDismissed) },
+      ) { HomeScreen() },
       SnapshotCase("home-search") { HomeScreen(preview: HomePreview(query: "review")) },
       SnapshotCase("home-search-phone", canvas: .phone) { HomeScreen(preview: HomePreview(query: "review")) },
       SnapshotCase("home-no-results") { HomeScreen(preview: HomePreview(query: "giraffe")) },
@@ -38,19 +38,17 @@ enum HomeSnapshots {
             player: HomeAudioPlayer(showing: states[0].id, progress: 0.4, elapsed: 3)
           )
         )
-        .defaultAppStorage(ScreenSamples.tipDismissed)
       },
       SnapshotCase("home-states-phone", canvas: .phone, model: { ScreenSamples.model(dictations: states) }) {
         HomeScreen(
           preview: HomePreview(player: HomeAudioPlayer(showing: states[0].id, progress: 0.4, elapsed: 3))
         )
-        .defaultAppStorage(ScreenSamples.tipDismissed)
       },
       SnapshotCase("home-long", model: { ScreenSamples.model(dictations: long) }) {
-        HomeScreen().defaultAppStorage(ScreenSamples.tipDismissed)
+        HomeScreen()
       },
       SnapshotCase("home-long-phone", canvas: .phone, model: { ScreenSamples.model(dictations: long) }) {
-        HomeScreen().defaultAppStorage(ScreenSamples.tipDismissed)
+        HomeScreen()
       },
       SnapshotCase("home-delete", model: { ScreenSamples.model(dictations: states) }) {
         HomeScreen(preview: HomePreview(deleting: states[0]))
@@ -175,13 +173,5 @@ enum ScreenSamples {
         checkAPIKey: { _ in }
       )
     )
-  }
-
-  /// Settings storage in which the tip on the home screen has been dismissed.
-  static var tipDismissed: UserDefaults {
-    let name = "open-wisper-snapshots-tip-dismissed"
-    let store = UserDefaults(suiteName: name) ?? .standard
-    store.set(true, forKey: "home.tipDismissed")
-    return store
   }
 }

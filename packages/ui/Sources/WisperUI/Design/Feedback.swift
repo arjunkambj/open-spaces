@@ -47,67 +47,27 @@ public struct EmptyState<Illustration: View, Action: View>: View {
   }
 }
 
-/// A simple illustration: an SF Symbol on a soft rounded tile. For empty states and row icons.
+/// A simple illustration: one SF Symbol, drawn quietly with no box around it. For empty
+/// states and the icons at the start of rows.
 public struct SymbolTile: View {
   private let systemName: String
   private let size: CGFloat
   private let tint: SwiftUI.Color
 
-  /// - size: the side of the tile, in points. 64 suits an empty state, 36 a row.
-  public init(_ systemName: String, size: CGFloat = 64, tint: SwiftUI.Color = Wisper.Color.textPrimary) {
+  /// - size: how big it is, in points: 64 suits an empty state, 36 a row. The symbol is drawn
+  ///   at half of it, in a frame a little larger, so symbols of different shapes line up.
+  public init(_ systemName: String, size: CGFloat = 64, tint: SwiftUI.Color = Wisper.Color.textSecondary) {
     self.systemName = systemName
     self.size = size
     self.tint = tint
   }
 
   public var body: some View {
-    let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
     Image(systemName: systemName)
-      .font(.system(size: size * 0.42, weight: .regular))
+      .font(.system(size: size * 0.5, weight: .regular))
       .foregroundStyle(tint)
-      .frame(width: size, height: size)
-      .background(Wisper.Color.surface, in: shape)
-      .overlay { shape.strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline) }
+      .frame(width: size * 0.625, height: size * 0.625)
       .accessibilityHidden(true)
-  }
-}
-
-/// A number worth showing off, in the serif face, with a plain label beside or under it.
-public struct StatTile: View {
-  public enum Layout: Sendable {
-    /// Number, then the label on the same line.
-    case inline
-    /// Number above, label below.
-    case stacked
-  }
-
-  private let value: String
-  private let label: String
-  private let layout: Layout
-
-  /// - value: already formatted, e.g. "14.2K".
-  public init(_ value: String, label: String, layout: Layout = .inline) {
-    self.value = value
-    self.label = label
-    self.layout = layout
-  }
-
-  public var body: some View {
-    Group {
-      switch layout {
-      case .inline:
-        HStack(alignment: .firstTextBaseline, spacing: Wisper.Space.s) {
-          Text(value).wisperText(.statNumber)
-          Text(label).wisperText(.body)
-        }
-      case .stacked:
-        VStack(alignment: .leading, spacing: Wisper.Space.xs) {
-          Text(value).wisperText(.statNumber)
-          Text(label).wisperText(.sectionLabel)
-        }
-      }
-    }
-    .accessibilityElement(children: .combine)
   }
 }
 
@@ -215,11 +175,14 @@ public struct Banner<Action: View>: View {
     }
     .padding(.horizontal, Wisper.Space.l)
     .padding(.vertical, 14)
-    .background(Wisper.Color.surface, in: shape)
-    .background(tone.color.opacity(0.07), in: shape)
-    .overlay { shape.strokeBorder(tone.color.opacity(0.28), lineWidth: Wisper.Stroke.hairline) }
+    .background(tone.color.opacity(Self.tintOpacity), in: shape)
     .accessibilityElement(children: .contain)
   }
+}
+
+extension Banner {
+  /// How strongly the tone colours the banner. The fill alone sets it apart; there is no border.
+  fileprivate static var tintOpacity: Double { 0.1 }
 }
 
 /// A short message that appears at the bottom for a moment. Show one with `.toast(_:)`.

@@ -282,12 +282,7 @@ struct MeetingDetail: View {
       .disabled(isStopping)
       .accessibilityLabel("Stop recording")
     } else if !phone {
-      Button {
-        copyMarkdown(meeting)
-      } label: {
-        Label("Copy Markdown", systemImage: "doc.on.doc")
-      }
-      .buttonStyle(.wisper())
+      IconButton("doc.on.doc", label: "Copy the notes and transcript") { copyMarkdown(meeting) }
       ShareLink(item: MeetingShare(meeting: meeting), preview: SharePreview(meeting.title)) {
         Image(systemName: "square.and.arrow.up")
       }
@@ -302,12 +297,12 @@ struct MeetingDetail: View {
           isRenaming = true
         }
         if phase != .live {
-          Button("Copy Markdown") { copyMarkdown(meeting) }
-          Button("Copy transcript") { copyTranscript(meeting) }
+          Button("Copy notes and transcript") { copyMarkdown(meeting) }
+          Button("Copy transcript only") { copyTranscript(meeting) }
           ShareLink("Share", item: MeetingShare(meeting: meeting), preview: SharePreview(meeting.title))
         }
       } else if phase != .live {
-        Button("Save as…") { isExporting = true }
+        Button("Save as a file…") { isExporting = true }
       }
       if phase != .live {
         Button(meeting.notes == nil ? "Write notes" : "Write notes again") {
@@ -326,7 +321,7 @@ struct MeetingDetail: View {
   }
 
   private func header(_ meeting: Meeting, phase: MeetingPhase) -> some View {
-    VStack(alignment: .leading, spacing: Wisper.Space.m) {
+    VStack(alignment: .leading, spacing: Wisper.Space.s) {
       if idiom == .mac {
         MeetingInlineText(text: meeting.title, style: .pageTitle, label: "Meeting title") { title in
           edit { $0.title = title }
@@ -362,7 +357,7 @@ struct MeetingDetail: View {
 
   private func copyMarkdown(_ meeting: Meeting) {
     MeetingActions.copy(meeting.markdown())
-    toast = Toast("Copied as Markdown")
+    toast = Toast("Copied")
   }
 
   private func copyTranscript(_ meeting: Meeting) {
@@ -431,8 +426,8 @@ private struct MeetingTagEditor<Leading: View>: View {
         } label: {
           Label("Add tag", systemImage: "plus")
             .labelStyle(MeetingChipLabel())
-            .wisperText(.captionStrong, color: Wisper.Color.textSecondary)
-            .modifier(MeetingChip(fill: .clear, border: Wisper.Color.borderStrong))
+            .wisperText(.caption, color: Wisper.Color.textTertiary)
+            .modifier(MeetingChip(fill: .clear))
         }
         .buttonStyle(.plain)
       }

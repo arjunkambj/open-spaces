@@ -5,17 +5,17 @@ import WisperEngine
 // MARK: - General
 
 struct GeneralSettings: View {
+  /// The platform's own row for how the app looks, when it has one.
+  var appearance: AnyView?
+
   @Environment(AppModel.self) private var model
   @Environment(\.wisperIdiom) private var idiom
   @State private var devices: [AudioDevice] = []
 
   var body: some View {
-    PageSection("You") {
+    PageSection("Dictation") {
       Card(padding: 0) {
-        SettingsItem(
-          "Your name",
-          description: "Used to greet you, and so your name is spelled right."
-        ) {
+        SettingsItem("Your name", description: "So it is spelled right when you say it.") {
           DraftField(
             placeholder: "Your name",
             value: model.settings.userName,
@@ -24,10 +24,7 @@ struct GeneralSettings: View {
             model.update { $0.userName = name }
           }
         }
-      }
-    }
-    PageSection("Dictation") {
-      Card(padding: 0) {
+        SettingsDivider()
         SettingsItem(
           "Spoken language",
           description: "Pick yours for more accurate text."
@@ -71,11 +68,15 @@ struct GeneralSettings: View {
           SettingsDivider()
           ToggleRow(
             "Show the floating pill",
-            description: "A small bar at the bottom of the screen that shows when Open Wisper is listening.",
+            description: "A small bar at the bottom of the screen. It shows when Open Wisper is listening.",
             isOn: model.settingBinding(\.showPill)
           )
           SettingsDivider()
           ToggleRow("Open at login", isOn: model.settingBinding(\.launchAtLogin))
+        }
+        if let appearance {
+          SettingsDivider()
+          appearance
         }
       }
     }
@@ -93,7 +94,7 @@ struct GeneralSettings: View {
 enum FormattingCopy {
   static func description(isOn: Bool) -> String {
     isOn
-      ? "Removes filler words and fixes punctuation, using the text model."
+      ? "Takes out filler words and fixes punctuation."
       : "Off: your text is typed exactly as it was heard."
   }
 }
@@ -121,8 +122,7 @@ struct MeetingSettingsSection: View {
           ToggleRow(
             "Record computer audio",
             description:
-              "Captures the other side of your calls, not only your microphone. "
-              + "Needs the System audio recording permission.",
+              "Records the other side of a call too, not only your microphone.",
             isOn: model.settingBinding(\.meetings.captureSystemAudio)
           )
           SettingsDivider()
@@ -138,7 +138,7 @@ struct MeetingSettingsSection: View {
       Card(padding: 0) {
         ToggleRow(
           "Write notes automatically",
-          description: "When a recording ends, write a summary, decisions and action items.",
+          description: "A summary, the decisions and the action items, when a recording ends.",
           isOn: model.settingBinding(\.meetings.autoSummarize)
         )
       }
@@ -239,7 +239,7 @@ struct OpenAISettings: View {
         SettingsDivider()
         ModelPicker(
           title: "Text model",
-          description: "Cleans up dictations, follows spoken commands and writes meeting notes.",
+          description: "Tidies dictations, follows spoken commands and writes meeting notes.",
           suggested: WisperDomain.Settings.suggestedTextModels,
           current: model.settings.textModel,
           isTyping: $typingTextModel
@@ -253,8 +253,7 @@ struct OpenAISettings: View {
         SettingsItem(
           "Custom server address",
           description:
-            "For a proxy or a model server on your own machine that works like OpenAI. "
-            + "Leave empty to use OpenAI.",
+            "For a server of your own that works like OpenAI. Leave empty to use OpenAI.",
           layout: .stacked
         ) {
           DraftField(
@@ -439,25 +438,7 @@ struct PrivacySettings: View {
   @Environment(\.wisperIdiom) private var idiom
 
   var body: some View {
-    Card {
-      VStack(alignment: .leading, spacing: Wisper.Space.l) {
-        SetupFact(
-          "internaldrive",
-          title: "Everything is stored on this device",
-          detail: "Your dictations, meetings, notes and settings are plain files you can read."
-        )
-        SetupFact(
-          "waveform",
-          title: PrivacyCopy.destinationTitle(customServer: model.settings.apiBaseURL != nil),
-          detail: "Audio and text are sent there with your own key, and nowhere else."
-        )
-        SetupFact(
-          "eye.slash",
-          title: "No account, no tracking",
-          detail: "Open Wisper has no sign-up, no analytics and no server of its own."
-        )
-      }
-    }
+    SetupParagraph(PrivacyCopy.promise(customServer: model.settings.apiBaseURL != nil))
     PageSection("Dictation history") {
       Card(padding: 0) {
         SettingsItem(
@@ -474,7 +455,7 @@ struct PrivacySettings: View {
         SettingsDivider()
         ToggleRow(
           "Keep audio of dictations",
-          description: "Lets you try again when a dictation fails. Deleted together with its history entry.",
+          description: "So a dictation that failed can be tried again. Deleted with its history entry.",
           isOn: model.settingBinding(\.keepDictationAudio)
         )
         SettingsDivider()
@@ -503,8 +484,12 @@ struct PrivacySettings: View {
 }
 
 enum PrivacyCopy {
-  static func destinationTitle(customServer: Bool) -> String {
-    customServer ? "Your voice goes only to your custom server" : "Your voice goes only to OpenAI"
+  /// The whole promise in three short sentences: where things are kept, where your voice
+  /// goes, and what Open Wisper does not have.
+  static func promise(customServer: Bool) -> String {
+    let destination = customServer ? "your custom server" : "OpenAI"
+    return "Everything is stored on this device, as files you can read. Your voice goes only to "
+      + "\(destination), with your own key. There is no account and no tracking."
   }
 
   static func retention(_ retention: HistoryRetention) -> String {
@@ -540,43 +525,39 @@ enum PrivacyCopy {
 
 struct PermissionSettings: View {
   var body: some View {
-    SetupParagraph(
-      "Open Wisper asks your system for a few things. You can leave any of them off; "
-        + "each one says what stops working without it."
-    )
     PermissionsList()
+    SetupParagraph("You can leave any of these off.", style: .caption)
   }
 }
 
 // MARK: - About
 
 struct AboutSettings: View {
+  @Environment(AppModel.self) private var model
+
   var body: some View {
-    Card {
-      VStack(alignment: .leading, spacing: Wisper.Space.l) {
-        Wordmark(size: 24)
-        VStack(alignment: .leading, spacing: Wisper.Space.xs) {
-          Text("Version \(AppVersion.text())").wisperText(.bodyStrong)
-          Text("Voice dictation and meeting notes that stay on your device.")
-            .wisperText(.caption)
-            .fixedSize(horizontal: false, vertical: true)
+    Wordmark(size: 24)
+    Card(padding: 0) {
+      SettingRow("Version \(AppVersion.text())", description: AboutCopy.tagline) {
+        // Only where the app updates itself: on iPhone the App Store does it.
+        if let check = model.host.checkForUpdates {
+          Button("Check for updates", action: check)
+            .buttonStyle(.wisper(.secondary, size: .small))
         }
       }
-    }
-    PageSection("Open source") {
-      Card(padding: 0) {
-        SettingRow(
-          "Open source under the MIT licence",
-          description: "Read the code, change it, share it."
-        ) {
-          SetupLink("GitHub", url: SetupLinks.repository)
-        }
+      SettingsDivider()
+      SettingRow("Open source", description: "MIT licence. Read the code, change it, share it.") {
+        SetupLink("GitHub", url: SetupLinks.repository)
       }
-      SetupParagraph(
-        "Open Wisper is an independent project. It is not made by, or connected to, OpenAI or any other "
-          + "dictation app.",
-        style: .caption
-      )
     }
+    SetupParagraph(
+      "Open Wisper is an independent project. It is not made by, or connected to, OpenAI or any other "
+        + "dictation app.",
+      style: .caption
+    )
   }
+}
+
+enum AboutCopy {
+  static let tagline = "Voice dictation and meeting notes that stay on your device."
 }

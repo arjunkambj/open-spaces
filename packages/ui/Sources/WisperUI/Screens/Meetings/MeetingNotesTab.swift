@@ -231,9 +231,9 @@ private struct MeetingActionItemRow: View {
         .opacity(idiom == .phone || isHovered || simulatedHover || isFocused ? 1 : 0)
     }
     .focused($isFocused)
-    .padding(.horizontal, Wisper.Space.l)
     .padding(.vertical, Wisper.Space.s)
     .frame(minHeight: MeetingsMetrics.checklistRow(idiom))
+    .rowChrome(isHighlighted: false)
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
     .animation(Wisper.Motion.quick, value: isHovered)
@@ -300,17 +300,20 @@ struct MeetingAskBar: View {
   let onAsk: (String) -> Void
 
   @State private var question = ""
+  @Environment(\.wisperIdiom) private var idiom
 
   var body: some View {
     MeetingBottomBar {
       if showsSuggestions {
         ScrollView(.horizontal, showsIndicators: false) {
-          HStack(spacing: Wisper.Space.s) {
+          HStack(spacing: Wisper.Space.xxs) {
             ForEach(MeetingsLogic.suggestedQuestions, id: \.self) { suggestion in
               Button(suggestion) { onAsk(suggestion) }
-                .buttonStyle(.wisper(.tertiary, size: .small))
+                .buttonStyle(.wisper(.ghost, size: .small))
             }
           }
+          // The words of the first one line up with the field under them.
+          .padding(.leading, -MeetingsMetrics.suggestionInset(idiom))
         }
         .disabled(isWaiting)
       }

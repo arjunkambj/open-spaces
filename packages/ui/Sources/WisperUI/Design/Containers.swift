@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A small uppercase label above a group of rows or cards.
+/// A small, quiet label above a group of rows or cards.
 public struct SectionLabel: View {
   private let text: String
 
@@ -38,7 +38,7 @@ public struct PageSection<Content: View, Trailing: View>: View {
   }
 
   public var body: some View {
-    VStack(alignment: .leading, spacing: Wisper.Space.m) {
+    VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: Wisper.Space.s) {
         SectionLabel(title)
         Spacer(minLength: 0)
@@ -65,10 +65,68 @@ public struct Hairline: View {
 
 /// How a `Card` or `CardList` is drawn.
 public enum CardStyle: Sendable {
-  /// Warm-grey fill with a hairline border. For settings groups and stat panels.
+  /// No box at all: rows sit on the page with hairlines between them. For lists of content.
+  case plain
+  /// A warm-grey fill, no border. For groups of settings and things that are live.
   case filled
-  /// No fill, hairline border. For long lists of rows.
+  /// A hairline border, no fill. For one thing set apart on a page.
   case outlined
+}
+
+/// How the rows of a list sit in it. `CardList` sets it; rows read it to pick their side
+/// inset and the shape of their hover fill.
+enum RowSetting: Sendable {
+  /// On the page: no side inset, and a rounded hover fill that reaches into the page margin.
+  case open
+  /// In a box: inset from its edges, with a hover fill from edge to edge.
+  case boxed
+}
+
+private struct RowSettingKey: EnvironmentKey {
+  static let defaultValue = RowSetting.boxed
+}
+
+extension EnvironmentValues {
+  var rowSetting: RowSetting {
+    get { self[RowSettingKey.self] }
+    set { self[RowSettingKey.self] = newValue }
+  }
+}
+
+/// The side inset and the hover fill of a row, to suit the list it is in.
+private struct RowChrome: ViewModifier {
+  let isHighlighted: Bool
+  @Environment(\.rowSetting) private var setting
+
+  func body(content: Content) -> some View {
+    let open = setting == .open
+    content
+      .padding(.horizontal, open ? 0 : Wisper.Space.l)
+      .background {
+        if isHighlighted {
+          if open {
+            RoundedRectangle(cornerRadius: Wisper.Radius.control, style: .continuous)
+              .fill(Wisper.Color.surfaceHover)
+              .padding(.horizontal, -RowMetrics.reach)
+          } else {
+            Wisper.Color.surfaceHover
+          }
+        }
+      }
+  }
+}
+
+enum RowMetrics {
+  /// How far the hover fill of an open row reaches into the page margin on each side.
+  static let reach = Wisper.Space.m
+}
+
+extension View {
+  /// Gives a row you draw yourself the side inset and hover fill of the kit's own rows.
+  /// Put it after the row's vertical padding, so the fill covers that too.
+  func rowChrome(isHighlighted: Bool) -> some View {
+    modifier(RowChrome(isHighlighted: isHighlighted))
+  }
 }
 
 /// A rounded container for a group of content: a warm-grey fill, or just an outline.
@@ -85,17 +143,31 @@ public struct Card<Content: View>: View {
   }
 
   public var body: some View {
-    let shape = RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous)
     VStack(alignment: .leading, spacing: 0) { content }
       .padding(padding)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(style == .filled ? Wisper.Color.surface : .clear, in: shape)
-      .clipShape(shape)
-      .overlay { shape.strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline) }
+      .cardBox(style)
   }
 }
 
-/// A card that holds one row per item, with hairlines between them.
+extension View {
+  /// The fill, border and clipping of a card style. A plain one is left as it is.
+  @ViewBuilder fileprivate func cardBox(_ style: CardStyle) -> some View {
+    let shape = RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous)
+    switch style {
+    case .plain:
+      self
+    case .filled:
+      background(Wisper.Color.surface, in: shape).clipShape(shape)
+    case .outlined:
+      clipShape(shape)
+        .overlay { shape.strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline) }
+    }
+  }
+}
+
+/// One row per item, with hairlines between them. Plain by default: the rows sit on the
+/// page. Give it `.filled` for a short group that reads as one block, such as a menu of places.
 ///
 ///     CardList(model.words) { word in
 ///       ListRow(word.text)
@@ -107,7 +179,7 @@ public struct CardList<Data: RandomAccessCollection, Row: View>: View where Data
 
   public init(
     _ data: Data,
-    style: CardStyle = .outlined,
+    style: CardStyle = .plain,
     @ViewBuilder row: @escaping (Data.Element) -> Row
   ) {
     self.data = data
@@ -117,7 +189,6 @@ public struct CardList<Data: RandomAccessCollection, Row: View>: View where Data
 
   public var body: some View {
     let last = data.last?.id
-    let shape = RoundedRectangle(cornerRadius: Wisper.Radius.card, style: .continuous)
     LazyVStack(alignment: .leading, spacing: 0) {
       ForEach(data) { item in
         row(item)
@@ -125,9 +196,8 @@ public struct CardList<Data: RandomAccessCollection, Row: View>: View where Data
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(style == .filled ? Wisper.Color.surface : .clear, in: shape)
-    .clipShape(shape)
-    .overlay { shape.strokeBorder(Wisper.Color.border, lineWidth: Wisper.Stroke.hairline) }
+    .environment(\.rowSetting, style == .plain ? .open : .boxed)
+    .cardBox(style)
   }
 }
 
@@ -200,10 +270,9 @@ public struct ListRow<Leading: View, Trailing: View, HoverActions: View>: View {
           .opacity(idiom == .phone || hovered || rowIsFocused || actionIsFocused ? 1 : 0)
       }
     }
-    .padding(.horizontal, Wisper.Space.l)
     .padding(.vertical, Wisper.Space.m)
     .frame(minHeight: idiom == .phone ? 56 : 52)
-    .background(hovered && action != nil ? Wisper.Color.surfaceHover : .clear)
+    .rowChrome(isHighlighted: hovered && action != nil)
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
     .animation(Wisper.Motion.quick, value: isHovered)

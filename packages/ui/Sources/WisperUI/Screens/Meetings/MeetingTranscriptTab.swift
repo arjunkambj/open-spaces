@@ -193,7 +193,7 @@ struct MeetingMyNotesTab: View {
         height: MeetingsMetrics.editorHeight(idiom)
       )
       HStack(spacing: Wisper.Space.s) {
-        Text("Saved by itself. Markdown is kept as you type it.")
+        Text("Saved as you type.")
           .wisperText(.caption, color: Wisper.Color.textTertiary)
         Spacer(minLength: 0)
         if showsSaved {

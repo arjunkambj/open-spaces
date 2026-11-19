@@ -37,7 +37,10 @@ struct HomeDictationRow: View {
   private static let gutter: CGFloat = 84
   private static let timeWidth: CGFloat = 64
   /// The heights of the kit's own rows.
-  private static let macRowHeight: CGFloat = 52
+  private static let macRowHeight: CGFloat = 46
+  private static let macRowPadding: CGFloat = 12
+  /// The side of a small icon button on a Mac.
+  private static let actionSide: CGFloat = 26
   private static let phoneRowHeight: CGFloat = 56
   private static let touchHeight: CGFloat = 32
   private static let indicatorHeight: CGFloat = 14
@@ -77,10 +80,8 @@ struct HomeDictationRow: View {
         .opacity(showsActions ? 0 : 1)
         .accessibilityLabel(dictation.appName.map { "In \($0)" } ?? "")
     }
-    .padding(.horizontal, Wisper.Space.l)
-    .padding(.vertical, Wisper.Space.l)
+    .padding(.vertical, Self.macRowPadding)
     .frame(minHeight: Self.macRowHeight, alignment: .top)
-    .background(showsActions ? Wisper.Color.surfaceHover : .clear)
     .overlay(alignment: .topTrailing) {
       HStack(spacing: Wisper.Space.xxs) {
         // While it plays, the stop button is beside the progress bar.
@@ -95,10 +96,12 @@ struct HomeDictationRow: View {
         IconButton("trash", label: "Delete", size: .small, action: actions.delete)
           .focused($focusedAction, equals: .delete)
       }
-      .padding(.top, Wisper.Space.m)
-      .padding(.trailing, Wisper.Space.m)
+      // Small buttons, so three of them fit in the gutter and the text keeps its width.
+      .padding(.top, (Self.macRowHeight - Self.actionSide) / 2)
+      .padding(.trailing, -Wisper.Space.xs)
       .opacity(showsActions ? 1 : 0)
     }
+    .rowChrome(isHighlighted: showsActions)
     .onHover { isHovered = $0 }
     .animation(Wisper.Motion.quick, value: showsActions)
   }
@@ -116,9 +119,9 @@ struct HomeDictationRow: View {
       OverflowMenu(label: "Actions") { menuItems }
         .padding(.top, Wisper.Space.xs)
     }
-    .padding(.leading, Wisper.Space.l)
-    .padding(.trailing, Wisper.Space.xs)
+    .padding(.trailing, -Wisper.Space.s)
     .frame(minHeight: Self.phoneRowHeight)
+    .rowChrome(isHighlighted: false)
   }
 
   @ViewBuilder private var menuItems: some View {

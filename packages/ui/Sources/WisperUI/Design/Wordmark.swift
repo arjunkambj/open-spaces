@@ -41,8 +41,9 @@ public struct Wordmark: View {
     HStack(spacing: size * 0.4) {
       WisperGlyph(size: size)
       Text("Open Wisper")
-        .font(.system(size: size * 0.9, weight: .semibold))
-        .tracking(-size * 0.02)
+        // Rounded letters, to go with the rounded bars of the mark. The one place they are used.
+        .font(.system(size: size * 0.9, weight: .semibold, design: .rounded))
+        .tracking(-size * 0.015)
         .foregroundStyle(Wisper.Color.textPrimary)
         .lineLimit(1)
         .fixedSize()
