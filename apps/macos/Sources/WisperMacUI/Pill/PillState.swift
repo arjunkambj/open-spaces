@@ -17,12 +17,15 @@ struct PillState: Equatable, Sendable {
     /// Speech is being turned into text.
     case working
     /// A short message. `canFix` means a click leads somewhere that helps.
-    case notice(String, canFix: Bool)
+    /// `isProblem` is false for plain news ("Copied to the clipboard").
+    case notice(String, canFix: Bool, isProblem: Bool = true)
   }
 
   var look: Look
   /// When the meeting being recorded started, or `nil` when none is.
   var meetingSince: Date?
+  /// The shortcuts cannot be heard right now (a password field has the keyboard): the hint says so.
+  var shortcutsPaused = false
 
   /// Nothing to draw and nothing to click.
   var isEmpty: Bool { look == .hidden && meetingSince == nil }
@@ -38,10 +41,13 @@ struct PillState: Equatable, Sendable {
     meetingSince: Date?,
     isEnabled: Bool,
     isHovered: Bool,
-    hintKeys: [String]
+    hintKeys: [String],
+    shortcutsPaused: Bool = false
   ) -> PillState {
     var look: Look {
-      if let notice { return .notice(notice.message, canFix: notice.fix != nil) }
+      if let notice {
+        return .notice(notice.message, canFix: notice.fix != nil, isProblem: notice.isProblem)
+      }
       switch phase {
       case .recording(let mode, _, let handsFree):
         // Push to talk records at once but only looks like it a moment later.
@@ -57,7 +63,7 @@ struct PillState: Equatable, Sendable {
       guard isEnabled else { return .hidden }
       return isHovered ? .hint(keys: hintKeys) : .resting
     }
-    return PillState(look: look, meetingSince: meetingSince)
+    return PillState(look: look, meetingSince: meetingSince, shortcutsPaused: shortcutsPaused)
   }
 }
 

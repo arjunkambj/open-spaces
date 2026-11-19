@@ -75,7 +75,9 @@ public struct PillView: View {
       meetingSince: model.meetings.live?.startedAt,
       isEnabled: model.settings.isOnboarded && model.settings.showPill && !hidden,
       isHovered: pointer.isHovered,
-      hintKeys: model.settings.shortcut(for: .pushToTalk)?.keyCaps ?? []
+      hintKeys: model.settings.shortcut(for: .pushToTalk)?.keyCaps ?? [],
+      // Asked only while the pointer is on the pill, which is when the hint shows.
+      shortcutsPaused: pointer.isHovered && SecureInput.isOn
     )
   }
 
@@ -102,6 +104,7 @@ private enum PillMetrics {
   static let holdWidth: CGFloat = 92
   static let workingWidth: CGFloat = 64
   static let noticeWidth: CGFloat = 340
+  static let hintWidth: CGFloat = 280
   static let radius: CGFloat = 16
   static let roundButton: CGFloat = 24
   static let waveHeight: CGFloat = 16
@@ -121,7 +124,7 @@ struct PillBody: View {
   var body: some View {
     VStack(spacing: Wisper.Space.xs) {
       if case .hint(let keys) = state.look {
-        PillHint(keys: keys)
+        PillHint(keys: keys, isPaused: state.shortcutsPaused)
           .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
       }
       HStack(spacing: Wisper.Space.xs) {
@@ -184,14 +187,16 @@ struct PillBody: View {
 
   private var fill: SwiftUI.Color {
     switch state.look {
-    case .resting: Wisper.Color.inverse.opacity(0.72)
+    case .resting: Wisper.Color.inverse.opacity(0.94)
     case .recording(.command, _): Wisper.Color.accent
     default: Wisper.Color.inverse
     }
   }
 
+  /// The resting pill is tiny and sits on anything: near-black with a crisp light rim, so it
+  /// reads on a dark window as well as on a light one.
   private var outline: Double {
-    state.look == .resting ? 0.42 : 0.2
+    state.look == .resting ? 0.6 : 0.2
   }
 
   @ViewBuilder private var content: some View {
@@ -215,8 +220,8 @@ struct PillBody: View {
       recording(mode: mode, handsFree: handsFree)
     case .working:
       ProcessingIndicator(tint: Wisper.Color.onInverse, height: PillMetrics.waveHeight)
-    case .notice(let message, let canFix):
-      notice(message, canFix: canFix)
+    case .notice(let message, let canFix, let isProblem):
+      notice(message, canFix: canFix, isProblem: isProblem)
     }
   }
 
@@ -245,11 +250,11 @@ struct PillBody: View {
     .accessibilityLabel(mode == .command ? "Listening for a command" : "Listening")
   }
 
-  private func notice(_ message: String, canFix: Bool) -> some View {
+  private func notice(_ message: String, canFix: Bool, isProblem: Bool) -> some View {
     Button(action: actions.tapNotice) {
       HStack(alignment: .center, spacing: Wisper.Space.s) {
-        Image(systemName: "exclamationmark.circle.fill")
-          .wisperText(.body, color: Wisper.Color.recording)
+        Image(systemName: isProblem ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+          .wisperText(.body, color: isProblem ? Wisper.Color.recording : Wisper.Color.onInverse)
           .accessibilityHidden(true)
         Text(message)
           .wisperText(.captionStrong, color: Wisper.Color.onInverse)
@@ -289,21 +294,33 @@ private struct PillWaveform: View {
 /// The bubble above the hovered pill that says how to dictate.
 private struct PillHint: View {
   let keys: [String]
+  var isPaused = false
 
   var body: some View {
     text
       .wisperText(.caption, color: Wisper.Color.onInverse)
-      .fixedSize()
+      .multilineTextAlignment(.center)
+      // The long hint takes two lines instead of running out of the pill's window.
+      .fixedSize(horizontal: !isLong, vertical: true)
+      .frame(width: isLong ? PillMetrics.hintWidth : nil)
       .padding(.horizontal, Wisper.Space.m)
       .padding(.vertical, Wisper.Space.s)
-      .background(Wisper.Color.inverse, in: Capsule())
+      .background(Wisper.Color.inverse, in: shape)
       .overlay {
-        Capsule().strokeBorder(Wisper.Color.onInverse.opacity(0.2), lineWidth: Wisper.Stroke.hairline)
+        shape.strokeBorder(Wisper.Color.onInverse.opacity(0.2), lineWidth: Wisper.Stroke.hairline)
       }
       .accessibilityHidden(true)
   }
 
+  private var shape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: PillMetrics.radius, style: .continuous)
+  }
+
+  private var isLong: Bool { isPaused && !keys.isEmpty }
+
   private var text: Text {
+    // While a password field has the keyboard, macOS keeps every key press from other apps.
+    if isLong { return Text("Shortcuts are off while a password field is in use. Click to dictate") }
     guard !keys.isEmpty else { return Text("Click to dictate") }
     return Text("Hold ") + Text(keys.joined(separator: " ")).bold() + Text(" to dictate, or click")
   }

@@ -31,6 +31,9 @@ enum Composition {
     )
     let monitor = ShortcutMonitor()
     let tool = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/wisper").path
+    let target = MacTextTarget()
+    // The controls are made from the model, and two of the model's parts report to the controls.
+    let late = Late()
     let model = AppModel(
       AppModel.Dependencies(
         library: library,
@@ -38,12 +41,16 @@ enum Composition {
         capture: SystemAudioCapture(),
         transcriber: openAI.transcriber,
         languageModel: openAI.languageModel,
-        target: MacTextTarget(),
+        target: target,
         permissions: MacPermissions(),
         host: HostActions(
           agentToolPath: FileManager.default.isExecutableFile(atPath: tool) ? tool : nil,
           dataFolder: root,
-          setLaunchAtLogin: { LaunchAtLogin.set($0) },
+          // macOS can refuse, or wait for a yes in System Settings: the controls put the
+          // setting right and say so.
+          setLaunchAtLogin: { wanted in
+            late.controls?.noteLaunchAtLogin(LaunchAtLogin.set(wanted), wanted: wanted)
+          },
           reveal: { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
           // `shortcutsChanged` is not needed: the controls watch the settings themselves,
           // which also catches a change made by an agent.
@@ -51,7 +58,16 @@ enum Composition {
         checkAPIKey: { try await openAI.check(key: $0) }
       )
     )
-    return Parts(model: model, controls: MacControls(model: model, monitor: monitor, sounds: SoundPlayer()))
+    let controls = MacControls(model: model, monitor: monitor, sounds: SoundPlayer())
+    late.controls = controls
+    target.onCopied = { [weak controls] in controls?.noteCopied() }
+    return Parts(model: model, controls: controls)
+  }
+
+  /// Holds the controls for the parts that are made before them.
+  @MainActor
+  private final class Late {
+    weak var controls: MacControls?
   }
 
   /// The whole app on made-up data, for trying it out and for screenshots.

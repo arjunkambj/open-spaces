@@ -36,10 +36,10 @@ public final class ShortcutMonitor {
     didSet { tap.setSuspended(isSuspended) }
   }
 
-  /// Turn on while there is something to cancel that is not a held key: a
-  /// hands-free recording, or text being made. While on, a press of Escape is
-  /// reported as `.cancel` and does not reach the app in front. Turn it off
-  /// again as soon as the dictation is over, or Escape stops working elsewhere.
+  /// Turn on while there is a recording to cancel that is not a held key (a
+  /// hands-free recording). While on, a press of Escape is reported as
+  /// `.cancel` and does not reach the app in front. Turn it off again as soon
+  /// as the recording is over, or Escape stops working elsewhere.
   public var cancelsOnEscape = false {
     didSet { tap.setCancelsOnEscape(cancelsOnEscape) }
   }

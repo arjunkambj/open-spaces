@@ -4,61 +4,56 @@ import WisperDomain
 
 /// Types dictated text into whatever app the user is working in.
 ///
-/// How the app is chosen:
-/// - `context()` picks the target: the app in front. When that is Open Wisper
-///   itself and no text field of ours has the cursor (the user clicked the
-///   pill or the hub), it is the app that was in front just before.
-/// - `insert(_:)` types where the cursor is now. If Open Wisper is in front
-///   without a text field of its own in use, the target is brought forward
-///   first, so text never lands in our own windows by accident.
+/// Where the text goes:
+/// - Into the app in front, where the cursor is now. No other app is ever
+///   brought forward to receive it.
+/// - When Open Wisper itself is in front, into the text field of ours that
+///   has the cursor. When none has, the text is put on the clipboard and
+///   left there for the user to paste, and `onCopied` is called.
 ///
-/// Text goes in by pasting: the clipboard is borrowed, ⌘V is pressed, and the
-/// user's clipboard is put back half a second later. This works the same in
-/// native, web and Electron apps, and replaces the selection.
+/// Text goes into an app by pasting: the clipboard is borrowed, ⌘V is
+/// pressed, and the user's clipboard is put back a moment later. This works
+/// the same in native, web and Electron apps, and replaces the selection.
 ///
-/// Needs the Accessibility permission. Without it `insert` throws,
-/// `selectedText` returns nil and browser pages are not recognised.
+/// Typing into another app needs the Accessibility permission. Without it
+/// `insert` throws, `selectedText` returns nil and browser pages are not
+/// recognised.
 @MainActor
 public final class MacTextTarget: TextTarget {
   /// How long the dictated text stays on the clipboard before the user's own
-  /// contents come back. Slow apps read the clipboard a moment after ⌘V.
-  private static let restoreDelay: Duration = .milliseconds(500)
+  /// contents come back. An app that is busy reads the clipboard well after
+  /// ⌘V was pressed; put back too soon, it would paste the old contents.
+  private static let restoreDelay: Duration = .milliseconds(1500)
+  /// How long a copy we asked for may still turn up after we stopped waiting for it.
+  private static let lateCopyTime: TimeInterval = 1.5
+
+  /// Called when text was put on the clipboard instead of typed, because
+  /// Open Wisper was in front with no text field of its own in use.
+  public var onCopied: (@MainActor () -> Void)?
 
   private let clipboard: BorrowedPasteboard
   private let ownPID = ProcessInfo.processInfo.processIdentifier
-  /// The last app in front that was not Open Wisper.
-  private var lastOtherApp: NSRunningApplication?
+  /// Whether Open Wisper is the app in front. Tests answer this themselves.
+  private let isInFront: @MainActor () -> Bool
   /// The app the current dictation is for, set by `context()`.
   private var target: NSRunningApplication?
-  private var activation: WorkspaceObservation?
   private var restore: Task<Void, Never>?
 
-  /// Stops observing when it goes away, so the target needs no clean-up of its own.
-  private final class WorkspaceObservation: @unchecked Sendable {
-    private let token: any NSObjectProtocol
-
-    init(_ token: any NSObjectProtocol) { self.token = token }
-
-    deinit { NSWorkspace.shared.notificationCenter.removeObserver(token) }
+  public convenience init() {
+    let ownPID = ProcessInfo.processInfo.processIdentifier
+    self.init(clipboard: BorrowedPasteboard(.general)) {
+      NSWorkspace.shared.frontmostApplication?.processIdentifier == ownPID
+    }
   }
 
-  public init() {
-    clipboard = BorrowedPasteboard(.general)
-    noteFrontApp()
-    let token = NSWorkspace.shared.notificationCenter.addObserver(
-      forName: NSWorkspace.didActivateApplicationNotification,
-      object: nil,
-      queue: .main
-    ) { [weak self] _ in
-      MainActor.assumeIsolated { self?.noteFrontApp() }
-    }
-    activation = WorkspaceObservation(token)
+  init(clipboard: BorrowedPasteboard, isInFront: @escaping @MainActor () -> Bool) {
+    self.clipboard = clipboard
+    self.isInFront = isInFront
   }
 
   // MARK: - TextTarget
 
   public func context() async -> DictationContext {
-    noteFrontApp()
     let app = currentTarget()
     target = app
     guard let app else { return DictationContext() }
@@ -76,7 +71,6 @@ public final class MacTextTarget: TextTarget {
   }
 
   public func selectedText() async -> String? {
-    noteFrontApp()
     guard let app = target ?? currentTarget() else { return nil }
     if app.processIdentifier == ownPID { return ownSelection() }
     guard AXIsProcessTrusted() else { return nil }
@@ -88,15 +82,23 @@ public final class MacTextTarget: TextTarget {
       // The app would not say. Ask it to copy instead, but only if it is the
       // app in front: a copy sent anywhere else would do who knows what.
       guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return nil }
-      return await copySelection()
+      guard let copied = await copySelection() else { return nil }
+      return Self.isWholeLineCopy(copied, bundleID: app.bundleIdentifier) ? nil : copied
     }
   }
 
   public func insert(_ text: String) async throws {
-    guard AXIsProcessTrusted() else { throw WisperError.permissionDenied(.accessibility) }
     guard !text.isEmpty else { return }
-    try await bringTargetForward()
     target = nil
+    if isInFront(), ownTextView() == nil {
+      // Our own window is in front and nothing in it takes text. Pasting would land nowhere,
+      // and bringing another app forward to paste there is not ours to decide.
+      restore?.cancel()
+      clipboard.keep(text)
+      onCopied?()
+      return
+    }
+    guard AXIsProcessTrusted() else { throw WisperError.permissionDenied(.accessibility) }
     await waitForModifiersToLift()
     restore?.cancel()
     clipboard.borrow()
@@ -111,21 +113,9 @@ public final class MacTextTarget: TextTarget {
 
   // MARK: - Which app
 
-  private func noteFrontApp() {
-    guard let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != ownPID else {
-      return
-    }
-    lastOtherApp = front
-  }
-
   /// The app the user is typing in right now.
   private func currentTarget() -> NSRunningApplication? {
-    if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != ownPID {
-      return front
-    }
-    if ownTextView() != nil { return .current }
-    if let lastOtherApp, !lastOtherApp.isTerminated { return lastOtherApp }
-    return nil
+    isInFront() ? .current : NSWorkspace.shared.frontmostApplication
   }
 
   /// The text view of ours that has the cursor, if one does.
@@ -140,27 +130,6 @@ public final class MacTextTarget: TextTarget {
     }
     let text = String(view.string[range])
     return text.isEmpty ? nil : text
-  }
-
-  /// Makes sure a press of ⌘V will land in the right place.
-  private func bringTargetForward() async throws {
-    if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != ownPID { return }
-    if ownTextView() != nil { return }
-    let candidate = [target, lastOtherApp].compactMap { $0 }.first {
-      !$0.isTerminated && $0.processIdentifier != ownPID
-    }
-    guard let app = candidate else { throw WisperError.notFound("The app you were typing in") }
-    NSApp?.yieldActivation(to: app)
-    app.activate()
-    for _ in 0..<50 {
-      if NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier {
-        // Give the app a moment to hand the keyboard to its window.
-        try? await Task.sleep(for: .milliseconds(60))
-        return
-      }
-      try? await Task.sleep(for: .milliseconds(20))
-    }
-    throw WisperError.notFound("The app you were typing in")
   }
 
   /// A shortcut such as ⌃⌘V can ask for a paste while its keys are still
@@ -192,8 +161,32 @@ public final class MacTextTarget: TextTarget {
         break
       }
     }
+    guard let copied else {
+      // Nothing yet. A slow app may still copy in a moment: hold on to the user's clipboard
+      // until then, so that late copy is undone instead of staying on it.
+      clipboard.expectCopy(for: Self.lateCopyTime)
+      restore = Task { [clipboard] in
+        try? await Task.sleep(for: .seconds(Self.lateCopyTime))
+        guard !Task.isCancelled else { return }
+        clipboard.giveBack()
+      }
+      return nil
+    }
     clipboard.giveBack()
-    guard let copied, !copied.isEmpty else { return nil }
-    return copied
+    return copied.isEmpty ? nil : copied
+  }
+
+  /// Whether what ⌘C gave is a line the editor copied by itself because nothing was selected.
+  ///
+  /// Code editors copy the whole line the cursor is on when ⌘C is pressed with no selection.
+  /// Taken for a selection, that line would be rewritten and pasted at the cursor, next to
+  /// the line it came from. So in those editors one line that ends in a line break counts
+  /// as nothing selected. (A line picked with a triple click looks the same and is passed
+  /// over too; selecting it without its line break works.)
+  nonisolated static func isWholeLineCopy(_ copied: String, bundleID: String?) -> Bool {
+    guard AppCatalog.copiesLineWithoutSelection(bundleID), let last = copied.last, last.isNewline else {
+      return false
+    }
+    return !copied.dropLast().contains(where: \.isNewline)
   }
 }

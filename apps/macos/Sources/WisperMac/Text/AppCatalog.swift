@@ -49,6 +49,13 @@ enum AppCatalog {
     "notion.mail.id": .email,
   ]
 
+  /// Code editors that copy the whole line when ⌘C is pressed with nothing selected.
+  static let lineCopyingEditors: [String] = [
+    "com.microsoft.VSCode*", "com.vscodium*", "com.visualstudio.code.oss", "com.todesktop.230313mzl4w4u92",
+    "com.exafunction.windsurf", "dev.zed.Zed*", "com.sublimetext.*", "com.jetbrains.*",
+    "com.google.android.studio*",
+  ]
+
   /// Browsers. Inside one of these the page decides the category.
   static let browsers: [String] = [
     "com.apple.Safari*", "com.google.Chrome*", "org.chromium.Chromium", "company.thebrowser.Browser",
@@ -103,6 +110,12 @@ enum AppCatalog {
   static func isBrowser(_ bundleID: String?) -> Bool {
     guard let bundleID else { return false }
     return browsers.contains { matches(bundleID, pattern: $0) }
+  }
+
+  /// Whether the app copies the line the cursor is on when ⌘C is pressed with nothing selected.
+  static func copiesLineWithoutSelection(_ bundleID: String?) -> Bool {
+    guard let bundleID else { return false }
+    return lineCopyingEditors.contains { matches(bundleID, pattern: $0) }
   }
 
   /// The category for an app. For a browser, pass the title of its front

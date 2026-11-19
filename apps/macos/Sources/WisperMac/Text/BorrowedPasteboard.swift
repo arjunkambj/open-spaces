@@ -5,7 +5,10 @@ import AppKit
 /// Typing into another app is done by pasting, and reading a selection may
 /// need a copy. Both go through the clipboard, which belongs to the user.
 /// The pattern is `borrow()`, use, `giveBack()`:
-/// - everything that was on the clipboard (all items, all formats) comes back;
+/// - everything that was on the clipboard (all items, all formats) comes back,
+///   except items marked as secret (a password from a password manager): the
+///   manager clears those itself after a while, and a copy we put back would
+///   stay for good;
 /// - if the user or another app copies something while we hold it, their
 ///   copy wins and nothing is put back;
 /// - text we place is marked so clipboard-history apps do not record it.
@@ -21,6 +24,8 @@ final class BorrowedPasteboard {
   private var saved: [[NSPasteboard.PasteboardType: Data]]?
   /// The clipboard's change count as we last left it.
   private var ourChange = 0
+  /// Until this moment, a change to the clipboard is the answer to a copy we asked for.
+  private var copyExpectedUntil = Date.distantPast
 
   init(_ pasteboard: NSPasteboard) {
     self.pasteboard = pasteboard
@@ -32,14 +37,37 @@ final class BorrowedPasteboard {
   /// Remembers what is on the clipboard. Borrowing again before giving back
   /// keeps the first copy, unless someone else has copied something since.
   func borrow() {
+    adoptLateCopy()
     if saved != nil, pasteboard.changeCount == ourChange { return }
-    saved = (pasteboard.pasteboardItems ?? []).map { item in
+    saved = (pasteboard.pasteboardItems ?? []).compactMap { item in
+      guard !item.types.contains(Self.concealedType) else { return nil }
       var contents: [NSPasteboard.PasteboardType: Data] = [:]
       for type in item.types {
         if let data = item.data(forType: type) { contents[type] = data }
       }
       return contents
     }
+    ourChange = pasteboard.changeCount
+  }
+
+  /// Puts `text` on the clipboard for the user to keep. Nothing is put back afterwards.
+  func keep(_ text: String) {
+    saved = nil
+    pasteboard.clearContents()
+    pasteboard.setString(text, forType: .string)
+    ourChange = pasteboard.changeCount
+  }
+
+  /// Call after asking the app in front to copy, when its copy has not shown
+  /// up yet. A change within `seconds` is then taken as that copy arriving
+  /// late and is undone by `giveBack()`, instead of being mistaken for
+  /// something the user copied.
+  func expectCopy(for seconds: TimeInterval) {
+    copyExpectedUntil = Date().addingTimeInterval(seconds)
+  }
+
+  private func adoptLateCopy() {
+    guard saved != nil, pasteboard.changeCount != ourChange, Date() < copyExpectedUntil else { return }
     ourChange = pasteboard.changeCount
   }
 
@@ -58,6 +86,7 @@ final class BorrowedPasteboard {
   /// Takes the text another app just copied (after a copy we asked for), and
   /// counts that change as ours so `giveBack()` undoes it.
   func takeCopiedText() -> String? {
+    copyExpectedUntil = .distantPast
     ourChange = pasteboard.changeCount
     return pasteboard.string(forType: .string)
   }
@@ -65,6 +94,8 @@ final class BorrowedPasteboard {
   /// Puts back what the user had. Does nothing if nothing is borrowed, or if
   /// someone else has changed the clipboard in the meantime.
   func giveBack() {
+    adoptLateCopy()
+    copyExpectedUntil = .distantPast
     guard let saved else { return }
     self.saved = nil
     guard pasteboard.changeCount == ourChange else { return }

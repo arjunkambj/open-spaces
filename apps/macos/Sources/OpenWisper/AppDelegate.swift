@@ -1,6 +1,7 @@
 import AppKit
 import WisperDomain
 import WisperEngine
+import WisperMac
 import WisperMacUI
 
 /// Starts the app and holds its long-lived parts: the model, the controls,
@@ -14,9 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var pill: PillPanel?
   private var statusItem: StatusItem?
   private var watches: [AnyObject] = []
-  /// Links that arrived before the library was read.
-  private var waitingLinks: [WisperLink] = []
+  /// Links that arrived before the library was read, each with whether its ticket was good.
+  private var waitingLinks: [(link: WisperLink, ticketIsValid: Bool)] = []
   private var isReady = false
+  private var gate = LinkGate()
 
   init(parts: Composition.Parts, isDemo: Bool) {
     self.parts = parts
@@ -61,9 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
       )
       isReady = true
+      // The person may have taken the app out of Login Items since the last run.
+      parts.controls.noteLaunchAtLogin(LaunchAtLogin.status)
       // Opened by the person: show the window. Opened by the Mac at login: stay in the menu bar.
       if !openedAtLogin || !parts.model.settings.isOnboarded { hub.show() }
-      for link in waitingLinks { follow(link) }
+      for waiting in waitingLinks { receive(waiting.link, ticketIsValid: waiting.ticketIsValid) }
       waitingLinks = []
     }
   }
@@ -78,10 +82,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func application(_ application: NSApplication, open urls: [URL]) {
-    for link in urls.compactMap(WisperLink.init) {
-      if isReady { follow(link) } else { waitingLinks.append(link) }
+    for url in urls {
+      guard let link = WisperLink(url) else { continue }
+      // A ticket is looked at once, when its link arrives. Only the bundled tool can make one.
+      let ticketIsValid =
+        link.needsTrust
+        && parts.model.host.dataFolder.map { LinkTicket.redeem(WisperLink.ticket(in: url), in: $0) } == true
+      if isReady {
+        receive(link, ticketIsValid: ticketIsValid)
+      } else if waitingLinks.count < Self.mostWaitingLinks {
+        waitingLinks.append((link, ticketIsValid))
+      }
     }
   }
+
+  /// A link that opens the app arrives before the library is read. A handful is plenty.
+  private static let mostWaitingLinks = 8
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     let model = parts.model
@@ -106,6 +122,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     hub.show()
   }
 
+  /// Decides what to do with a link (`LinkGate` has the rules) and does it.
+  private func receive(_ link: WisperLink, ticketIsValid: Bool) {
+    let model = parts.model
+    let decision = gate.decide(
+      link,
+      ticketIsValid: ticketIsValid,
+      isSetUp: model.isLoaded && model.settings.isOnboarded,
+      isRecordingMeeting: model.meetings.isRecording
+    )
+    switch decision {
+    case .ignore:
+      break
+    case .act:
+      follow(link)
+    case .ask:
+      guard let hub else {
+        gate.answered(allowed: false)
+        return
+      }
+      Task {
+        let allowed = await hub.confirm(
+          "A link from outside Open Wisper wants to start recording a meeting.",
+          yes: "Allow",
+          no: "Don’t allow"
+        )
+        gate.answered(allowed: allowed)
+        if allowed { follow(link) }
+      }
+    }
+  }
+
   private func follow(_ link: WisperLink) {
     switch link {
     case .showHub:
@@ -115,8 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     case .toggleDictation:
       parts.controls.toggleHandsFree()
     case .startMeeting(let title):
-      guard !parts.model.meetings.isRecording else { return }
-      parts.model.run { model in _ = try await model.meetings.start(title: title) }
+      parts.controls.startMeeting(title: title)
     case .stopMeeting:
       Task { await parts.model.meetings.stop() }
     }

@@ -92,6 +92,10 @@ public enum MacSnapshots {
     let states: [(String, PillState)] = [
       ("Resting", PillState(look: .resting)),
       ("Pointer over it", PillState(look: .hint(keys: ["fn"]))),
+      (
+        "Pointer over it, password field in use",
+        PillState(look: .hint(keys: ["fn"]), meetingSince: nil, shortcutsPaused: true)
+      ),
       ("Push to talk", PillState(look: .recording(mode: .dictation, handsFree: false))),
       ("Hands-free", PillState(look: .recording(mode: .dictation, handsFree: true))),
       ("Command mode", PillState(look: .recording(mode: .command, handsFree: false))),
@@ -107,9 +111,10 @@ public enum MacSnapshots {
         PillState(look: .recording(mode: .dictation, handsFree: false), meetingSince: meeting)
       ),
       ("Meeting, pill hidden", PillState(look: .hidden, meetingSince: meeting)),
+      ("Copied", PillState(look: .notice("Copied to the clipboard", canFix: false, isProblem: false))),
     ]
     return [
-      SnapshotCase("mac-pill", canvas: .custom(width: 1100, height: 560)) {
+      SnapshotCase("mac-pill", canvas: .custom(width: 1100, height: 760)) {
         PillSheet(states: states, now: meeting.addingTimeInterval(247))
       }
     ]

@@ -29,19 +29,31 @@ import WisperDomain
     for status in [PermissionStatus.granted, .denied, .notDetermined] {
       let (permissions, defaults) = permissions(systemAudio: status)
       defer { cleanUp(defaults) }
-      permissions.noteSystemAudioCapture(worked: status != .granted)
       #expect(permissions.status(.systemAudio) == status)
     }
   }
 
-  @Test func systemAudioFallsBackToWhatTheLastRecordingFound() {
-    let (permissions, defaults) = permissions(systemAudio: nil)
+  @Test func systemAudioFallsBackToTheLastAnswerTheSystemGave() {
+    let (unknown, defaults) = permissions(systemAudio: nil)
     defer { cleanUp(defaults) }
-    #expect(permissions.status(.systemAudio) == .notDetermined)
-    permissions.noteSystemAudioCapture(worked: true)
-    #expect(permissions.status(.systemAudio) == .granted)
-    permissions.noteSystemAudioCapture(worked: false)
-    #expect(permissions.status(.systemAudio) == .denied)
+    #expect(unknown.status(.systemAudio) == .notDetermined, "Never asked, and no way to ask")
+    // On a macOS where the system can be asked, its answer is remembered...
+    #expect(permissions(systemAudio: .granted).0.status(.systemAudio) == .granted)
+    // ...and stands in on a macOS where it cannot.
+    #expect(unknown.status(.systemAudio) == .granted)
+    #expect(permissions(systemAudio: .denied).0.status(.systemAudio) == .denied)
+    #expect(unknown.status(.systemAudio) == .denied)
+  }
+
+  @Test func thePrivateCheckIsOnlyUsedOnKnownVersionsOfMacOS() async {
+    #expect(
+      SystemAudioAccess.knownVersions.contains(ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
+    )
+    // A macOS that did not exist when this was written: nothing private is called.
+    let later = SystemAudioAccess.forMacOS(major: (SystemAudioAccess.knownVersions.max() ?? 0) + 1)
+    #expect(later.status() == nil)
+    #expect(await later.request() == nil)
+    #expect(SystemAudioAccess.forMacOS(major: 13).status() == nil)
   }
 
   @Test func accessibilityIsNotDeterminedUntilAsked() {

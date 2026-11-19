@@ -75,6 +75,16 @@ import WisperDomain
     #expect(category == .workMessages)
   }
 
+  @Test func codeEditorsThatCopyTheLineAreKnown() {
+    #expect(AppCatalog.copiesLineWithoutSelection("com.microsoft.VSCode"))
+    #expect(AppCatalog.copiesLineWithoutSelection("com.microsoft.VSCodeInsiders"))
+    #expect(AppCatalog.copiesLineWithoutSelection("com.jetbrains.intellij"))
+    #expect(AppCatalog.copiesLineWithoutSelection("dev.zed.Zed"))
+    #expect(!AppCatalog.copiesLineWithoutSelection("com.apple.Notes"))
+    #expect(!AppCatalog.copiesLineWithoutSelection("com.tinyspeck.slackmacgap"))
+    #expect(!AppCatalog.copiesLineWithoutSelection(nil))
+  }
+
   @Test func aPageTitleMeansNothingOutsideABrowser() {
     #expect(AppCatalog.category(bundleID: "com.apple.Notes", windowTitle: "Inbox - Gmail") == .other)
     #expect(AppCatalog.isBrowser("com.google.Chrome.canary"))
@@ -201,6 +211,80 @@ import WisperDomain
     #expect(pasteboard.string(forType: .string) == "original")
   }
 
+  @Test func aPasswordIsNotPutBack() {
+    defer { finish() }
+    // What a password manager puts on the clipboard: the text, marked as secret.
+    let secret = NSPasteboardItem()
+    secret.setString("hunter2", forType: .string)
+    secret.setString("", forType: BorrowedPasteboard.concealedType)
+    pasteboard.writeObjects([secret])
+
+    let clipboard = BorrowedPasteboard(pasteboard)
+    clipboard.borrow()
+    clipboard.place("dictated")
+    clipboard.giveBack()
+    #expect(pasteboard.string(forType: .string) == nil, "Neither the password nor the dictated text stays")
+    #expect(pasteboard.pasteboardItems?.isEmpty ?? true)
+  }
+
+  @Test func onlyTheSecretItemIsLeftOut() {
+    defer { finish() }
+    let plain = NSPasteboardItem()
+    plain.setString("plain", forType: .string)
+    let secret = NSPasteboardItem()
+    secret.setString("hunter2", forType: .string)
+    secret.setString("", forType: BorrowedPasteboard.concealedType)
+    pasteboard.writeObjects([plain, secret])
+
+    let clipboard = BorrowedPasteboard(pasteboard)
+    clipboard.borrow()
+    clipboard.place("dictated")
+    clipboard.giveBack()
+    #expect(pasteboard.pasteboardItems?.map { $0.string(forType: .string) } == ["plain"])
+  }
+
+  @Test func keptTextStaysForTheUser() {
+    defer { finish() }
+    pasteboard.setString("original", forType: .string)
+    let clipboard = BorrowedPasteboard(pasteboard)
+    clipboard.borrow()
+    clipboard.keep("dictated")
+    #expect(!clipboard.isBorrowed)
+    clipboard.giveBack()
+    #expect(pasteboard.string(forType: .string) == "dictated")
+    let types = pasteboard.pasteboardItems?.first?.types ?? []
+    #expect(
+      !types.contains(BorrowedPasteboard.transientType),
+      "It is the user's to keep: history apps may record it"
+    )
+    #expect(!types.contains(BorrowedPasteboard.concealedType))
+  }
+
+  @Test func aCopyThatArrivesLateIsUndoneToo() {
+    defer { finish() }
+    pasteboard.setString("original", forType: .string)
+    let clipboard = BorrowedPasteboard(pasteboard)
+    clipboard.borrow()
+    // We asked the app in front to copy; it had not by the time we stopped waiting.
+    clipboard.expectCopy(for: 5)
+    pasteboard.clearContents()
+    pasteboard.setString("the slow app's copy", forType: .string)
+    clipboard.giveBack()
+    #expect(pasteboard.string(forType: .string) == "original")
+  }
+
+  @Test func aCopyLongAfterWeAskedIsTheUsers() {
+    defer { finish() }
+    pasteboard.setString("original", forType: .string)
+    let clipboard = BorrowedPasteboard(pasteboard)
+    clipboard.borrow()
+    clipboard.expectCopy(for: -1)
+    pasteboard.clearContents()
+    pasteboard.setString("the user's new copy", forType: .string)
+    clipboard.giveBack()
+    #expect(pasteboard.string(forType: .string) == "the user's new copy")
+  }
+
   @Test func givingBackTwiceDoesNothingTheSecondTime() {
     defer { finish() }
     pasteboard.setString("original", forType: .string)
@@ -213,5 +297,66 @@ import WisperDomain
     let count = pasteboard.changeCount
     clipboard.giveBack()
     #expect(pasteboard.changeCount == count)
+  }
+}
+
+/// Runs against a pasteboard of its own, and never presses a key: every case here ends
+/// before the target would type into another app.
+@MainActor
+@Suite struct MacTextTargetTests {
+  private let pasteboard: NSPasteboard
+
+  init() {
+    pasteboard = NSPasteboard(name: NSPasteboard.Name("dev.openwisper.tests.\(UUID().uuidString)"))
+    pasteboard.clearContents()
+  }
+
+  @Test func withOurOwnWindowInFrontTheTextGoesToTheClipboardAndStays() async throws {
+    defer { pasteboard.releaseGlobally() }
+    pasteboard.setString("what the user had", forType: .string)
+    // Open Wisper is in front and no text field of its own has the cursor.
+    let target = MacTextTarget(clipboard: BorrowedPasteboard(pasteboard)) { true }
+    var copied = 0
+    target.onCopied = { copied += 1 }
+
+    try await target.insert("Hello there.")
+    #expect(pasteboard.string(forType: .string) == "Hello there.")
+    #expect(copied == 1)
+    // Nothing comes along later to put the old contents back.
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(pasteboard.string(forType: .string) == "Hello there.")
+  }
+
+  @Test func nothingIsCopiedForEmptyText() async throws {
+    defer { pasteboard.releaseGlobally() }
+    pasteboard.setString("what the user had", forType: .string)
+    let target = MacTextTarget(clipboard: BorrowedPasteboard(pasteboard)) { true }
+    var copied = 0
+    target.onCopied = { copied += 1 }
+    try await target.insert("")
+    #expect(pasteboard.string(forType: .string) == "what the user had")
+    #expect(copied == 0)
+  }
+
+  @Test func withOurOwnWindowInFrontTheDictationIsForOpenWisperItself() async {
+    defer { pasteboard.releaseGlobally() }
+    let target = MacTextTarget(clipboard: BorrowedPasteboard(pasteboard)) { true }
+    let context = await target.context()
+    #expect(context.bundleID == Bundle.main.bundleIdentifier)
+    #expect(context.category == .other)
+    #expect(await target.selectedText() == nil)
+  }
+
+  @Test(arguments: [
+    ("let total = 4\n", "com.microsoft.VSCode", true),
+    ("let total = 4\r\n", "com.microsoft.VSCode", true),
+    ("let total = 4", "com.microsoft.VSCode", false),
+    ("one\ntwo\n", "com.microsoft.VSCode", false),
+    ("\n", "com.jetbrains.intellij", true),
+    ("let total = 4\n", "com.apple.Notes", false),
+    ("let total = 4\n", nil, false),
+  ])
+  func aLineAnEditorCopiedByItselfIsNotASelection(copied: String, bundleID: String?, isLine: Bool) {
+    #expect(MacTextTarget.isWholeLineCopy(copied, bundleID: bundleID) == isLine)
   }
 }

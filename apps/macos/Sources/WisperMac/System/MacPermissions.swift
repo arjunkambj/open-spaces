@@ -23,7 +23,7 @@ public final class MacPermissions: Permissions {
 
   private enum Key {
     static let askedAccessibility = "permissions.accessibility.asked"
-    static let systemAudioWorked = "permissions.systemAudio.worked"
+    static let systemAudio = "permissions.systemAudio.lastKnown"
   }
 
   /// `defaults` remembers what the system cannot be asked about.
@@ -40,29 +40,27 @@ public final class MacPermissions: Permissions {
     switch permission {
     case .microphone:
       switch AVCaptureDevice.authorizationStatus(for: .audio) {
-      case .authorized: .granted
-      case .notDetermined: .notDetermined
-      default: .denied
+      case .authorized: return .granted
+      case .notDetermined: return .notDetermined
+      default: return .denied
       }
     case .accessibility:
       // The system only says yes or no. "No" before we ever asked means the
       // user has not been shown anything yet.
-      if AXIsProcessTrusted() {
-        .granted
-      } else {
-        defaults.bool(forKey: Key.askedAccessibility) ? .denied : .notDetermined
-      }
+      if AXIsProcessTrusted() { return .granted }
+      return defaults.bool(forKey: Key.askedAccessibility) ? .denied : .notDetermined
     case .systemAudio:
-      // macOS has no public way to ask about this one. The same private
-      // check Apple's own apps use is tried first; if a future macOS removes
-      // it, the answer is what the last real recording found.
+      // macOS has no public way to ask about this one. The private check the system's own
+      // apps use is asked on the macOS versions it is known to work on, and its answer is
+      // remembered. On a newer macOS the answer is what it said last: a permission that was
+      // given stays given when macOS is updated.
       if let known = systemAudio.status() {
-        known
-      } else if let worked = defaults.object(forKey: Key.systemAudioWorked) as? Bool {
-        worked ? .granted : .denied
-      } else {
-        .notDetermined
+        if defaults.string(forKey: Key.systemAudio) != known.rawValue {
+          defaults.set(known.rawValue, forKey: Key.systemAudio)
+        }
+        return known
       }
+      return defaults.string(forKey: Key.systemAudio).flatMap(PermissionStatus.init) ?? .notDetermined
     }
   }
 
@@ -92,13 +90,6 @@ public final class MacPermissions: Permissions {
     for url in Self.settingsURLs(for: permission) where NSWorkspace.shared.open(url) { return }
   }
 
-  /// Call after a meeting recording that included system audio, with whether
-  /// the computer's sound was really captured. Keeps `status(.systemAudio)`
-  /// truthful on a macOS where it cannot be read directly.
-  public func noteSystemAudioCapture(worked: Bool) {
-    defaults.set(worked, forKey: Key.systemAudioWorked)
-  }
-
   /// The links that open the pane for `permission`, best first.
   static func settingsURLs(for permission: Permission) -> [URL] {
     let anchor =
@@ -124,13 +115,31 @@ public final class MacPermissions: Permissions {
 /// macOS has no public call for this permission. `system` uses the private
 /// functions in the system's own permission library, looked up by name at run
 /// time so that their absence is survivable: every answer can be "don't know".
+///
+/// Private functions can change shape without notice, and calling one with
+/// the wrong shape crashes the app. So they are only called on the macOS
+/// versions they have been seen to work on (`knownVersions`). On any other
+/// version every answer is "don't know".
 struct SystemAudioAccess: Sendable {
   /// The status, or nil when the system cannot be asked.
   var status: @Sendable () -> PermissionStatus?
   /// Shows the system prompt and waits for the answer. Nil when it cannot.
   var request: @Sendable () async -> Bool?
 
-  static let system = SystemAudioAccess(
+  /// The major macOS versions the private functions are known to work on.
+  /// (macOS went from 15 straight to 26.) Add a version here after trying it there.
+  static let knownVersions: Set<Int> = [14, 15, 26, 27]
+
+  /// The way to ask on this Mac.
+  static var system: SystemAudioAccess {
+    forMacOS(major: ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
+  }
+
+  static func forMacOS(major: Int) -> SystemAudioAccess {
+    knownVersions.contains(major) ? privateCalls : SystemAudioAccess(status: { nil }, request: { nil })
+  }
+
+  private static let privateCalls = SystemAudioAccess(
     status: {
       guard let preflight = SystemPermissionLibrary.preflight else { return nil }
       // 0: allowed, 1: refused, 2: never asked.

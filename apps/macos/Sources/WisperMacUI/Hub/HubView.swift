@@ -89,7 +89,9 @@ public struct HubView: View {
   @ViewBuilder private var notices: some View {
     let showsShortcutNotice = controls.needsAccessibility
     let error = model.errorMessage
-    if showsShortcutNotice || error != nil {
+    // The Meetings screen says this itself.
+    let meetingProblem = navigation.section == .meetings ? nil : model.meetings.lastError
+    if showsShortcutNotice || error != nil || meetingProblem != nil {
       VStack(spacing: Wisper.Space.s) {
         if showsShortcutNotice {
           Banner(
@@ -105,6 +107,11 @@ public struct HubView: View {
         if let error {
           Banner(.error, title: error) {
             IconButton("xmark", label: "Dismiss", size: .small) { model.errorMessage = nil }
+          }
+        }
+        if let meetingProblem {
+          Banner(.warning, title: meetingProblem) {
+            IconButton("xmark", label: "Dismiss", size: .small) { model.meetings.lastError = nil }
           }
         }
       }

@@ -50,6 +50,19 @@ final class HubWindow: NSObject, NSWindowDelegate {
     window?.performClose(nil)
   }
 
+  /// Brings the window forward and asks a yes-or-no question on it. Returns whether the
+  /// answer was yes. Return picks no, so a key press meant for something else never says yes.
+  func confirm(_ question: String, yes: String, no: String) async -> Bool {
+    show()
+    guard let window else { return false }
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = question
+    alert.addButton(withTitle: no)
+    alert.addButton(withTitle: yes)
+    return await alert.beginSheetModal(for: window) == .alertSecondButtonReturn
+  }
+
   private func makeWindow() -> NSWindow {
     let window = NSWindow(
       contentRect: CGRect(origin: .zero, size: Self.defaultSize),

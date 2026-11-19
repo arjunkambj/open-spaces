@@ -56,8 +56,9 @@ public enum MenuBarContent {
     case meeting
   }
 
-  public static func icon(for model: AppModel) -> Icon {
-    if model.dictation.isRecording { return .dictating }
+  /// Follows what the pill shows: a key that was only passing through (fn + arrow) changes nothing.
+  public static func icon(for model: AppModel, controls: MacControls) -> Icon {
+    if model.dictation.isRecording, controls.showsRecording { return .dictating }
     return model.meetings.isRecording ? .meeting : .idle
   }
 

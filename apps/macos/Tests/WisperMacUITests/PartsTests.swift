@@ -60,6 +60,30 @@ import WisperMac
     #expect(resolve(phase: recording, notice: notice).look == .notice("Add your OpenAI key", canFix: true))
   }
 
+  @Test func newsIsNotShownAsAProblem() {
+    let copied = MacControls.Notice(message: "Copied to the clipboard", isProblem: false)
+    #expect(
+      resolve(notice: copied).look == .notice("Copied to the clipboard", canFix: false, isProblem: false)
+    )
+  }
+
+  @Test func theHintKnowsWhenShortcutsCannotBeHeard() {
+    let state = PillState.resolve(
+      phase: .idle,
+      showsRecording: false,
+      isWrappingUp: false,
+      notice: nil,
+      meetingSince: nil,
+      isEnabled: true,
+      isHovered: true,
+      hintKeys: ["fn"],
+      shortcutsPaused: true
+    )
+    #expect(state.look == .hint(keys: ["fn"]))
+    #expect(state.shortcutsPaused)
+    #expect(!resolve(isHovered: true).shortcutsPaused)
+  }
+
   @Test func aMeetingShowsEvenWhenThePillIsHidden() {
     let since = Date()
     let state = resolve(meetingSince: since, isEnabled: false)
@@ -148,13 +172,23 @@ import WisperMac
     await settle { stage.model.meetings.isRecording }
     let entries = MenuBarContent.entries(for: stage.model, microphones: microphones)
     #expect(titles(entries).contains("Stop Meeting Recording"))
-    #expect(MenuBarContent.icon(for: stage.model) == .meeting)
+    #expect(MenuBarContent.icon(for: stage.model, controls: stage.controls) == .meeting)
     stage.controls.toggleHandsFree()
-    #expect(MenuBarContent.icon(for: stage.model) == .dictating)
+    #expect(MenuBarContent.icon(for: stage.model, controls: stage.controls) == .dictating)
     stage.controls.cancel()
     stage.controls.toggleMeeting()
     await settle { !stage.model.meetings.isRecording }
-    #expect(MenuBarContent.icon(for: stage.model) == .idle)
+    #expect(MenuBarContent.icon(for: stage.model, controls: stage.controls) == .idle)
+  }
+
+  @Test func aKeyThatIsOnlyPassingThroughDoesNotChangeTheMenuBarPicture() async {
+    let stage = await Stage(revealDelay: .seconds(5))
+    // fn goes down. It records at once, but may still turn out to be fn + arrow.
+    stage.press(.down(.pushToTalk))
+    #expect(stage.model.dictation.isRecording)
+    #expect(MenuBarContent.icon(for: stage.model, controls: stage.controls) == .idle)
+    stage.press(.abandoned(.pushToTalk, replacedBy: nil))
+    #expect(MenuBarContent.icon(for: stage.model, controls: stage.controls) == .idle)
   }
 
   @Test func theChosenMicrophoneIsTicked() {

@@ -16,17 +16,30 @@ struct Stage {
   let controls: MacControls
   /// The places the controls asked the app to show.
   let opened = Opened()
+  /// The sounds the controls played, in order. Nothing is really played.
+  let heard = Heard()
+  /// The shortcut monitor the controls were given, or `nil`. Never started: it watches no keys.
+  let monitor: ShortcutMonitor?
 
   @MainActor
   final class Opened {
     var destinations: [MacControls.Destination] = []
   }
 
+  @MainActor
+  final class Heard {
+    var sounds: [SoundCue] = []
+  }
+
+  /// - transcribeDelay: how long turning speech into text takes.
+  /// - withMonitor: give the controls a shortcut monitor (not started), to see what they ask of it.
   init(
     hasKey: Bool = true,
     captureFailure: WisperError? = nil,
     revealDelay: Duration = .zero,
-    noticeTime: Duration = .seconds(60)
+    noticeTime: Duration = .seconds(60),
+    transcribeDelay: Duration = .zero,
+    withMonitor: Bool = false
   ) async {
     capture = FakeAudioCapture(failure: captureFailure)
     model = AppModel(
@@ -34,7 +47,10 @@ struct Stage {
         library: library,
         secrets: InMemorySecretStore(apiKey: hasKey ? "sk-test" : nil),
         capture: capture,
-        transcriber: FakeTranscriber(text: "Hello there."),
+        transcriber: FakeTranscriber(reply: { _ in
+          try? await Task.sleep(for: transcribeDelay)
+          return Transcript(text: "Hello there.")
+        }),
         languageModel: FakeLanguageModel(text: "Hello there."),
         target: target,
         permissions: FakePermissions(statuses: [.microphone: .granted, .accessibility: .granted]),
@@ -42,7 +58,10 @@ struct Stage {
       )
     )
     await model.load()
-    controls = MacControls(model: model, revealDelay: revealDelay, noticeTime: noticeTime)
+    monitor = withMonitor ? ShortcutMonitor() : nil
+    controls = MacControls(model: model, monitor: monitor, revealDelay: revealDelay, noticeTime: noticeTime) {
+      [heard] cue in heard.sounds.append(cue)
+    }
     controls.open = { [opened] in opened.destinations.append($0) }
   }
 
@@ -57,6 +76,14 @@ struct Stage {
     if case .recording(_, _, true) = phase { return true }
     return false
   }
+
+  var isWriting: Bool {
+    if case .processing = phase { return true }
+    return false
+  }
+
+  /// How many times a sound was played.
+  func count(_ cue: SoundCue) -> Int { heard.sounds.filter { $0 == cue }.count }
 
   var recordingMode: DictationMode? {
     if case .recording(let mode, _, _) = phase { return mode }

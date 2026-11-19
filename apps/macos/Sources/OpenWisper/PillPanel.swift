@@ -11,6 +11,10 @@ import WisperMacUI
 /// Clicks pass straight through it, except on the pill itself. To make that
 /// exact, the panel follows the pointer on its own instead of relying on the
 /// system: it lets clicks in only while the pointer is over the pill.
+///
+/// It sits just under the Dock in the stacking order. A Dock that is always
+/// showing is never covered (the pill is placed above it); a Dock that hides
+/// itself slides up over the pill, so its icons can be seen and clicked.
 @MainActor
 final class PillPanel {
   private let panel: Panel
@@ -18,6 +22,7 @@ final class PillPanel {
   private let model: AppModel
   private let controls: MacControls
   private var tracking: Task<Void, Never>?
+  private var pillWatch: Watch<Bool>?
   private var screenObserver: (any NSObjectProtocol)?
   private var screenID: CGDirectDisplayID?
 
@@ -38,7 +43,7 @@ final class PillPanel {
     panel.isOpaque = false
     panel.backgroundColor = .clear
     panel.hasShadow = false
-    panel.level = .statusBar
+    panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) - 1)
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
     panel.hidesOnDeactivate = false
     panel.isMovable = false
@@ -74,12 +79,20 @@ final class PillPanel {
         self.follow()
       }
     }
+    // Starts looking at the pointer, and starts over at once when the pill comes or goes.
+    pillWatch = Watch({ [pointer] in pointer.hotFrame.isEmpty }) { [weak self] _ in self?.track() }
+  }
+
+  /// Looks at the pointer again and again: often while it is close to the pill, now and then
+  /// while it is far, and only once a second while there is no pill to point at.
+  private func track() {
+    tracking?.cancel()
     tracking = Task { [weak self] in
       while !Task.isCancelled {
         guard let self else { return }
         let near = self.follow()
-        // Look often only while the pointer is close enough to matter.
-        try? await Task.sleep(for: .milliseconds(near ? 33 : 150))
+        let pause = self.pointer.hotFrame.isEmpty ? 1000 : near ? 33 : 150
+        try? await Task.sleep(for: .milliseconds(pause))
       }
     }
   }

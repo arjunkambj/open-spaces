@@ -24,7 +24,9 @@ final class StatusItem: NSObject, NSMenuDelegate {
     item.menu = menu
     item.button?.toolTip = "Open Wisper"
     item.button?.setAccessibilityLabel("Open Wisper")
-    iconWatch = Watch({ [model] in MenuBarContent.icon(for: model) }) { [weak self] icon in self?.show(icon) }
+    iconWatch = Watch({ [model, controls] in MenuBarContent.icon(for: model, controls: controls) }) {
+      [weak self] icon in self?.show(icon)
+    }
     refreshMicrophones()
   }
 
