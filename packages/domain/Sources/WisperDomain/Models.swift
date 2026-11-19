@@ -12,7 +12,7 @@ public struct Settings: Codable, Sendable, Equatable {
   /// Set once the onboarding flow has been completed.
   public var onboardedAt: Date?
 
-  /// OpenAI transcription model, e.g. `gpt-4o-mini-transcribe`.
+  /// OpenAI transcription model, e.g. `gpt-transcribe`.
   public var transcriptionModel: String
   /// OpenAI chat model used for clean-up, command mode and meeting notes.
   public var textModel: String
@@ -78,13 +78,11 @@ public struct Settings: Codable, Sendable, Equatable {
     self.meetings = meetings
   }
 
-  public static let defaultTranscriptionModel = "gpt-4o-mini-transcribe"
-  public static let defaultTextModel = "gpt-4.1-mini"
+  public static let defaultTranscriptionModel = "gpt-transcribe"
+  public static let defaultTextModel = "gpt-6-luna"
   /// Models offered in pickers. The fields stay free-text so any model works.
-  public static let suggestedTranscriptionModels = [
-    "gpt-4o-mini-transcribe", "gpt-4o-transcribe", "whisper-1",
-  ]
-  public static let suggestedTextModels = ["gpt-4.1-mini", "gpt-4.1", "gpt-5-mini", "gpt-5"]
+  public static let suggestedTranscriptionModels = ["gpt-transcribe", "whisper-1"]
+  public static let suggestedTextModels = ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.2-sol", "gpt-6.2-astra"]
 
   public static let defaultStyles: [AppCategory: WritingStyle] = [
     .personalMessages: .casual,
@@ -128,16 +126,18 @@ public struct Settings: Codable, Sendable, Equatable {
     language = try c.decodeIfPresent(String.self, forKey: .language)
     apiBaseURL = try c.decodeIfPresent(String.self, forKey: .apiBaseURL)
     smartFormatting = try c.decodeIfPresent(Bool.self, forKey: .smartFormatting) ?? d.smartFormatting
-    let rawStyles = try c.decodeIfPresent([String: WritingStyle].self, forKey: .styles) ?? [:]
+    // A style, shortcut or other choice this version does not know (the file was written by a
+    // newer one) is skipped, and the default applies. It never makes the whole file unreadable.
+    let rawStyles = try c.decodeIfPresent([String: IfKnown<WritingStyle>].self, forKey: .styles) ?? [:]
     var styles = d.styles
     for (key, value) in rawStyles {
-      if let category = AppCategory(rawValue: key) { styles[category] = value }
+      if let category = AppCategory(rawValue: key), let style = value.value { styles[category] = style }
     }
     self.styles = styles
-    let rawShortcuts = try c.decodeIfPresent([String: KeyCombo].self, forKey: .shortcuts) ?? [:]
+    let rawShortcuts = try c.decodeIfPresent([String: IfKnown<KeyCombo>].self, forKey: .shortcuts) ?? [:]
     var shortcuts = d.shortcuts
     for (key, value) in rawShortcuts {
-      if let action = ShortcutAction(rawValue: key) { shortcuts[action] = value }
+      if let action = ShortcutAction(rawValue: key), let combo = value.value { shortcuts[action] = combo }
     }
     self.shortcuts = shortcuts
     microphoneID = try c.decodeIfPresent(String.self, forKey: .microphoneID)
@@ -146,7 +146,8 @@ public struct Settings: Codable, Sendable, Equatable {
     launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
     keepDictationAudio = try c.decodeIfPresent(Bool.self, forKey: .keepDictationAudio) ?? d.keepDictationAudio
     historyRetention =
-      try c.decodeIfPresent(HistoryRetention.self, forKey: .historyRetention) ?? d.historyRetention
+      try c.decodeIfPresent(IfKnown<HistoryRetention>.self, forKey: .historyRetention)?.value
+      ?? d.historyRetention
     meetings = try c.decodeIfPresent(MeetingSettings.self, forKey: .meetings) ?? d.meetings
   }
 
@@ -175,6 +176,17 @@ public struct Settings: Codable, Sendable, Equatable {
     try c.encode(keepDictationAudio, forKey: .keepDictationAudio)
     try c.encode(historyRetention, forKey: .historyRetention)
     try c.encode(meetings, forKey: .meetings)
+  }
+}
+
+/// A stored value that may have been written by a newer version of the app. When this version
+/// cannot read it (an enum case it does not know, say), `value` is `nil` instead of the whole
+/// file failing to load.
+struct IfKnown<Value: Decodable>: Decodable {
+  var value: Value?
+
+  init(from decoder: any Decoder) throws {
+    value = try? Value(from: decoder)
   }
 }
 
@@ -412,6 +424,10 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
   public var audioFile: String?
   /// Set when processing failed. `text` is then empty and the audio is kept for a retry.
   public var failure: String?
+  /// For a failed command: the text that was selected when the command was spoken, so a retry
+  /// changes that same text. An empty string means nothing was selected. `nil` on every other
+  /// entry, and on failed commands saved before selections were kept.
+  public var selection: String?
 
   public init(
     id: UUID = UUID(),
@@ -423,7 +439,8 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
     appName: String? = nil,
     bundleID: String? = nil,
     audioFile: String? = nil,
-    failure: String? = nil
+    failure: String? = nil,
+    selection: String? = nil
   ) {
     self.id = id
     self.createdAt = createdAt
@@ -435,6 +452,27 @@ public struct Dictation: Codable, Sendable, Identifiable, Hashable {
     self.bundleID = bundleID
     self.audioFile = audioFile
     self.failure = failure
+    self.selection = selection
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id, createdAt, mode, rawText, text, duration, appName, bundleID, audioFile, failure, selection
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    id = try c.decode(UUID.self, forKey: .id)
+    createdAt = try c.decode(Date.self, forKey: .createdAt)
+    // A mode this version does not know (the file comes from a newer one) reads as plain dictation.
+    mode = try c.decodeIfPresent(IfKnown<DictationMode>.self, forKey: .mode)?.value ?? .dictation
+    rawText = try c.decode(String.self, forKey: .rawText)
+    text = try c.decode(String.self, forKey: .text)
+    duration = try c.decode(TimeInterval.self, forKey: .duration)
+    appName = try c.decodeIfPresent(String.self, forKey: .appName)
+    bundleID = try c.decodeIfPresent(String.self, forKey: .bundleID)
+    audioFile = try c.decodeIfPresent(String.self, forKey: .audioFile)
+    failure = try c.decodeIfPresent(String.self, forKey: .failure)
+    selection = try c.decodeIfPresent(String.self, forKey: .selection)
   }
 
   public var wordCount: Int { text.split(whereSeparator: \.isWhitespace).count }
@@ -629,10 +667,17 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     return segments.map(\.end).max() ?? 0
   }
 
+  /// A time as whole seconds, safe for any number a file or a server may hold
+  /// (negative, huge or not a number), so a bad time can never crash a caller.
+  public static func wholeSeconds(_ time: TimeInterval) -> Int {
+    guard time.isFinite else { return 0 }
+    return Int(min(max(time, 0), 359_999))
+  }
+
   /// The transcript as plain text, one line per segment: `[mm:ss] Speaker: text`.
   public var transcriptText: String {
     segments.sorted { $0.start < $1.start }.map { segment in
-      let total = Int(segment.start)
+      let total = Meeting.wholeSeconds(segment.start)
       let stamp = String(format: "%02d:%02d", total / 60, total % 60)
       return "[\(stamp)] \(segment.speaker.label): \(segment.text)"
     }.joined(separator: "\n")
@@ -647,7 +692,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     dateFormat.dateFormat = "yyyy-MM-dd HH:mm"
     var lines = ["# \(title)", ""]
     var facts = ["**Date:** \(dateFormat.string(from: startedAt))"]
-    if duration > 0 { facts.append("**Length:** \(max(1, Int((duration / 60).rounded()))) min") }
+    if duration > 0 { facts.append("**Length:** \(max(1, Meeting.wholeSeconds(duration + 30) / 60)) min") }
     if !tags.isEmpty { facts.append("**Tags:** \(tags.joined(separator: ", "))") }
     lines.append(facts.joined(separator: "  \n"))
     func section(_ heading: String, _ body: [String]) {
@@ -680,7 +725,9 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Untitled meeting"
     startedAt = try c.decode(Date.self, forKey: .startedAt)
     endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
-    status = try c.decodeIfPresent(MeetingStatus.self, forKey: .status) ?? .ready
+    // A status this version does not know (the file comes from a newer one) reads as `ready`:
+    // nothing is recorded or retried for it, and the file is left as it is.
+    status = try c.decodeIfPresent(IfKnown<MeetingStatus>.self, forKey: .status)?.value ?? .ready
     failure = try c.decodeIfPresent(String.self, forKey: .failure)
     segments = try c.decodeIfPresent([TranscriptSegment].self, forKey: .segments) ?? []
     notes = try c.decodeIfPresent(MeetingNotes.self, forKey: .notes)

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# package-mac-app <zip-path>: check the built "Open Wisper.app" and zip it.
+#
+# Run apps/macos/scripts/bundle first. This finds the bundle it made, checks
+# that its code signature is intact (an ad hoc signature counts), and writes a
+# zip that keeps the bundle whole. CI uses it to attach the app to a run, so a
+# pull request can be tried without building. A release is a disk image
+# instead: see apps/macos/scripts/dmg.
+set -euo pipefail
+zip_path="${1:?usage: package-mac-app <zip-path>}"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+app="$(find "$root/apps/macos" -maxdepth 3 -type d -name 'Open Wisper.app' -not -path '*/.build/*' | head -1)"
+[[ -n "$app" ]] || { echo "error: no 'Open Wisper.app' under apps/macos. Run apps/macos/scripts/bundle first." >&2; exit 1; }
+
+echo "Bundle: $app"
+/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' \
+  "$app/Contents/Info.plist"
+codesign --verify --deep --strict --verbose=2 "$app"
+codesign --display --verbose=2 "$app" 2>&1 | grep -E '^(Identifier|Signature|TeamIdentifier|Format)' || true
+
+rm -f "$zip_path"
+ditto -c -k --keepParent "$app" "$zip_path"
+echo "Wrote $zip_path ($(du -h "$zip_path" | cut -f1 | tr -d ' '))"
+shasum -a 256 "$zip_path"

@@ -8,6 +8,8 @@ import Foundation
 //   Transcriber    -> WisperAI.OpenAITranscriber       (OpenAI audio API)
 //   LanguageModel  -> WisperAI.OpenAILanguageModel     (OpenAI chat API)
 //   AudioCapture   -> WisperAudio.SystemAudioCapture   (AVFoundation / Core Audio)
+//   TextTarget     -> WisperMac.MacTextTarget          (the app you are typing in)
+//   Permissions    -> WisperMac.MacPermissions         (system permission prompts)
 
 // MARK: - Library
 
@@ -48,8 +50,18 @@ public protocol Library: Sendable {
   /// Meetings, newest first. `search` matches title, notes, tags and transcript.
   func meetings(search: String?) async throws -> [Meeting]
   func meeting(_ id: Meeting.ID) async throws -> Meeting?
-  /// Inserts or replaces by `id`.
+  /// Inserts or replaces by `id`. To change part of a stored meeting, use
+  /// `updateMeeting`, so another writer's edit is never overwritten.
   func save(_ meeting: Meeting) async throws
+  /// Applies `change` to the stored meeting in one step and returns the
+  /// result: no other writer, in this process or another, can slip in between
+  /// the read and the write. Returns `nil`, and saves nothing, when the
+  /// meeting does not exist (it is never brought back after a delete).
+  @discardableResult
+  func updateMeeting(
+    _ id: Meeting.ID,
+    _ change: @Sendable (inout Meeting) -> Void
+  ) async throws -> Meeting?
   /// Deletes the meeting and its audio.
   func deleteMeeting(_ id: Meeting.ID) async throws
   /// Folder where a meeting's audio chunks are written. Created on demand.
@@ -76,11 +88,32 @@ extension Library {
 
 // MARK: - Secrets
 
-/// Holds the user's OpenAI API key. Never written to the library files.
+/// Holds the user's API key. Never written to the library files.
+///
+/// There is one key, and it belongs to one server: the host it was saved for
+/// (see `APIServer.host`). It is handed out only for that host, so a change to
+/// the server address in the settings file can never send the key somewhere
+/// its owner did not choose.
 public protocol SecretStore: Sendable {
-  func apiKey() async throws -> String?
-  /// Pass `nil` to remove the key.
-  func setAPIKey(_ key: String?) async throws
+  /// The saved key, when it was saved for `host`. `nil` when there is no key
+  /// or it belongs to another server. Host names are compared without regard
+  /// to case. A key saved before hosts were recorded counts as OpenAI's.
+  func apiKey(for host: String) async throws -> String?
+  /// Saves `key` as the key for `host`, replacing any key saved before.
+  /// Pass `nil` (or an empty key) to remove the saved key, whatever its host.
+  func setAPIKey(_ key: String?, host: String) async throws
+}
+
+extension SecretStore {
+  /// The saved key, when it was saved for OpenAI itself.
+  public func apiKey() async throws -> String? {
+    try await apiKey(for: APIServer.openAIHost)
+  }
+
+  /// Saves `key` as the key for OpenAI itself. Pass `nil` to remove the saved key.
+  public func setAPIKey(_ key: String?) async throws {
+    try await setAPIKey(key, host: APIServer.openAIHost)
+  }
 }
 
 // MARK: - Transcription
@@ -143,19 +176,29 @@ public struct CompletionRequest: Sendable {
   /// (given as JSON text). The returned string is then that JSON.
   public var jsonSchema: String?
   public var temperature: Double?
+  /// How hard the model should think before answering, or `nil` for the
+  /// model's own default. Models that cannot take the value ignore it.
+  public var effort: Effort?
+
+  /// Less effort answers sooner. Dictation clean-up wants `.none`; meeting notes can afford more.
+  public enum Effort: String, Sendable, CaseIterable {
+    case none, low, medium, high
+  }
 
   public init(
     model: String,
     system: String,
     user: String,
     jsonSchema: String? = nil,
-    temperature: Double? = nil
+    temperature: Double? = nil,
+    effort: Effort? = nil
   ) {
     self.model = model
     self.system = system
     self.user = user
     self.jsonSchema = jsonSchema
     self.temperature = temperature
+    self.effort = effort
   }
 }
 
@@ -266,13 +309,16 @@ public enum Permission: String, Sendable, CaseIterable, Hashable {
 }
 
 /// The errors Open Wisper shows to people. Every seam throws these.
+///
+/// `errorDescription` words them for OpenAI. When the person uses a server
+/// of their own, show `message(server:)` instead, which names that server.
 public enum WisperError: Error, Sendable, Equatable, LocalizedError {
   case missingAPIKey
   case invalidAPIKey
   case rateLimited
-  /// The request never reached OpenAI (offline, timeout).
+  /// The request never reached the server (offline, timeout).
   case network(String)
-  /// OpenAI answered with an error.
+  /// The server answered with an error.
   case server(status: Int, message: String)
   case noSpeech
   case permissionDenied(Permission)
@@ -280,6 +326,10 @@ public enum WisperError: Error, Sendable, Equatable, LocalizedError {
   case notFound(String)
   case storage(String)
   case invalidResponse(String)
+  /// `Settings.apiBaseURL` is set, but is not a usable `http://` or `https://` address.
+  case invalidServerAddress
+  /// The language model answered a command with far more text than could be meant.
+  case replyTooLong
 
   public var errorDescription: String? {
     switch self {
@@ -295,6 +345,8 @@ public enum WisperError: Error, Sendable, Equatable, LocalizedError {
     case .notFound(let what): "\(what) was not found."
     case .storage(let detail): "Could not read or save your data: \(detail)"
     case .invalidResponse(let detail): "OpenAI sent a reply that could not be read: \(detail)"
+    case .invalidServerAddress: "The custom server address in Settings is not a valid web address."
+    case .replyTooLong: "The reply was far longer than expected, so it was not typed. Try the command again."
     }
   }
 }
@@ -316,7 +368,8 @@ public enum WisperPaths {
     }
     let base =
       fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+      ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+      .appendingPathComponent("Library/Application Support", isDirectory: true)
     return base.appendingPathComponent("Open Wisper", isDirectory: true)
   }
 
@@ -334,6 +387,31 @@ public enum WisperLink: Sendable, Equatable {
   case showHub
 
   public static let scheme = "openwisper"
+
+  /// Whether this link makes the app start listening or cut a recording short.
+  /// The app acts on such a link without asking only when it carries a valid
+  /// `LinkTicket`; any other sender (a web page, a document) gets a question first.
+  public var needsTrust: Bool {
+    switch self {
+    case .startMeeting, .stopMeeting, .toggleDictation: true
+    case .showMeeting, .showHub: false
+    }
+  }
+
+  /// The link with a ticket attached. See `LinkTicket`.
+  public func url(ticket: String?) -> URL {
+    guard let ticket, !ticket.isEmpty,
+      var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { return url }
+    parts.queryItems = (parts.queryItems ?? []) + [URLQueryItem(name: "ticket", value: ticket)]
+    return parts.url ?? url
+  }
+
+  /// The ticket a link carries, if any.
+  public static func ticket(in url: URL) -> String? {
+    URLComponents(url: url, resolvingAgainstBaseURL: false)?
+      .queryItems?.first { $0.name == "ticket" }?.value
+  }
 
   public var url: URL {
     var parts = URLComponents()
@@ -365,7 +443,9 @@ public enum WisperLink: Sendable, Equatable {
     let path = parts.path.split(separator: "/").map(String.init)
     switch (parts.host?.lowercased(), path.first) {
     case ("meetings", "start"):
-      self = .startMeeting(title: parts.queryItems?.first { $0.name == "title" }?.value)
+      // A title is a short label. Anything longer is cut, and line breaks are dropped.
+      let title = parts.queryItems?.first { $0.name == "title" }?.value
+      self = .startMeeting(title: title.map(WisperLink.tidyTitle).flatMap { $0.isEmpty ? nil : $0 })
     case ("meetings", "stop"):
       self = .stopMeeting
     case ("meetings", let id?):
@@ -415,4 +495,86 @@ public protocol Permissions: AnyObject {
   /// the user is in System Settings, so poll `status` to see it change.
   @discardableResult
   func request(_ permission: Permission) async -> PermissionStatus
+}
+
+extension WisperLink {
+  /// One line, at most 120 characters.
+  static func tidyTitle(_ title: String) -> String {
+    let oneLine = title.split(whereSeparator: \.isNewline).joined(separator: " ")
+    return String(oneLine.trimmingCharacters(in: .whitespaces).prefix(120))
+  }
+}
+
+/// Proof that a link was sent by something that can already write the data
+/// folder (the bundled `wisper` tool, the keyboard extension), and not by a
+/// web page or a document.
+///
+/// The sender calls `issue` and puts the ticket in the link
+/// (`WisperLink.url(ticket:)`). The app calls `redeem` with the ticket from
+/// the link it received. A ticket works once, and only for a minute.
+public enum LinkTicket {
+  /// How long a ticket stays valid.
+  public static let lifetime: TimeInterval = 60
+
+  /// Writes a fresh ticket into the data folder and returns it.
+  public static func issue(in root: URL = WisperPaths.defaultRoot()) throws -> String {
+    let folder = self.folder(in: root)
+    do {
+      try FileManager.default.createDirectory(
+        at: folder,
+        withIntermediateDirectories: true,
+        attributes: [.posixPermissions: 0o700]
+      )
+      sweep(folder)
+      let ticket = UUID().uuidString + UUID().uuidString
+      let file = folder.appendingPathComponent(ticket)
+      guard
+        FileManager.default.createFile(
+          atPath: file.path,
+          contents: Data(),
+          attributes: [.posixPermissions: 0o600]
+        )
+      else { throw WisperError.storage("The data folder could not be written.") }
+      return ticket
+    } catch let error as WisperError {
+      throw error
+    } catch {
+      throw WisperError.storage(error.localizedDescription)
+    }
+  }
+
+  /// Whether `ticket` was issued in this data folder within the last minute.
+  /// A ticket is used up by this call.
+  public static func redeem(_ ticket: String?, in root: URL = WisperPaths.defaultRoot(), now: Date = Date())
+    -> Bool
+  {
+    // A ticket is a bare name made of letters, digits and dashes: never a path.
+    guard let ticket, (32...128).contains(ticket.count),
+      ticket.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") })
+    else { return false }
+    let file = folder(in: root).appendingPathComponent(ticket)
+    guard let made = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.creationDate] as? Date
+    else { return false }
+    guard (try? FileManager.default.removeItem(at: file)) != nil else { return false }
+    let age = now.timeIntervalSince(made)
+    return age >= -5 && age <= lifetime
+  }
+
+  private static func folder(in root: URL) -> URL {
+    root.appendingPathComponent(".tickets", isDirectory: true)
+  }
+
+  /// Removes tickets nobody used.
+  private static func sweep(_ folder: URL) {
+    let old = Date().addingTimeInterval(-lifetime * 2)
+    let files =
+      (try? FileManager.default.contentsOfDirectory(
+        at: folder,
+        includingPropertiesForKeys: [.creationDateKey]
+      )) ?? []
+    for file in files {
+      let made = (try? file.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast
+      if made < old { try? FileManager.default.removeItem(at: file) }
+    }
+  }
 }

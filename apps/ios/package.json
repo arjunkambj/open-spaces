@@ -1,0 +1,21 @@
+{
+  "name": "@open-wisper/ios",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open Wisper for iPhone, with its keyboard.",
+  "scripts": {
+    "generate": "../../scripts/ios generate",
+    "build": "../../scripts/swiftw build --package-path Phone && ../../scripts/ios build",
+    "test": "../../scripts/swiftw test --package-path Phone && ../../scripts/ios test",
+    "lint": "swift format lint --strict --recursive --parallel App Keyboard Widgets Shared Tests Phone/Package.swift Phone/Sources Phone/Tests",
+    "snapshots": "../../scripts/swiftw run --package-path Phone wisper-phone-snapshots build/snapshots"
+  },
+  "dependencies": {
+    "@open-wisper/domain": "workspace:*",
+    "@open-wisper/store": "workspace:*",
+    "@open-wisper/ai": "workspace:*",
+    "@open-wisper/audio": "workspace:*",
+    "@open-wisper/engine": "workspace:*",
+    "@open-wisper/ui": "workspace:*"
+  }
+}

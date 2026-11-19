@@ -1,24 +1,48 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "./node_modules/turbo/schema.json",
   "ui": "stream",
-  "globalDependencies": ["scripts/swiftw", ".swift-format"],
+  "noUpdateNotifier": true,
+  "concurrency": "2",
+  "globalDependencies": ["scripts/swiftw", "scripts/ios", ".swift-format"],
+  "globalEnv": ["WISPER_TOOLCHAIN", "DEVELOPER_DIR", "SDKROOT", "TOOLCHAINS"],
+  "globalPassThroughEnv": [
+    "CI",
+    "GITHUB_ACTIONS",
+    "TMPDIR",
+    "IOS_SKIP",
+    "IOS_SCHEME",
+    "IOS_DESTINATION",
+    "IOS_LOG_DIR"
+  ],
   "tasks": {
+    "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
+      "outputs": []
+    },
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["Package.swift", "Sources/**", "Resources/**", "project.yml"],
+      "inputs": ["$TURBO_DEFAULT$", "!Tests/**", "!**/*.md"],
       "outputs": []
     },
     "test": {
       "dependsOn": ["build"],
-      "inputs": ["Package.swift", "Sources/**", "Tests/**"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
       "outputs": []
     },
-    "lint": {
-      "inputs": ["Package.swift", "Sources/**", "Tests/**", "App/**", "Keyboard/**"],
-      "outputs": []
+    "@open-wisper/ios#build": {
+      "dependsOn": ["^build"],
+      "cache": false
     },
-    "bundle": { "dependsOn": ["build"], "cache": false },
-    "dev": { "cache": false, "persistent": true },
-    "generate": { "cache": false }
+    "@open-wisper/ios#test": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "bundle": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "generate": {
+      "cache": false
+    }
   }
 }

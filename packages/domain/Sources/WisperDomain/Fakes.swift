@@ -152,6 +152,15 @@ public actor InMemoryLibrary: Library {
     broadcaster.send(.meetings)
   }
 
+  @discardableResult
+  public func updateMeeting(_ id: Meeting.ID, _ change: @Sendable (inout Meeting) -> Void) -> Meeting? {
+    guard let index = storedMeetings.firstIndex(where: { $0.id == id }) else { return nil }
+    let before = storedMeetings[index]
+    change(&storedMeetings[index])
+    if storedMeetings[index] != before { broadcaster.send(.meetings) }
+    return storedMeetings[index]
+  }
+
   public func deleteMeeting(_ id: Meeting.ID) {
     storedMeetings.removeAll { $0.id == id }
     broadcaster.send(.meetings)
@@ -174,13 +183,23 @@ public actor InMemoryLibrary: Library {
 
 public actor InMemorySecretStore: SecretStore {
   private var key: String?
+  private var host: String
 
-  public init(apiKey: String? = nil) { key = apiKey }
+  /// - Parameters:
+  ///   - apiKey: the key that is already saved, if any.
+  ///   - host: the server that key was saved for. OpenAI itself unless said otherwise.
+  public init(apiKey: String? = nil, host: String = APIServer.openAIHost) {
+    key = (apiKey?.isEmpty ?? true) ? nil : apiKey
+    self.host = host
+  }
 
-  public func apiKey() -> String? { key }
+  public func apiKey(for host: String) -> String? {
+    APIServer.sameHost(host, self.host) ? key : nil
+  }
 
-  public func setAPIKey(_ key: String?) {
+  public func setAPIKey(_ key: String?, host: String) {
     self.key = (key?.isEmpty ?? true) ? nil : key
+    self.host = host
   }
 }
 

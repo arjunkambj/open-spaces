@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest something Open Wisper should do.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open Wisper keeps everything on your device: no account, no server of ours, no tracking.
+        Ideas that need any of those will not fit.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the situation, not the solution. What is hard or missing today?
+      placeholder: When I dictate into my terminal, I want ...
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you imagine it working.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do today instead?
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where?
+      multiple: true
+      options:
+        - macOS app
+        - iOS app
+        - iOS keyboard
+        - "`wisper` command-line tool or MCP server"
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Would you like to build it?
+      options:
+        - label: I can open a pull request for this.

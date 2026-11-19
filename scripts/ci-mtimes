@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ci-mtimes: give every tracked file a "last changed" time that depends only
+# on its content.
+#
+# Why: CI checks the code out fresh each run, so every file looks brand new and
+# SwiftPM rebuilds everything even when a saved .build folder was restored.
+# With times tied to content, an unchanged file looks unchanged, and only what
+# really changed is compiled again. Meant for CI; harmless but pointless locally.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+# 2024-01-01 plus up to 194 days, picked by the first six hex digits of the
+# file's content hash: always in the past, and different content gives a
+# different time.
+git ls-files -s -z | perl -0 -ne '
+  chomp;
+  my ($meta, $path) = split /\t/, $_, 2;
+  my $hash = (split / /, $meta)[1];
+  my $time = 1704067200 + hex(substr($hash, 0, 6));
+  utime $time, $time, $path;
+'

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Open Wisper</string>
+	<key>CFBundleExecutable</key>
+	<string>OpenWisper</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>dev.openwisper.mac</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Open Wisper</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<!-- scripts/bundle fills in the two version numbers. -->
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>dev.openwisper.mac</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>openwisper</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.4</string>
+	<!-- A menu-bar app: no Dock icon until the app asks for one (see scripts/bundle). -->
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Open source under the MIT licence.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Open Wisper listens to your microphone while you dictate or record a meeting, and turns what you say into text.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Open Wisper records the sound your Mac plays during a meeting, so the notes include what other people said.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
+	<!--
+	  Updates (Sparkle). The app asks this address for the newest version about once a day,
+	  and when "Check for Updates…" is chosen. GitHub sends the request on to the newest release.
+	-->
+	<key>SUFeedURL</key>
+	<string>https://github.com/arjunkambj/open-wisper/releases/latest/download/appcast.xml</string>
+	<!--
+	  The public half of the update signing key. A download, and the list of versions itself,
+	  is only accepted when it was signed with the private half, which scripts/setup-signing
+	  made and which is not in this repository. A fork must put its own key here.
+	-->
+	<key>SUPublicEDKey</key>
+	<string>pBoeNXXb/WlKU+EJ0dkbw/JSN2lu1k/Ly1HrHkz7Rp0=</string>
+	<!-- Check without asking first, once a day (in seconds). Nothing is installed without a yes. -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<!-- Check the signature of a download before it is opened, and of the list of versions too. -->
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<!-- Never send details about this Mac along with a check. -->
+	<key>SUEnableSystemProfiling</key>
+	<false/>
+</dict>
+</plist>

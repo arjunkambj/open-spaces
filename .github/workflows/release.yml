@@ -1,0 +1,161 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the macOS app, signs it, and publishes a GitHub
+# Release with two files:
+#
+#   Open-Wisper-0.1.0.dmg   the disk image people download
+#   appcast.xml             the list of versions the app reads to update itself
+#
+# Apps that are already installed ask for
+# https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml, which GitHub
+# sends on to the newest release. So publishing a release is what hands out an update.
+#
+# It needs three repository secrets, which `scripts/setup-signing --github` saves:
+#   MAC_SIGNING_P12_BASE64     the code-signing certificate and its private key
+#   MAC_SIGNING_P12_PASSWORD   the password of that file
+#   SPARKLE_ED_PRIVATE_KEY     the private half of the update signing key
+#
+# The certificate is one we made ourselves, not an Apple Developer ID, and the app is
+# not notarised: the release notes say how to open it the first time.
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  XCODE_VERSION: "26.6"
+
+jobs:
+  macos:
+    name: Build and publish the macOS app
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write # to create the release and attach the files
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # The whole history: the build number counts the commits.
+          fetch-depth: 0
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_$XCODE_VERSION.app"
+          xcodebuild -version
+          swift --version
+      - name: Check the tag against the version
+        # The app only takes an update with a higher build number, and the build number
+        # starts with the version. A tag for a version that was not raised would publish
+        # an update nobody gets.
+        run: |
+          version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' apps/macos/package.json | head -1)"
+          wanted="${TAG#v}"
+          if [[ "$wanted" != "$version" && "$wanted" != "$version"-* ]]; then
+            echo "::error::The tag is $TAG, but apps/macos/package.json says version $version. Raise the version there, commit, and tag that commit as v$version."
+            exit 1
+          fi
+          echo "OPEN_WISPER_VERSION=$wanted" >> "$GITHUB_ENV"
+          echo "OPEN_WISPER_SIGNING_DIR=$RUNNER_TEMP/open-wisper-signing" >> "$GITHUB_ENV"
+      - name: Put the signing keys in place
+        # The secrets go into files only this job can read, and from there into a keychain
+        # of their own. Nothing is printed but the public half of each key.
+        env:
+          MAC_SIGNING_P12_BASE64: ${{ secrets.MAC_SIGNING_P12_BASE64 }}
+          MAC_SIGNING_P12_PASSWORD: ${{ secrets.MAC_SIGNING_P12_PASSWORD }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$MAC_SIGNING_P12_BASE64" || -z "$MAC_SIGNING_P12_PASSWORD" || -z "$SPARKLE_ED_PRIVATE_KEY" ]]; then
+            echo "::error::The signing secrets are missing. Run scripts/setup-signing --github on the maintainer's Mac."
+            exit 1
+          fi
+          umask 077
+          mkdir -p "$OPEN_WISPER_SIGNING_DIR"
+          printf '%s' "$MAC_SIGNING_P12_BASE64" | base64 --decode > "$OPEN_WISPER_SIGNING_DIR/identity.p12"
+          printf '%s\n' "$MAC_SIGNING_P12_PASSWORD" > "$OPEN_WISPER_SIGNING_DIR/identity.p12.password"
+          printf '%s\n' "$SPARKLE_ED_PRIVATE_KEY" > "$OPEN_WISPER_SIGNING_DIR/update-key"
+          scripts/setup-signing
+      - name: Build and sign the app
+        working-directory: apps/macos
+        run: ./scripts/bundle
+      - name: Make the disk image
+        working-directory: apps/macos
+        run: ./scripts/dmg
+      - name: Write what is new
+        # GitHub's own list of what was merged since the last release. The app shows it
+        # in the update window. If it cannot be made, the release still goes out.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" --jq .body > whats-new.md ||
+            [[ ! -s whats-new.md ]]; then
+            printf 'See what is new: https://github.com/%s/releases/tag/%s\n' "$GITHUB_REPOSITORY" "$TAG" > whats-new.md
+          fi
+      - name: Sign the disk image and write the update feed
+        working-directory: apps/macos
+        run: |
+          ./scripts/appcast \
+            --url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" \
+            --notes "$GITHUB_WORKSPACE/whats-new.md"
+      - name: Check this build is newer than the newest release
+        # A release with a "-" in its tag is a pre-release: GitHub does not hand it out
+        # as the newest one, so installed apps never see it.
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          new="$(sed -n 's/.*<sparkle:version>\(.*\)<\/sparkle:version>.*/\1/p' apps/macos/build/update/appcast.xml | head -1)"
+          newest_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          if [[ -z "$newest_tag" || "$newest_tag" == "$TAG" ]]; then
+            echo "Build $new. There is no other release to compare with."
+            exit 0
+          fi
+          if ! curl -fsSL -o newest.xml "https://github.com/$GITHUB_REPOSITORY/releases/download/$newest_tag/appcast.xml"; then
+            echo "The newest release ($newest_tag) has no update feed, so there is nothing to compare with."
+            exit 0
+          fi
+          old="$(sed -n 's/.*<sparkle:version>\(.*\)<\/sparkle:version>.*/\1/p' newest.xml | head -1)"
+          highest="$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)"
+          if [[ "$new" == "$old" || "$highest" != "$new" ]]; then
+            echo "::error::This is build $new, but the newest release ($newest_tag) is build $old. Installed apps would not take it as an update. Raise the version in apps/macos/package.json."
+            exit 1
+          fi
+          echo "Build $new is newer than $newest_tag (build $old)."
+      - name: Write the release notes
+        run: |
+          dmg="Open-Wisper-$OPEN_WISPER_VERSION.dmg"
+          sha="$(shasum -a 256 "apps/macos/build/update/$dmg" | cut -d' ' -f1)"
+          sed -e "s/{{TAG}}/$TAG/g" -e "s/{{DMG}}/$dmg/g" -e "s/{{SHA256}}/$sha/g" \
+            .github/release-notes.md > release-notes.md
+          cat release-notes.md
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dmg="apps/macos/build/update/Open-Wisper-$OPEN_WISPER_VERSION.dmg"
+          feed="apps/macos/build/update/appcast.xml"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # The disk image first: the feed must never point at a file that is not there yet.
+            gh release upload "$TAG" "$dmg" --clobber
+            gh release upload "$TAG" "$feed" --clobber
+          else
+            prerelease=()
+            [[ "$TAG" == *-* ]] && prerelease=(--prerelease)
+            gh release create "$TAG" "$dmg" "$feed" --verify-tag --title "Open Wisper $TAG" \
+              --notes-file release-notes.md --generate-notes "${prerelease[@]}"
+          fi
+      - name: Remove the signing keys
+        if: always()
+        run: |
+          if [[ -n "${OPEN_WISPER_SIGNING_DIR:-}" ]]; then
+            security delete-keychain "$OPEN_WISPER_SIGNING_DIR/signing.keychain-db" 2>/dev/null || true
+            rm -rf "$OPEN_WISPER_SIGNING_DIR"
+          fi

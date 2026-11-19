@@ -35,7 +35,7 @@ import Testing
 }
 
 @Test func inMemoryLibraryStoresSearchesAndReportsChanges() async throws {
-  let library = InMemoryLibrary()
+  let library: any Library = InMemoryLibrary()
   var changes = library.changes().makeAsyncIterator()
   try await library.save(DictionaryWord(text: "Kubernetes"))
   #expect(await changes.next() == .words)
@@ -88,4 +88,61 @@ import Testing
   }
   #expect(markdown.contains("- [x] Send onboarding copy to design (Jordan)"))
   #expect(markdown.contains("**Length:** 31 min"))
+}
+
+@Test func updateMeetingChangesInPlaceAndNeverRevivesADeletedMeeting() async throws {
+  let library: any Library = InMemoryLibrary()
+  let meeting = Meeting(title: "Sync")
+  try await library.save(meeting)
+  let updated = try await library.updateMeeting(meeting.id) { $0.tags = ["team"] }
+  #expect(updated?.tags == ["team"])
+  #expect(try await library.meeting(meeting.id)?.title == "Sync")
+  try await library.deleteMeeting(meeting.id)
+  #expect(try await library.updateMeeting(meeting.id) { $0.title = "Back" } == nil)
+  #expect(try await library.meetings().isEmpty)
+}
+
+@Test func linkTicketsWorkOnceAndOnlyFromTheDataFolder() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("tickets-\(UUID().uuidString)")
+  defer { try? FileManager.default.removeItem(at: root) }
+  let ticket = try LinkTicket.issue(in: root)
+  let url = WisperLink.startMeeting(title: "Standup").url(ticket: ticket)
+  #expect(WisperLink(url) == .startMeeting(title: "Standup"))
+  #expect(WisperLink.ticket(in: url) == ticket)
+  #expect(LinkTicket.redeem(WisperLink.ticket(in: url), in: root))
+  #expect(!LinkTicket.redeem(ticket, in: root))
+
+  #expect(!LinkTicket.redeem(nil, in: root))
+  #expect(!LinkTicket.redeem("made-up-by-a-web-page-0000000000000000", in: root))
+  #expect(!LinkTicket.redeem("../../../../etc/passwd-0000000000000000000", in: root))
+  let late = try LinkTicket.issue(in: root)
+  #expect(!LinkTicket.redeem(late, in: root, now: Date().addingTimeInterval(LinkTicket.lifetime + 5)))
+
+  #expect(WisperLink.startMeeting(title: nil).needsTrust)
+  #expect(WisperLink.toggleDictation.needsTrust)
+  #expect(!WisperLink.showHub.needsTrust)
+}
+
+@Test func linksCutLongTitlesAndBadTimesNeverCrash() {
+  let long = String(repeating: "a", count: 5_000) + "\nsecond line"
+  var parts = URLComponents(string: "openwisper://meetings/start")!
+  parts.queryItems = [URLQueryItem(name: "title", value: long)]
+  guard case .startMeeting(let title?) = WisperLink(parts.url!) else {
+    Issue.record("the link did not parse")
+    return
+  }
+  #expect(title.count == 120)
+  #expect(!title.contains("\n"))
+
+  let meeting = Meeting(
+    title: "Odd times",
+    endedAt: Date().addingTimeInterval(1e300),
+    segments: [
+      TranscriptSegment(speaker: .me, start: 1e300, end: .infinity, text: "a"),
+      TranscriptSegment(speaker: .me, start: -.infinity, end: .nan, text: "b"),
+      TranscriptSegment(speaker: .others, start: .nan, end: 2, text: "c"),
+    ]
+  )
+  #expect(meeting.transcriptText.contains("Me: a"))
+  #expect(meeting.markdown().contains("# Odd times"))
 }

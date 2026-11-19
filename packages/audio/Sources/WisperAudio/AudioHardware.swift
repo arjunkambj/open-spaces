@@ -1,0 +1,214 @@
+#if os(macOS)
+  import CoreAudio
+  import Foundation
+  import WisperDomain
+  import os
+
+  /// Small, typed reads of Core Audio's property system.
+  enum AudioHardware {
+    static let system = AudioObjectID(kAudioObjectSystemObject)
+    static let unknown = AudioObjectID(kAudioObjectUnknown)
+
+    /// Every private device this package creates has a UID that starts with this.
+    static let ownDevicePrefix = "openwisper.system-audio."
+
+    static func address(
+      _ selector: AudioObjectPropertySelector,
+      scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+    ) -> AudioObjectPropertyAddress {
+      AudioObjectPropertyAddress(
+        mSelector: selector,
+        mScope: scope,
+        mElement: kAudioObjectPropertyElementMain
+      )
+    }
+
+    /// Reads a fixed-size property into `value`. Returns whether it worked.
+    static func read<Value>(
+      _ object: AudioObjectID,
+      _ selector: AudioObjectPropertySelector,
+      scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
+      into value: inout Value
+    ) -> Bool {
+      var address = address(selector, scope: scope)
+      var size = UInt32(MemoryLayout<Value>.size)
+      return withUnsafeMutablePointer(to: &value) {
+        AudioObjectGetPropertyData(object, &address, 0, nil, &size, $0)
+      } == noErr
+    }
+
+    static func string(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
+      var value: Unmanaged<CFString>?
+      guard read(object, selector, into: &value) else { return nil }
+      return value?.takeRetainedValue() as String?
+    }
+
+    static func devices() -> [AudioDeviceID] {
+      var address = address(kAudioHardwarePropertyDevices)
+      var size: UInt32 = 0
+      guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size) == noErr else { return [] }
+      var ids = [AudioDeviceID](repeating: unknown, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
+      guard !ids.isEmpty, AudioObjectGetPropertyData(system, &address, 0, nil, &size, &ids) == noErr
+      else { return [] }
+      return Array(ids.prefix(Int(size) / MemoryLayout<AudioDeviceID>.size))
+    }
+
+    /// How many channels `device` can record.
+    static func inputChannels(_ device: AudioDeviceID) -> Int {
+      var address = address(kAudioDevicePropertyStreamConfiguration, scope: kAudioDevicePropertyScopeInput)
+      var size: UInt32 = 0
+      guard AudioObjectGetPropertyDataSize(device, &address, 0, nil, &size) == noErr, size > 0
+      else { return 0 }
+      let raw = UnsafeMutableRawPointer.allocate(
+        byteCount: Int(size),
+        alignment: MemoryLayout<AudioBufferList>.alignment
+      )
+      defer { raw.deallocate() }
+      guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, raw) == noErr else { return 0 }
+      let list = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
+      return list.reduce(0) { $0 + Int($1.mNumberChannels) }
+    }
+
+    static func defaultDevice(_ selector: AudioObjectPropertySelector) -> AudioDeviceID? {
+      var device = unknown
+      guard read(system, selector, into: &device), device != unknown else { return nil }
+      return device
+    }
+
+    /// The device with this UID, if it is connected right now.
+    static func device(uid: String) -> AudioDeviceID? {
+      var address = address(kAudioHardwarePropertyTranslateUIDToDevice)
+      var device = unknown
+      var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+      var qualifier = uid as CFString
+      let status = withUnsafePointer(to: &qualifier) {
+        AudioObjectGetPropertyData(
+          system,
+          &address,
+          UInt32(MemoryLayout<CFString>.size),
+          $0,
+          &size,
+          &device
+        )
+      }
+      return status == noErr && device != unknown ? device : nil
+    }
+
+    /// Core Audio's object for a running process, used to leave it out of a tap.
+    static func process(pid: pid_t) -> AudioObjectID? {
+      var address = address(kAudioHardwarePropertyTranslatePIDToProcessObject)
+      var object = unknown
+      var size = UInt32(MemoryLayout<AudioObjectID>.size)
+      var qualifier = pid
+      let status = AudioObjectGetPropertyData(
+        system,
+        &address,
+        UInt32(MemoryLayout<pid_t>.size),
+        &qualifier,
+        &size,
+        &object
+      )
+      return status == noErr && object != unknown ? object : nil
+    }
+
+    /// Whether `device` is a combined device that only this process can see.
+    /// Audio frameworks (and this package) make such devices for their own
+    /// use; they are not something a person can pick.
+    static func isPrivateAggregate(_ device: AudioDeviceID) -> Bool {
+      var transport: UInt32 = 0
+      guard read(device, kAudioDevicePropertyTransportType, into: &transport),
+        transport == kAudioDeviceTransportTypeAggregate
+      else { return false }
+      var composition: Unmanaged<CFDictionary>?
+      guard read(device, kAudioAggregateDevicePropertyComposition, into: &composition),
+        let values = composition?.takeRetainedValue() as? [String: Any]
+      else { return false }
+      return (values[kAudioAggregateDeviceIsPrivateKey] as? NSNumber)?.boolValue ?? false
+    }
+
+    /// Input devices a person could pick as their microphone.
+    static func microphones() -> [AudioDevice] {
+      let preferred = defaultDevice(kAudioHardwarePropertyDefaultInputDevice)
+      return devices().compactMap { device in
+        guard inputChannels(device) > 0, !isPrivateAggregate(device),
+          let uid = string(device, kAudioDevicePropertyDeviceUID),
+          !uid.hasPrefix(ownDevicePrefix)
+        else { return nil }
+        let name = string(device, kAudioObjectPropertyName) ?? "Microphone"
+        return AudioDevice(id: uid, name: name, isDefault: device == preferred)
+      }
+    }
+  }
+
+  /// Calls back when one property of the audio system changes, until dropped.
+  ///
+  /// `@unchecked Sendable`: immutable after `init`.
+  final class HardwareWatch: @unchecked Sendable {
+    private struct Listener: Sendable {
+      var queue: DispatchQueue
+      var changed: @Sendable () -> Void
+    }
+
+    private struct Registry: Sendable {
+      var lastToken: UInt = 0
+      var listeners: [UInt: Listener] = [:]
+      var calls = 0
+    }
+
+    /// Every live watch, by the number Core Audio hands back with each change.
+    ///
+    /// Core Audio removes a listener by matching what it was added with. A Swift closure
+    /// passed to the block-based calls is wrapped in a new block each time, so a remove
+    /// never matched and listeners piled up. A plain function and a number always match,
+    /// and a number, unlike a pointer, cannot outlive what it stands for: a change that
+    /// arrives late finds nothing under it.
+    private static let registry = OSAllocatedUnfairLock(initialState: Registry())
+
+    private static let listener: AudioObjectPropertyListenerProc = { _, _, _, context in
+      let token = UInt(bitPattern: context)
+      let found = HardwareWatch.registry.withLock { registry in
+        registry.calls += 1
+        return registry.listeners[token]
+      }
+      if let found { found.queue.async(execute: found.changed) }
+      return noErr
+    }
+
+    /// How often Core Audio has called this process about a watched property, for a live
+    /// watch or not. A watch that was dropped but never taken away would keep adding to it.
+    static var callsFromTheSystem: Int { registry.withLock { $0.calls } }
+
+    private let object: AudioObjectID
+    private var address: AudioObjectPropertyAddress
+    private let token: UInt
+
+    /// - Parameter queue: Where `changed` runs.
+    init?(
+      _ selector: AudioObjectPropertySelector,
+      of object: AudioObjectID = AudioHardware.system,
+      on queue: DispatchQueue,
+      changed: @escaping @Sendable () -> Void
+    ) {
+      self.object = object
+      address = AudioHardware.address(selector)
+      let token = HardwareWatch.registry.withLock { registry in
+        registry.lastToken += 1
+        registry.listeners[registry.lastToken] = Listener(queue: queue, changed: changed)
+        return registry.lastToken
+      }
+      self.token = token
+      let context = UnsafeMutableRawPointer(bitPattern: token)
+      guard AudioObjectAddPropertyListener(object, &address, HardwareWatch.listener, context) == noErr else {
+        HardwareWatch.registry.withLock { _ = $0.listeners.removeValue(forKey: token) }
+        return nil
+      }
+    }
+
+    deinit {
+      // Forgotten first, so a change already on its way is not passed on.
+      HardwareWatch.registry.withLock { _ = $0.listeners.removeValue(forKey: token) }
+      let context = UnsafeMutableRawPointer(bitPattern: token)
+      AudioObjectRemovePropertyListener(object, &address, HardwareWatch.listener, context)
+    }
+  }
+#endif

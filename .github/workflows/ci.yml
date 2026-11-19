@@ -1,0 +1,179 @@
+name: CI
+
+# Runs on every pull request into main, on every push to main, and on the
+# throwaway branches that scripts/ci-try makes. It can also be started by hand
+# (Actions > CI > Run workflow), which adds pictures of the iOS app.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - "ci/try-**"
+  workflow_dispatch:
+
+# A newer push to the same branch or pull request replaces the older run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # macos-26 is the newest generally available macOS image. Its newest Xcode is
+  # picked by name so an image update cannot change the compiler silently.
+  XCODE_VERSION: "26.6"
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      macos-bundle: ${{ steps.look.outputs.macos-bundle }}
+      ios: ${{ steps.look.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: See which apps can be built
+        id: look
+        run: |
+          have() { [[ -f "$1" ]] && echo true || echo false; }
+          echo "macos-bundle=$(have apps/macos/scripts/bundle)" >> "$GITHUB_OUTPUT"
+          echo "ios=$(have apps/ios/project.yml)" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  check:
+    name: Lint, build and test
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      # The ios-app job builds the iOS app. Do not build it twice.
+      IOS_SKIP: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_$XCODE_VERSION.app"
+          xcodebuild -version
+          swift --version
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Restore Swift build folders
+        id: swift-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            packages/*/.build
+            apps/macos/.build
+            apps/ios/Phone/.build
+          key: swift-check-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-${{ github.sha }}
+          restore-keys: |
+            swift-check-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-
+      - name: Make unchanged files look unchanged
+        run: scripts/ci-mtimes
+      - name: Lint, build and test everything
+        # One Swift build at a time: the runner has 3 cores and 7 GB of memory.
+        # Keep going after a failure so one run shows everything that is broken.
+        # Print lines as they happen, each marked with its package, so a test
+        # that hangs can be seen and named; the time limit then stops it.
+        timeout-minutes: 30
+        run: pnpm check --concurrency=1 --continue=dependencies-successful --log-order=stream
+      - name: Save Swift build folders
+        # Saved only from main and try branches, so pull requests reuse main's
+        # copy and do not fill the cache with their own.
+        if: (!cancelled()) && github.event_name == 'push' && steps.swift-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            packages/*/.build
+            apps/macos/.build
+            apps/ios/Phone/.build
+          key: ${{ steps.swift-cache.outputs.cache-primary-key }}
+
+  macos-app:
+    name: macOS app
+    needs: plan
+    if: needs.plan.outputs.macos-bundle == 'true'
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_$XCODE_VERSION.app"
+          xcodebuild -version
+          swift --version
+      - name: Build the app bundle
+        working-directory: apps/macos
+        run: ./scripts/bundle
+      - name: Check and zip the bundle
+        run: scripts/package-mac-app Open-Wisper-macOS.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          path: Open-Wisper-macOS.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-app:
+    name: iOS app
+    needs: plan
+    if: needs.plan.outputs.ios == 'true'
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      IOS_LOG_DIR: ${{ github.workspace }}/ios-logs
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_$XCODE_VERSION.app"
+          xcodebuild -version
+          swift --version
+      - name: Install XcodeGen
+        run: command -v xcodegen || brew install xcodegen
+      - name: Generate the Xcode project
+        run: scripts/ios generate
+      - name: Build for the iOS Simulator
+        run: scripts/ios build
+      - name: Run the tests
+        run: scripts/ios test
+      - name: Take pictures of the app in the simulator
+        # Something to look at, not a check: a failure here never fails the job.
+        # It takes about eight minutes, so only on request: a run started by hand,
+        # or `scripts/ci-try ios`.
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'ci/try-ios')
+        continue-on-error: true
+        timeout-minutes: 15
+        run: apps/ios/scripts/screenshots ios-screenshots
+      - name: Upload the pictures
+        if: (!cancelled()) && (github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'ci/try-ios'))
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-screenshots
+          path: ios-screenshots
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload the raw Xcode logs
+        if: (!cancelled())
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-xcodebuild-logs
+          path: ios-logs
+          if-no-files-found: ignore
+          retention-days: 14

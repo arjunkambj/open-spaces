@@ -8,6 +8,7 @@
     "test": "../../scripts/swiftw test",
     "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests",
     "bundle": "./scripts/bundle",
+    "dmg": "./scripts/bundle && ./scripts/dmg",
     "dev": "./scripts/bundle && open 'build/Open Wisper.app'"
   },
   "dependencies": {

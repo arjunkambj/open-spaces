@@ -9,7 +9,9 @@ let package = Package(
     .library(name: "WisperEngine", targets: ["WisperEngine"])
   ],
   dependencies: [
-    .package(path: "../domain")
+    .package(path: "../domain"),
+    // Tests only: the engines are also tested on the real file library.
+    .package(path: "../store"),
   ],
   targets: [
     .target(
@@ -20,7 +22,11 @@ let package = Package(
     ),
     .testTarget(
       name: "WisperEngineTests",
-      dependencies: ["WisperEngine", .product(name: "WisperDomain", package: "domain")]
+      dependencies: [
+        "WisperEngine",
+        .product(name: "WisperDomain", package: "domain"),
+        .product(name: "WisperStore", package: "store"),
+      ]
     ),
   ]
 )
