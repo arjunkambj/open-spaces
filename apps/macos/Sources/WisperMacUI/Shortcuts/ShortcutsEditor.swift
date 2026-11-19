@@ -16,38 +16,33 @@ public struct ShortcutsEditor: View {
   @State private var recording: ShortcutAction?
   /// Why the last recorded keys were turned down, per action.
   @State private var problems: [ShortcutAction: String] = [:]
-  private let showsGlobeHint: Bool?
+  private let globeHint: GlobeKeyHint.Stage?
+  private let globeUndo: GlobeKey.SystemUse?
   private let previewRecording: ShortcutAction?
   private let previewProblem: (ShortcutAction, String)?
 
   public init() {
-    self.init(showsGlobeHint: nil)
+    self.init(globeHint: nil)
   }
 
   /// For still pictures: fixes what the system would decide and what the person would be doing.
+  /// - globeHint: what the fn-key hint says; `nil` follows the Mac.
+  /// - globeUndo: the fn-key choice Open Wisper replaced, to show the line that says so.
   init(
-    showsGlobeHint: Bool?,
+    globeHint: GlobeKeyHint.Stage?,
+    globeUndo: GlobeKey.SystemUse? = nil,
     recording: ShortcutAction? = nil,
     problem: (ShortcutAction, String)? = nil
   ) {
-    self.showsGlobeHint = showsGlobeHint
+    self.globeHint = globeHint
+    self.globeUndo = globeUndo
     previewRecording = recording
     previewProblem = problem
   }
 
   public var body: some View {
     VStack(alignment: .leading, spacing: Wisper.Space.l) {
-      if needsGlobeHint {
-        Banner(
-          .warning,
-          title: "macOS also reacts to the fn key",
-          message: "In Keyboard settings, set “Press 🌐 key to” to “Do Nothing”. "
-            + "Otherwise the emoji picker can open when you dictate."
-        ) {
-          Button("Open Keyboard settings") { GlobeKey.openSettings() }
-            .buttonStyle(.wisper(.tertiary, size: .small))
-        }
-      }
+      GlobeKeyHint(preview: globeHint)
       Card(padding: 0) {
         ForEach(ShortcutAction.allCases, id: \.self) { action in
           if action != ShortcutAction.allCases.first {
@@ -63,6 +58,10 @@ public struct ShortcutsEditor: View {
         Button("Reset to defaults") { reset() }
           .buttonStyle(.wisper(.secondary, size: .small))
           .disabled(model.settings.shortcuts == WisperDomain.Settings.defaultShortcuts)
+      }
+      // Only when the hint is not being staged for a picture of something else.
+      if globeHint == nil || globeUndo != nil {
+        GlobeKeyUndoNote(preview: globeUndo)
       }
     }
     .onAppear {
@@ -120,11 +119,6 @@ public struct ShortcutsEditor: View {
         .buttonStyle(.wisper(.ghost, size: .small))
     }
     .accessibilityElement(children: .contain)
-  }
-
-  private var needsGlobeHint: Bool {
-    let usesGlobeAlone = model.settings.shortcuts.values.contains { $0 == KeyCombo(modifiers: [.function]) }
-    return usesGlobeAlone && (showsGlobeHint ?? GlobeKey.interferes)
   }
 
   private func record(_ action: ShortcutAction) {

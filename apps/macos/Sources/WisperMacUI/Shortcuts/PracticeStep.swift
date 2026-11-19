@@ -17,7 +17,7 @@ public struct PracticeStep: View {
   @State private var missing: [Missing] = []
   /// The text box has the cursor. Dictated text is typed where the cursor is.
   @FocusState private var boxHasCursor: Bool
-  private let showsGlobeHint: Bool?
+  private let globeHint: GlobeKeyHint.Stage?
 
   /// One thing that stops dictation from working.
   enum Missing: Hashable {
@@ -28,11 +28,12 @@ public struct PracticeStep: View {
   }
 
   public init() {
-    self.init(showsGlobeHint: nil)
+    self.init(globeHint: nil)
   }
 
-  init(showsGlobeHint: Bool?) {
-    self.showsGlobeHint = showsGlobeHint
+  /// - globeHint: for still pictures, what the fn-key hint says; `nil` follows the Mac.
+  init(globeHint: GlobeKeyHint.Stage?) {
+    self.globeHint = globeHint
   }
 
   public var body: some View {
@@ -49,15 +50,7 @@ public struct PracticeStep: View {
           }
           VStack(alignment: .leading, spacing: Wisper.Space.m) {
             ForEach(missing, id: \.self) { item in banner(for: item) }
-            if needsGlobeHint {
-              Banner(
-                title: "macOS also reacts to the fn key",
-                message: "To stop the emoji picker opening, set “Press 🌐 key to” to “Do Nothing”."
-              ) {
-                Button("Open Keyboard settings") { GlobeKey.openSettings() }
-                  .buttonStyle(.wisper(.tertiary, size: .small))
-              }
-            }
+            GlobeKeyHint(preview: globeHint)
             WisperTextEditor(text: $text, placeholder: "What you say will be typed here.", height: 96)
               .focused($boxHasCursor)
             status
@@ -168,13 +161,6 @@ public struct PracticeStep: View {
     case .accessibility: "Open Wisper needs it to notice the key and to type the text for you."
     case .systemAudio: "It is only needed to record the other side of a call."
     }
-  }
-
-  private var needsGlobeHint: Bool {
-    guard model.settings.shortcut(for: .pushToTalk) == KeyCombo(modifiers: [.function]) else { return false }
-    if let showsGlobeHint { return showsGlobeHint }
-    // Without the shortcuts (the demo) the fn key is never pressed for us.
-    return controls.monitor != nil && GlobeKey.interferes
   }
 
   /// Checking never shows a system prompt, so it is safe to do once a second.

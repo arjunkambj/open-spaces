@@ -62,7 +62,14 @@ enum Composition {
         checkAPIKey: { try await openAI.check(key: $0) }
       )
     )
-    let controls = MacControls(model: model, monitor: monitor, sounds: SoundPlayer())
+    let controls = MacControls(
+      model: model,
+      monitor: monitor,
+      sounds: SoundPlayer(),
+      // The Mac's own fn-key setting, which the app may change when the person asks it to.
+      globeKey: GlobeKeySetting(system: .live, memory: .standard),
+      pillSpots: PillSpots(defaults: .standard)
+    )
     late.controls = controls
     target.onCopied = { [weak controls] in controls?.noteCopied() }
     return Parts(model: model, controls: controls, updater: updater)

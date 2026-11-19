@@ -21,7 +21,7 @@ import WisperDomain
 ///   `abandoned(_, replacedBy:)` right before the `down` of the longer one.
 /// - A key press that belongs to a shortcut (the Space of fn+Space, the V of
 ///   ⌃⌘V) and an Escape that cancels do not reach the app in front.
-///   Everything else is passed on untouched.
+///   Everything else is passed on untouched (but see `holdsBackGlobeKey`).
 @MainActor
 public final class ShortcutMonitor {
   public typealias Event = ShortcutEvent
@@ -42,6 +42,14 @@ public final class ShortcutMonitor {
   /// as the recording is over, or Escape stops working elsewhere.
   public var cancelsOnEscape = false {
     didSet { tap.setCancelsOnEscape(cancelsOnEscape) }
+  }
+
+  /// While true, the key press macOS makes up for a lone tap of fn (Globe) does not reach
+  /// the system, so the emoji picker (or whatever the Globe key is set to) does not open.
+  /// fn itself and fn with another key work as always. Turn it on while fn is part of a
+  /// shortcut and the user has not chosen a Globe-key action they would miss.
+  public var holdsBackGlobeKey = false {
+    didSet { tap.setHoldsBackGlobeKey(holdsBackGlobeKey) }
   }
 
   private let tap: KeyboardTap

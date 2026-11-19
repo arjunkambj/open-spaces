@@ -11,9 +11,12 @@ import WisperEngine
 /// - onClose: called by the close button; `nil` hides the button.
 /// - appearance: a control the platform supplies for its own look, such as light or dark (macOS).
 ///   It is shown as a row of General, under "App". `nil` leaves the row out.
+/// - pill: a row the Mac app supplies about its floating pill, such as putting it back in its
+///   place. It is shown right under "Show the floating pill", on a Mac only. `nil` leaves it out.
 public struct SettingsScreen: View {
   private let shortcuts: AnyView?
   private let appearance: AnyView?
+  private let pill: AnyView?
   private let onClose: (() -> Void)?
   private let preview: SettingsPreview
 
@@ -25,8 +28,19 @@ public struct SettingsScreen: View {
   @State private var opened: SettingsSection?
   @State private var dialog: SettingsDialog?
 
-  public init(shortcuts: AnyView? = nil, onClose: (() -> Void)? = nil, appearance: AnyView? = nil) {
-    self.init(shortcuts: shortcuts, onClose: onClose, appearance: appearance, preview: SettingsPreview())
+  public init(
+    shortcuts: AnyView? = nil,
+    onClose: (() -> Void)? = nil,
+    appearance: AnyView? = nil,
+    pill: AnyView? = nil
+  ) {
+    self.init(
+      shortcuts: shortcuts,
+      onClose: onClose,
+      appearance: appearance,
+      pill: pill,
+      preview: SettingsPreview()
+    )
   }
 
   /// Opens on a given section and dialog, so snapshots can show each state.
@@ -34,10 +48,12 @@ public struct SettingsScreen: View {
     shortcuts: AnyView? = nil,
     onClose: (() -> Void)? = nil,
     appearance: AnyView? = nil,
+    pill: AnyView? = nil,
     preview: SettingsPreview
   ) {
     self.shortcuts = shortcuts
     self.appearance = appearance
+    self.pill = pill
     self.onClose = onClose
     self.preview = preview
     _selection = State(initialValue: preview.section ?? .general)
@@ -209,7 +225,7 @@ public struct SettingsScreen: View {
 
   @ViewBuilder private func content(for section: SettingsSection) -> some View {
     switch section {
-    case .general: GeneralSettings(appearance: appearance)
+    case .general: GeneralSettings(appearance: appearance, pill: pill)
     case .shortcuts: if let shortcuts { shortcuts }
     case .meetings: MeetingSettingsSection(open: open)
     case .openAI: OpenAISettings(dialog: $dialog)

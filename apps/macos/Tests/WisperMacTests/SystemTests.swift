@@ -133,12 +133,162 @@ import WisperDomain
     #expect(GlobeKey.systemUse(setting: 2) == .showEmoji)
     #expect(GlobeKey.systemUse(setting: 3) == .startDictation)
     #expect(GlobeKey.systemUse(setting: nil) == .systemDefault)
-    #expect(GlobeKey.systemUse(setting: "nonsense") == .systemDefault)
+    #expect(GlobeKey.systemUse(setting: 17) == .systemDefault)
   }
 
   @Test func readingTheRealSettingDoesNotCrash() {
-    _ = GlobeKey.systemUse
-    _ = GlobeKey.interferes
+    // Reading only. The real setting is never written by a test.
+    _ = GlobeKey.System.live.read()
+  }
+
+  @Test func knowsWhetherFnIsPartOfAShortcut() {
+    #expect(GlobeKey.isUsed(by: Settings.defaultShortcuts))
+    #expect(
+      GlobeKey.isUsed(by: [.handsFree: KeyCombo(keyCode: KeyCombo.KeyCode.space, modifiers: [.function])])
+    )
+    #expect(!GlobeKey.isUsed(by: [.pushToTalk: KeyCombo(modifiers: [.option])]))
+    #expect(!GlobeKey.isUsed(by: [.pushToTalk: KeyCombo()]))
+    #expect(!GlobeKey.isUsed(by: [:]))
+  }
+}
+
+/// Stands in for the Mac's fn (Globe) key setting. Nothing on the Mac is read or changed.
+private final class FakeGlobeSystem: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stored: Int?
+  private var written: [Int] = []
+  private let outcome: GlobeKey.Outcome
+
+  init(value: Int?, outcome: GlobeKey.Outcome = .now) {
+    stored = value
+    self.outcome = outcome
+  }
+
+  var writes: [Int] { lock.withLock { written } }
+
+  var value: Int? {
+    get { lock.withLock { stored } }
+    set { lock.withLock { stored = newValue } }
+  }
+
+  var system: GlobeKey.System {
+    GlobeKey.System(
+      read: { self.value },
+      write: { value in
+        self.lock.withLock {
+          self.written.append(value)
+          if self.outcome != .failed { self.stored = value }
+        }
+        return self.outcome
+      }
+    )
+  }
+}
+
+@MainActor
+@Suite struct GlobeKeySettingTests {
+  private let fnAlone: [ShortcutAction: KeyCombo] = [.pushToTalk: KeyCombo(modifiers: [.function])]
+  private let noFn: [ShortcutAction: KeyCombo] = [.pushToTalk: KeyCombo(modifiers: [.option])]
+
+  /// A throwaway place to remember things, removed again afterwards.
+  private func memory() throws -> (UserDefaults, String) {
+    let name = "open-wisper-tests-\(UUID().uuidString)"
+    return (try #require(UserDefaults(suiteName: name)), name)
+  }
+
+  @Test(arguments: [
+    (0, true, false), (0, false, false),
+    (1, true, true), (2, true, true), (3, true, true),
+    (1, false, false), (2, false, false), (3, false, false),
+  ])
+  func theFixIsOfferedOnlyWhenFnIsBoundAndMacOSReactsToIt(value: Int, usesFn: Bool, offered: Bool) {
+    let setting = GlobeKeySetting(system: FakeGlobeSystem(value: value).system)
+    #expect(setting.needsFix(for: usesFn ? fnAlone : noFn) == offered)
+    #expect(setting.shouldAsk(for: usesFn ? fnAlone : noFn) == offered)
+  }
+
+  @Test func aSettingThatWasNeverChosenCountsAsInTheWay() {
+    let setting = GlobeKeySetting(system: FakeGlobeSystem(value: nil).system)
+    #expect(setting.systemUse == .systemDefault)
+    #expect(setting.needsFix(for: fnAlone))
+  }
+
+  @Test func theFixWritesDoNothingAndNothingElse() {
+    let system = FakeGlobeSystem(value: 2)
+    let setting = GlobeKeySetting(system: system.system)
+    #expect(setting.fix() == .now)
+    #expect(system.writes == [0])
+    #expect(setting.systemUse == .nothing)
+    #expect(!setting.needsFix(for: fnAlone), "The hint goes away by itself")
+    #expect(setting.previousUse == .showEmoji)
+    // Asked again, there is nothing left to do: nothing more is written.
+    #expect(setting.fix() == .now)
+    #expect(system.writes == [0])
+    #expect(setting.previousUse == .showEmoji)
+  }
+
+  @Test func nothingIsWrittenWhenTheKeyIsAlreadyFree() {
+    let system = FakeGlobeSystem(value: 0)
+    let setting = GlobeKeySetting(system: system.system)
+    #expect(setting.fix() == .now)
+    #expect(system.writes.isEmpty)
+    #expect(setting.previousUse == nil)
+    #expect(setting.outcome == nil)
+  }
+
+  @Test func itSaysWhenTheChangeOnlyCountsAfterLoggingIn() {
+    let system = FakeGlobeSystem(value: 1, outcome: .afterLogin)
+    let setting = GlobeKeySetting(system: system.system)
+    #expect(setting.fix() == .afterLogin)
+    #expect(system.writes == [0])
+    #expect(setting.outcome == .afterLogin)
+    #expect(setting.previousUse == .changeInputSource)
+  }
+
+  @Test func aChangeMacOSRefusesIsNotRemembered() {
+    let system = FakeGlobeSystem(value: 2, outcome: .failed)
+    let setting = GlobeKeySetting(system: system.system)
+    #expect(setting.fix() == .failed)
+    #expect(system.writes == [0])
+    #expect(setting.outcome == .failed)
+    #expect(setting.previousUse == nil)
+    #expect(setting.needsFix(for: fnAlone), "Still in the way, so still offered")
+  }
+
+  @Test func theEarlierChoiceIsKeptBetweenLaunchesUntilThePersonChangesItBack() throws {
+    let (defaults, name) = try memory()
+    defer { defaults.removePersistentDomain(forName: name) }
+    let system = FakeGlobeSystem(value: 3)
+    GlobeKeySetting(system: system.system, memory: defaults).fix()
+
+    let later = GlobeKeySetting(system: system.system, memory: defaults)
+    #expect(later.previousUse == .startDictation)
+
+    // The person picks the emoji picker again in System Settings.
+    system.value = 2
+    later.refresh()
+    #expect(later.previousUse == nil)
+    #expect(GlobeKeySetting(system: system.system, memory: defaults).previousUse == nil)
+    #expect(system.writes == [0], "Reading again never writes")
+  }
+
+  @Test func theQuestionIsPutOnlyOnce() throws {
+    let (defaults, name) = try memory()
+    defer { defaults.removePersistentDomain(forName: name) }
+    let system = FakeGlobeSystem(value: 2)
+    let setting = GlobeKeySetting(system: system.system, memory: defaults)
+    #expect(setting.shouldAsk(for: fnAlone))
+    setting.markAsked()
+    #expect(!setting.shouldAsk(for: fnAlone))
+    #expect(setting.needsFix(for: fnAlone), "Settings still offers the fix")
+    #expect(!GlobeKeySetting(system: system.system, memory: defaults).shouldAsk(for: fnAlone))
+    #expect(system.writes.isEmpty)
+  }
+
+  @Test func withoutAWayToTheMacItReadsDoNothingAndChangesNothing() {
+    let setting = GlobeKeySetting()
+    #expect(!setting.interferes)
+    #expect(setting.fix() == .now)
   }
 }
 

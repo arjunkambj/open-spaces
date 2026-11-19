@@ -22,6 +22,7 @@ final class HubWindow: NSObject, NSWindowDelegate {
   private static let setupSize = CGSize(width: 720, height: 560)
   private static let frameName = "Hub"
   private var sizeWatch: Watch<Bool>?
+  private var theme = HubNavigation.Theme.initial
 
   init(model: AppModel, controls: MacControls, navigation: HubNavigation, remembersFrame: Bool) {
     self.model = model
@@ -46,6 +47,12 @@ final class HubWindow: NSObject, NSWindowDelegate {
 
   func close() {
     window?.performClose(nil)
+  }
+
+  /// Makes the window light, dark, or the way the Mac is. Also before the window exists.
+  func setTheme(_ theme: HubNavigation.Theme) {
+    self.theme = theme
+    window?.appearance = theme.appearance
   }
 
   /// Brings the window forward and asks a yes-or-no question on it. Returns whether the
@@ -77,6 +84,7 @@ final class HubWindow: NSObject, NSWindowDelegate {
     // Asked for from the menu bar or the pill, the window comes to the desktop the person is on.
     window.collectionBehavior = [.fullScreenPrimary, .moveToActiveSpace]
     window.delegate = self
+    window.appearance = theme.appearance
     window.contentView = NSHostingView(
       rootView: HubView(navigation: navigation)
         .environment(model)

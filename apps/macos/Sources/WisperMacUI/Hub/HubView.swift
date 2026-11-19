@@ -68,7 +68,8 @@ public struct HubView: View {
       SettingsScreen(
         shortcuts: AnyView(ShortcutsEditor()),
         onClose: { navigation.showsSettings = false },
-        appearance: AnyView(AppearanceRow(navigation: navigation))
+        appearance: AnyView(AppearanceRow(navigation: navigation)),
+        pill: AnyView(PillPositionRow())
       )
       .frame(maxWidth: HubMetrics.settingsSize.width, maxHeight: HubMetrics.settingsSize.height)
       .modalSurface()
@@ -185,6 +186,23 @@ struct Sidebar: View {
     }
     .padding(.horizontal, Wisper.Space.m)
     .padding(.bottom, Wisper.Space.m)
+  }
+}
+
+/// The row of Settings that puts the floating pill back where it started. The hub hands it to
+/// the settings screen, which shows it under "Show the floating pill".
+struct PillPositionRow: View {
+  @Environment(MacControls.self) private var controls
+
+  var body: some View {
+    SettingRow(
+      "Pill position",
+      description: "Drag the pill to any edge of the screen. At the left or right it stands upright."
+    ) {
+      Button("Reset pill position") { controls.pillSpots.reset() }
+        .buttonStyle(.wisper(.secondary, size: .small))
+        .disabled(!controls.pillSpots.isMoved)
+    }
   }
 }
 

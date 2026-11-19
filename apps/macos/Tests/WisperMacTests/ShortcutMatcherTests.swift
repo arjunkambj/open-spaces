@@ -40,13 +40,17 @@ private func down(_ code: UInt16, _ modifiers: Set<KeyCombo.Modifier> = [], isRe
   .keyDown(code, modifiers: modifiers, isRepeat: isRepeat)
 }
 
+private let globe = ShortcutMatcher.globeKeyCode
+
 private func check(
   _ steps: [Step],
   shortcuts: [ShortcutAction: KeyCombo] = Settings.defaultShortcuts,
-  cancelsOnEscape: Bool = false
+  cancelsOnEscape: Bool = false,
+  holdsBackGlobeKey: Bool = false
 ) {
   var matcher = ShortcutMatcher(shortcuts: shortcuts)
   matcher.cancelsOnEscape = cancelsOnEscape
+  matcher.holdsBackGlobeKey = holdsBackGlobeKey
   for step in steps {
     let output = matcher.handle(step.input, at: step.time)
     #expect(output.events == step.events, "events at line \(step.line)")
@@ -55,6 +59,63 @@ private func check(
 }
 
 @Suite struct ShortcutMatcherTests {
+  // MARK: The Globe key's own key press
+
+  @Test func theGlobeKeyPressAfterATapOfFnIsHeldBack() {
+    check(
+      [
+        Step(.modifiers(fn), [.down(.pushToTalk)]),
+        Step(.modifiers([]), at: 0.2, [.up(.pushToTalk)]),
+        // What macOS sends right after a lone fn: this is what would open the emoji picker.
+        Step(down(globe), at: 0.21, swallow: true),
+        Step(.keyUp(globe), at: 0.22, swallow: true),
+      ],
+      holdsBackGlobeKey: true
+    )
+  }
+
+  @Test func theGlobeKeyPressDuringAHoldDoesNotEndPushToTalk() {
+    // Some keyboards send it a moment after fn goes down. It is fn itself, not a second key.
+    for holdsBack in [true, false] {
+      check(
+        [
+          Step(.modifiers(fn), [.down(.pushToTalk)]),
+          Step(down(globe), at: 0.06, swallow: holdsBack),
+          Step(.keyUp(globe), at: 0.07, swallow: holdsBack),
+          Step(.modifiers([]), at: 3, [.up(.pushToTalk)]),
+        ],
+        holdsBackGlobeKey: holdsBack
+      )
+    }
+  }
+
+  @Test func theGlobeKeyPressIsLeftAloneWhenNotAskedToHoldItBack() {
+    check([
+      Step(.modifiers(fn), [.down(.pushToTalk)]),
+      Step(.modifiers([]), at: 0.2, [.up(.pushToTalk)]),
+      Step(down(globe), at: 0.21),
+      Step(.keyUp(globe), at: 0.22),
+    ])
+  }
+
+  @Test func holdingBackTheGlobeKeyLeavesFnWithOtherKeysAlone() {
+    check(
+      [
+        // fn + arrow: push to talk gives way, and the arrow reaches the app.
+        Step(.modifiers(fn), [.down(.pushToTalk)]),
+        Step(down(leftArrow, fn), at: 0.1, [.abandoned(.pushToTalk, replacedBy: nil)]),
+        Step(.keyUp(leftArrow), at: 0.2),
+        Step(.modifiers([]), at: 0.3),
+        // fn + F5 (key code 96), the same.
+        Step(.modifiers(fn), at: 1, [.down(.pushToTalk)]),
+        Step(down(96, fn), at: 1.1, [.abandoned(.pushToTalk, replacedBy: nil)]),
+        Step(.keyUp(96), at: 1.2),
+        Step(.modifiers([]), at: 1.3),
+      ],
+      holdsBackGlobeKey: true
+    )
+  }
+
   @Test func holdingFnIsPushToTalk() {
     check([
       Step(.modifiers(fn), [.down(.pushToTalk)]),

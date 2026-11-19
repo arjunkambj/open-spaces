@@ -285,8 +285,8 @@ On a Mac the dialog is a centred card on a dimmed layer that covers **the view t
 ### Voice
 
 ```swift
-Waveform(level: Double, bars: = 9, tint: = textPrimary, height: = 20)       // level 0...1
-ProcessingIndicator(bars: = 5, tint: = textPrimary, height: = 20)
+Waveform(level: Double, bars: = 9, tint: = textPrimary, height: = 20, axis: = .horizontal)   // level 0...1
+ProcessingIndicator(bars: = 5, tint: = textPrimary, height: = 20, axis: = .horizontal)
 RecordButton(_ mode: RecordButton.Mode, diameter: = 80) { }   // .idle, .recording(level:), .processing
 ```
 
@@ -295,7 +295,7 @@ Waveform(level: Double(model.dictation.level), tint: Wisper.Color.accent, height
 RecordButton(isRecording ? .recording(level: level) : .idle, diameter: 96) { toggle() }
 ```
 
-Give `Waveform` the newest level each time it changes; it smooths the motion itself. On a dark pill use `tint: Wisper.Color.onInverse`.
+Give `Waveform` the newest level each time it changes; it smooths the motion itself. On a dark pill use `tint: Wisper.Color.onInverse`. With `axis: .vertical` the bars lie on their side, one under the other, for a tall thin place (the pill at the side of a screen); `height` is then how wide the row is.
 
 ### Brand
 
