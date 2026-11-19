@@ -143,19 +143,29 @@ public struct CompletionRequest: Sendable {
   /// (given as JSON text). The returned string is then that JSON.
   public var jsonSchema: String?
   public var temperature: Double?
+  /// How hard the model should think before answering, or `nil` for the
+  /// model's own default. Models that cannot take the value ignore it.
+  public var effort: Effort?
+
+  /// Less effort answers sooner. Dictation clean-up wants `.none`; meeting notes can afford more.
+  public enum Effort: String, Sendable, CaseIterable {
+    case none, low, medium, high
+  }
 
   public init(
     model: String,
     system: String,
     user: String,
     jsonSchema: String? = nil,
-    temperature: Double? = nil
+    temperature: Double? = nil,
+    effort: Effort? = nil
   ) {
     self.model = model
     self.system = system
     self.user = user
     self.jsonSchema = jsonSchema
     self.temperature = temperature
+    self.effort = effort
   }
 }
 
