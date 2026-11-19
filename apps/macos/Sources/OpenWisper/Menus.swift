@@ -4,16 +4,20 @@ import WisperMac
 import WisperMacUI
 
 /// A menu item that runs a closure.
-final class ActionMenuItem: NSMenuItem {
+final class ActionMenuItem: NSMenuItem, NSMenuItemValidation {
   private let handler: @MainActor () -> Void
+  private let isAvailable: (@MainActor () -> Bool)?
 
+  /// - isAvailable: asked each time the menu opens; the item is greyed out while it says no.
   init(
     _ title: String,
     key: String = "",
     modifiers: NSEvent.ModifierFlags = [.command],
+    isAvailable: (@MainActor () -> Bool)? = nil,
     handler: @escaping @MainActor () -> Void
   ) {
     self.handler = handler
+    self.isAvailable = isAvailable
     super.init(title: title, action: #selector(run), keyEquivalent: key)
     keyEquivalentModifierMask = modifiers
     target = self
@@ -26,6 +30,10 @@ final class ActionMenuItem: NSMenuItem {
 
   @MainActor @objc private func run() {
     handler()
+  }
+
+  @MainActor func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+    isAvailable?() ?? true
   }
 }
 
@@ -108,9 +116,13 @@ enum Menus {
 /// The menu bar across the top of the screen while the main window is open.
 @MainActor
 enum MainMenu {
-  static func make(navigation: HubNavigation, controls: MacControls, showHub: @escaping @MainActor () -> Void)
-    -> NSMenu
-  {
+  /// - updater: looks for new versions; `nil` leaves "Check for Updates…" out.
+  static func make(
+    navigation: HubNavigation,
+    controls: MacControls,
+    updater: AppUpdater?,
+    showHub: @escaping @MainActor () -> Void
+  ) -> NSMenu {
     let main = NSMenu()
 
     let app = NSMenu()
@@ -121,6 +133,13 @@ enum MainMenu {
         keyEquivalent: ""
       )
     )
+    if let updater {
+      app.addItem(
+        ActionMenuItem("Check for Updates…", modifiers: [], isAvailable: { updater.canCheck }) {
+          updater.checkNow()
+        }
+      )
+    }
     app.addItem(.separator())
     app.addItem(ActionMenuItem("Settings…", key: ",") { controls.open(.settings) })
     app.addItem(.separator())

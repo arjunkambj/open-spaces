@@ -57,5 +57,31 @@
 	<false/>
 	<key>NSSupportsSuddenTermination</key>
 	<false/>
+	<!--
+	  Updates (Sparkle). The app asks this address for the newest version about once a day,
+	  and when "Check for Updates…" is chosen. GitHub sends the request on to the newest release.
+	-->
+	<key>SUFeedURL</key>
+	<string>https://github.com/arjunkambj/open-wisper/releases/latest/download/appcast.xml</string>
+	<!--
+	  The public half of the update signing key. A download, and the list of versions itself,
+	  is only accepted when it was signed with the private half, which scripts/setup-signing
+	  made and which is not in this repository. A fork must put its own key here.
+	-->
+	<key>SUPublicEDKey</key>
+	<string>pBoeNXXb/WlKU+EJ0dkbw/JSN2lu1k/Ly1HrHkz7Rp0=</string>
+	<!-- Check without asking first, once a day (in seconds). Nothing is installed without a yes. -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<!-- Check the signature of a download before it is opened, and of the list of versions too. -->
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<!-- Never send details about this Mac along with a check. -->
+	<key>SUEnableSystemProfiling</key>
+	<false/>
 </dict>
 </plist>

@@ -45,6 +45,8 @@ case .snapshots(let folder, let only):
 
 case .app:
   if OtherInstance.handOver() { exit(0) }
+  // The application object comes first: the updater that `Composition` makes expects it to be there.
+  _ = NSApplication.shared
   run(AppDelegate(parts: Composition.real(), isDemo: false))
 
 case .demo(let firstRun):

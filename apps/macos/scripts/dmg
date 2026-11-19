@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# dmg: put the built "Open Wisper.app" into a disk image people can download.
+#
+#   apps/macos/scripts/dmg          -> apps/macos/build/Open-Wisper-<version>.dmg
+#
+# Run apps/macos/scripts/bundle first (`pnpm mac:dmg` does both). The disk image holds
+# the app and a shortcut to the Applications folder, so installing is one drag.
+#
+# It is made with `hdiutil` alone, so nothing shows on screen while it is made (the tool
+# opens the image for a moment in a way Finder does not show). That is also why its
+# window has no picture or arranged icons: those need Finder.
+#
+# The image is signed with the same certificate as the app (see scripts/signing.sh).
+# The version in the file name is read from the app itself.
+set -euo pipefail
+
+fail() {
+  printf '\ndmg: %s\n' "$*" >&2
+  exit 1
+}
+trap 'fail "stopped at line $LINENO (see the output above)."' ERR
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=apps/macos/scripts/signing.sh
+source "$here/scripts/signing.sh"
+
+case "${1:-}" in
+  "") ;;
+  -h | --help)
+    sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+  *) fail "unknown option '$1'. This script takes none." ;;
+esac
+
+app_name="Open Wisper"
+out="$here/build"
+app="$out/$app_name.app"
+[[ -d "$app" ]] || fail "there is no $app. Run apps/macos/scripts/bundle first."
+
+echo "==> Checking the app"
+codesign --verify --deep --strict "$app" || fail "the app's signature is not intact. Run apps/macos/scripts/bundle again."
+version="$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")"
+build_number="$(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist")"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || fail "the app has an odd version: '$version'."
+dmg="$out/Open-Wisper-$version.dmg"
+
+load_signing || fail "could not get the signing certificate ready."
+
+staging="$(mktemp -d "$out/.dmg.XXXXXX")"
+cleanup() { rm -rf "${staging:?}"; }
+trap cleanup EXIT
+
+echo "==> Making the disk image for Open Wisper $version (build $build_number)"
+mkdir "$staging/image"
+# `cp -R` keeps the links and the signature of the app as they are.
+cp -R "$app" "$staging/image/"
+ln -s /Applications "$staging/image/Applications"
+# Compressed and read-only. HFS+ so that every macOS the app runs on can open it.
+hdiutil create -quiet -volname "$app_name" -srcfolder "$staging/image" -fs HFS+ -format UDZO \
+  -imagekey zlib-level=9 -ov "$staging/image.dmg"
+
+echo "==> Signing with $(describe_signing)"
+sign_identifier=(--identifier dev.openwisper.mac.dmg)
+codesign --force "${sign_options[@]}" --sign "$sign_identity" "${sign_identifier[@]}" "$staging/image.dmg"
+
+echo "==> Checking"
+codesign --verify --strict "$staging/image.dmg"
+hdiutil verify -quiet "$staging/image.dmg"
+
+mv -f "$staging/image.dmg" "$dmg"
+size="$(du -h "$dmg" | cut -f1 | tr -d ' ')"
+echo "==> Done: $dmg ($size)"
+echo "    SHA-256: $(shasum -a 256 "$dmg" | cut -d' ' -f1)"

@@ -43,11 +43,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     self.hub = hub
 
     parts.controls.open = { [weak self] destination in self?.open(destination) }
-    NSApp.mainMenu = MainMenu.make(navigation: navigation, controls: parts.controls) { [weak hub] in
+    NSApp.mainMenu = MainMenu.make(
+      navigation: navigation,
+      controls: parts.controls,
+      updater: parts.updater
+    ) { [weak hub] in
       hub?.show()
     }
     watches.append(Watch({ navigation.theme }) { theme in NSApp.appearance = theme.appearance })
-    statusItem = StatusItem(model: parts.model, controls: parts.controls)
+    statusItem = StatusItem(model: parts.model, controls: parts.controls, updater: parts.updater)
     let pill = PillPanel(model: parts.model, controls: parts.controls)
     pill.show()
     self.pill = pill

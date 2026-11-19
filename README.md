@@ -5,7 +5,7 @@
 
 Open Wisper is a free, open-source app for macOS and iOS that turns your voice into text. Hold a key, speak, and clean text appears in whatever app you are typing in; it can also record your meetings and write the notes.
 
-![The Open Wisper window on a Mac, showing dictation history and stats](docs/images/mac-home.png)
+![The Open Wisper window on a Mac, showing dictation history](docs/images/mac-home.png)
 
 | Recording a meeting | The floating pill, in each state |
 | --- | --- |
@@ -19,7 +19,7 @@ Open Wisper is a free, open-source app for macOS and iOS that turns your voice i
 
 All pictures show made-up sample data.
 
-> **Status: early.** This is a first version. Some things will be rough or broken. The macOS app is the main focus. The iOS app is newer and less tested. There is no signed download yet, so for now you build it yourself. Bug reports are welcome.
+> **Status: early.** This is a first version. Some things will be rough or broken. The macOS app is the main focus. The iOS app is newer and less tested. The Mac download is not checked by Apple, so macOS asks you to allow it the first time (see [Install](#install)). Bug reports are welcome.
 
 Open Wisper is an independent open-source project. It is not affiliated with Wispr Flow.
 
@@ -34,7 +34,7 @@ Open Wisper is an independent open-source project. It is not affiliated with Wis
 - **Personal dictionary.** Teach it names and words it keeps getting wrong.
 - **Snippets.** Say a short phrase ("my calendar link") and get a longer piece of text.
 - **Writing style per kind of app.** Formal in email, casual in chat. You choose.
-- **History with stats.** See what you dictated, search it, and see your word count, speed and streak.
+- **History.** See what you dictated, search it, and see how many words you have dictated and how fast you speak.
 - **Your words are not lost.** If a dictation fails, its audio is kept and you can try it again from Home. (If you told the app not to keep history, nothing is kept.)
 
 **Meetings**
@@ -52,6 +52,39 @@ Open Wisper is an independent open-source project. It is not affiliated with Wis
 - **iPhone app with a keyboard.** Tap, speak, and the text is on your clipboard. The app's keyboard has a Dictate key and a key that types your latest dictation, so you can use it from any app. The iPhone app records meetings too.
 - **Use your own server.** Point it at any server that speaks the same language as OpenAI's, such as a proxy or a model running on your own machine.
 
+## Install
+
+For a Mac with Apple silicon and macOS 14.4 or newer.
+
+1. Download `Open-Wisper-<version>.dmg` from the [newest release](https://github.com/arjunkambj/open-wisper/releases/latest).
+2. Open the file and drag **Open Wisper** onto **Applications**.
+3. Open it from Applications. The first time, macOS stops it and says it could not check the app. Click **Done**.
+4. Open **System Settings → Privacy & Security**, scroll down to **Security**, and click **Open Anyway** next to the line about Open Wisper. The button is there for about an hour after step 3.
+5. macOS asks once more. Confirm, and type your Mac password.
+
+You do steps 3 to 5 only once. macOS asks because the app is not signed with an Apple developer certificate, which costs money each year. Apple has not checked it. If you would rather not run such an app, [build it yourself](#build-and-run) from the code on this page.
+
+After that the app asks for your name, your OpenAI API key and a few [permissions](#permissions-on-first-run).
+
+There is no iPhone download. To use the iPhone app, [build it with Xcode](#iphone).
+
+## Updates
+
+Open Wisper keeps itself up to date.
+
+- **It checks by itself, about once a day.** When there is a new version, a window shows what changed and asks whether to install it. Nothing is installed without your yes.
+- **You can check any time.** Choose **Check for Updates…** from the Open Wisper menu, from its menu bar item, or in Settings.
+- **Your permissions and settings stay.** Every version is signed with the same certificate, so macOS knows it is the same app. You do not have to allow the microphone or Accessibility again.
+- **Only a real update is installed.** Each release is signed with a key that only the project holds. The app checks that signature before it opens a download, and refuses anything that does not match. This holds even if someone took over the download page.
+
+The check asks GitHub, where the releases are, for a small file that lists the newest version. It sends the app's name and version, and nothing about you or what you dictate. To turn the daily check off, run this once in Terminal. You can still check from the menu.
+
+```bash
+defaults write dev.openwisper.mac SUEnableAutomaticChecks -bool false
+```
+
+An app you built yourself does not look for updates. See [Build and run](#build-and-run).
+
 ## How it works
 
 1. You speak. Open Wisper records the audio on your device.
@@ -64,6 +97,8 @@ Meetings work the same way: the audio is turned into text piece by piece while y
 Out of the box, Open Wisper asks for the model `gpt-transcribe` to turn speech into text and `gpt-6-luna` to tidy it and write notes. You can pick other models in Settings.
 
 **What leaves your device.** Your audio and the text made from it. To get spelling and style right, a few more things go along: your name, your dictionary words, and the name of the app you are typing into. Command mode also sends the text you selected. Meeting notes and questions send that meeting's title, transcript and notes. All of it goes only to OpenAI, or to the server you chose instead.
+
+The Mac app makes one other kind of request: about once a day it asks GitHub whether there is a newer version (see [Updates](#updates)). That request carries the app's name and version, and none of your data.
 
 - **No account.** There is nothing to sign up for.
 - **No server of ours.** We do not run one. We never see your audio, your text or your key.
@@ -103,9 +138,19 @@ pnpm mac
 
 `pnpm mac` builds the app, wraps it into `Open Wisper.app`, and opens it. The first build takes a few minutes. The app then asks for your name, your API key and a few permissions, and lets you try the shortcut.
 
-The finished app is at `apps/macos/build/Open Wisper.app`. You can move it into your Applications folder.
+The finished app is at `apps/macos/build/Open Wisper.app`. You can move it into your Applications folder. `pnpm mac:dmg` also makes a disk image, `apps/macos/build/Open-Wisper-<version>.dmg`.
 
-**If you build it more than once:** macOS ties the permissions you gave to one exact build. After a rebuild, the switches in System Settings can look on but do nothing. Remove Open Wisper from each list and add it again. To stop this from happening, sign the app with a certificate you make yourself, which takes a few minutes: the steps are at the top of [`apps/macos/scripts/bundle`](apps/macos/scripts/bundle).
+**If you build it more than once,** run this first, once:
+
+```bash
+scripts/setup-signing
+```
+
+It makes a free signing certificate of your own and keeps it in `~/.config/open-wisper/signing`, outside the project. It asks for nothing. From then on every build is signed with it.
+
+Why it matters: macOS ties the permissions you gave to the signature of the app. Without a certificate every build has a different one, so after a rebuild the switches in System Settings look on but do nothing, until you remove Open Wisper from each list and add it again. With your certificate, permissions you gave once keep working.
+
+A build of your own does not look for updates, and has no **Check for Updates…** in its menus: an update from this project is signed with the project's keys, and would replace your build with a different app. Get new versions with `git pull` and `pnpm mac`. If you publish releases from a fork, [CONTRIBUTING.md](CONTRIBUTING.md#making-a-release) has the steps.
 
 ### iPhone
 
@@ -213,7 +258,7 @@ docs              guides, and the pictures on this page
 scripts           build and CI scripts
 ```
 
-All of it is Swift, with no third-party Swift libraries. [Turborepo](https://turborepo.dev) and pnpm run each part's build, tests and style check in the right order.
+All of it is Swift. There is one library we did not write: [Sparkle](https://sparkle-project.org), the open-source updater most Mac apps outside the App Store use. It is in the Mac app only. [Turborepo](https://turborepo.dev) and pnpm run each part's build, tests and style check in the right order.
 
 Useful commands:
 
@@ -222,13 +267,14 @@ pnpm check     # style check, build and tests for everything
 pnpm test      # tests only
 pnpm format    # fix the code style in place
 pnpm mac       # build and open the macOS app
+pnpm mac:dmg   # build the macOS app and put it in a disk image
 ```
 
 ## Roadmap
 
 Ideas, not promises:
 
-- A signed download, so you do not have to build it yourself.
+- A download signed with an Apple developer certificate, so macOS opens it without the extra steps.
 - Transcription that runs fully on your device, with no API key.
 - More languages for the app's own text. Today it is in English only.
 

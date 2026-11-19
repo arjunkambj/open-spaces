@@ -14,6 +14,8 @@ enum Composition {
   struct Parts {
     var model: AppModel
     var controls: MacControls
+    /// Looks for new versions. `nil` in the demo, and when the app is not a finished bundle.
+    var updater: AppUpdater?
   }
 
   /// The real app: files on disk, the Keychain, the microphone, OpenAI and the global shortcuts.
@@ -30,6 +32,9 @@ enum Composition {
     let monitor = ShortcutMonitor()
     let tool = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/wisper").path
     let target = MacTextTarget()
+    let updater = AppUpdater()
+    var checkForUpdates: (@MainActor @Sendable () -> Void)?
+    if let updater { checkForUpdates = { updater.checkNow() } }
     // The controls are made from the model, and two of the model's parts report to the controls.
     let late = Late()
     let model = AppModel(
@@ -49,9 +54,10 @@ enum Composition {
           setLaunchAtLogin: { wanted in
             late.controls?.noteLaunchAtLogin(LaunchAtLogin.set(wanted), wanted: wanted)
           },
-          reveal: { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
+          reveal: { NSWorkspace.shared.activateFileViewerSelecting([$0]) },
           // `shortcutsChanged` is not needed: the controls watch the settings themselves,
           // which also catches a change made by an agent.
+          checkForUpdates: checkForUpdates
         ),
         checkAPIKey: { try await openAI.check(key: $0) }
       )
@@ -59,7 +65,7 @@ enum Composition {
     let controls = MacControls(model: model, monitor: monitor, sounds: SoundPlayer())
     late.controls = controls
     target.onCopied = { [weak controls] in controls?.noteCopied() }
-    return Parts(model: model, controls: controls)
+    return Parts(model: model, controls: controls, updater: updater)
   }
 
   /// Holds the controls for the parts that are made before them.
@@ -69,7 +75,7 @@ enum Composition {
   }
 
   /// The whole app on made-up data, for trying it out and for screenshots.
-  /// No shortcuts and no sounds: nothing it does can be noticed outside its own windows.
+  /// No shortcuts, no sounds and no updates: nothing it does can be noticed outside its own windows.
   /// - firstRun: start before setup. A pretend key is already saved, so every step can be clicked through.
   static func demo(firstRun: Bool) -> Parts {
     let model = AppModel.demo(onboarded: !firstRun)

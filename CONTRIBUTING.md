@@ -23,7 +23,13 @@ pnpm mac        # build and open the macOS app
 
 The first build takes a few minutes. The app lands in `apps/macos/build/Open Wisper.app`.
 
-macOS ties the permissions you give (Microphone, Accessibility, System Audio Recording) to one exact build, so after a rebuild they can stop working until you remove the app from each list and add it again. If you rebuild often, sign with a certificate you make yourself. It takes a few minutes, and the steps are at the top of `apps/macos/scripts/bundle`.
+macOS ties the permissions you give (Microphone, Accessibility, System Audio Recording) to the signature of the app. Without a signing certificate every build has a different one, so after a rebuild the permissions stop working until you remove the app from each list and add it again. To stop that, run this once:
+
+```bash
+scripts/setup-signing
+```
+
+It makes a free certificate of your own, asks for nothing, and keeps it in `~/.config/open-wisper/signing`, outside the project. Every build after that is signed with it. You can build without it too; the build script then warns you.
 
 To look at the app without touching your real data, microphone or key, start it on made-up data:
 
@@ -70,7 +76,8 @@ Use `scripts/swiftw` in place of `swift` to build, test and run. It makes the bu
 - **The API key lives only in the Keychain.** Never in a file, a log, an error message or a test. A saved key belongs to one server and is never sent to another.
 - **Nothing starts listening behind the user's back.** A link that would start or stop a recording is followed only with a ticket from our own tool or keyboard, or after the user says yes.
 - **Original work only.** Do not copy code, images, icons, sounds, names or wording from any other product.
-- **No third-party Swift libraries** unless there is a strong reason. Apple's frameworks cover what we need.
+- **No third-party Swift libraries** unless there is a strong reason. Apple's frameworks cover what we need. There is one, in the Mac app: [Sparkle](https://sparkle-project.org), which updates the app. An updater replaces the app itself, so it is safer to use the one most Mac apps share than to write our own.
+- **A signing key never goes into the project.** Not into a file, a log or a test. `scripts/setup-signing` keeps the keys in your home folder and in GitHub's encrypted secrets.
 
 ## Style
 
@@ -137,6 +144,56 @@ gh run list --branch ci/try-my-change --limit 1
 Delete the branch when you are done: `git push origin --delete ci/try-my-change`.
 
 CI can also take pictures of the iPhone app in a simulator. That takes about eight minutes, so it happens only when asked: start the CI workflow by hand (Actions > CI > Run workflow), or use a name that starts with `ios`, such as `scripts/ci-try ios-my-change`. The pictures are the `ios-screenshots` download of that run.
+
+## Making a release
+
+A release is a GitHub Release with two files: the disk image people download (`Open-Wisper-<version>.dmg`), and `appcast.xml`, the small file installed apps read to find out there is a new version. Publishing a release is what hands the update to everyone who has the app.
+
+Only a maintainer with push access can do this.
+
+1. **Raise the version** in `apps/macos/package.json` (for example `0.1.0` to `0.2.0`) and merge that into `main`.
+2. **Tag that commit and push the tag:**
+
+   ```bash
+   git checkout main && git pull
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+3. **Wait for the Release workflow** (Actions > Release). It:
+   - checks that the tag matches the version;
+   - builds the app and signs it with the project's certificate;
+   - makes the disk image and signs it;
+   - signs the disk image with the update key and writes `appcast.xml`, with GitHub's list of what was merged as the "what is new" text;
+   - checks that the new build number is higher than the one of the newest release, so installed apps will take it;
+   - publishes the release with both files.
+
+Installed apps find it within a day, or at once with **Check for Updates…**.
+
+Good to know:
+
+- **The build number** is what apps compare, not the version text. It is the version as one number, a dot, and the number of commits: version 0.2.0 at 57 commits is `200.57`. The top of `apps/macos/scripts/bundle` has the details. Keep the second and third numbers of a version below 100.
+- **A tag with a `-` in it** (such as `v0.2.0-beta.1`, with `0.2.0` in `package.json`) becomes a pre-release. GitHub does not hand a pre-release out as the newest one, so installed apps do not see it.
+- **A release cannot be taken back** from people who already installed it. To fix a bad one, publish a newer one.
+- **To try the whole thing on your Mac** without publishing anything: `pnpm mac:dmg`, then `apps/macos/scripts/appcast`. The result is in `apps/macos/build/update`.
+
+### The keys
+
+Two keys make a release, and both were made once with `scripts/setup-signing`:
+
+- **A code-signing certificate**, "Open Wisper Self-Signed". Every build is signed with it, so macOS sees each version as the same app and keeps its permissions.
+- **An update signing key.** Its public half is in `apps/macos/Resources/Info.plist` (`SUPublicEDKey`). An installed app takes an update only when it was signed with the private half.
+
+They live in `~/.config/open-wisper/signing` on the maintainer's Mac, and as three encrypted secrets of the GitHub repository (`MAC_SIGNING_P12_BASE64`, `MAC_SIGNING_P12_PASSWORD`, `SPARKLE_ED_PRIVATE_KEY`), which `scripts/setup-signing --github` saves. They are never in the project.
+
+**Keep a backup** of `identity.p12`, `identity.p12.password` and `update-key` from that folder, somewhere safe and private. If they are lost, installed apps can no longer be updated: people would have to download the app again by hand, and allow its permissions again.
+
+### Releases from a fork
+
+A fork cannot use the project's keys, and must not: its users would get updates from the wrong place. To publish your own releases:
+
+1. Run `scripts/setup-signing --github`. It makes your own two keys and saves the secrets in your fork.
+2. Put the public key it prints into `apps/macos/Resources/Info.plist` as `SUPublicEDKey`, and change `SUFeedURL` there to your fork's address.
 
 ## Licence
 

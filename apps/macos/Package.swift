@@ -19,6 +19,10 @@ let package = Package(
     .package(path: "../../packages/engine"),
     .package(path: "../../packages/ui"),
     .package(path: "../../packages/agent"),
+    // The one third-party library: Sparkle, the standard updater for Mac apps that are not in
+    // the App Store. An updater checks and replaces the app itself, so it is not code to write
+    // twice. Pinned to one exact version; Package.resolved records the checksum of its download.
+    .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
   ],
   targets: [
     // macOS system glue: global shortcuts, typing into other apps, permissions.
@@ -48,6 +52,7 @@ let package = Package(
         .product(name: "WisperAudio", package: "audio"),
         .product(name: "WisperEngine", package: "engine"),
         .product(name: "WisperUI", package: "ui"),
+        .product(name: "Sparkle", package: "Sparkle"),
       ]
     ),
     .testTarget(

@@ -1,20 +1,25 @@
 ## Download
 
-**{{ZIP}}** (below, under Assets) holds `Open Wisper.app` for macOS 14.4 or newer.
+**{{DMG}}** (below, under Assets) holds Open Wisper for a Mac with Apple silicon and macOS 14.4 or newer.
 
-1. Unzip it and move `Open Wisper.app` into your Applications folder.
-2. Open it. The first time, macOS will stop it, because this build is **not signed with an Apple developer certificate and not notarized** (it has only an ad hoc signature).
-3. To allow it: open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Open Wisper. You only do this once.
+**Already have Open Wisper?** You do not need this page. The app offers the update by itself, or choose **Check for Updates…** from its menu. Your permissions and settings stay as they are.
 
-**Updating from an older version?** Because the build has no certificate, macOS treats each new version as a new app. The permissions you gave before (Microphone, Accessibility, System Audio Recording) can look on but do nothing. If dictation or the shortcuts stop working after an update, open **System Settings → Privacy & Security**, remove Open Wisper from each list, and allow it again.
+**New here?**
 
-If you would rather not run an unsigned app, build it yourself: `pnpm install && pnpm mac`. The README has the details.
+1. Open the file you downloaded and drag **Open Wisper** onto **Applications**.
+2. Open it from Applications. The first time, macOS stops it and says it could not check the app, because this build is **not signed with an Apple developer certificate and not notarized**. Click **Done**.
+3. Open **System Settings → Privacy & Security**, scroll down to **Security**, and click **Open Anyway** next to the line about Open Wisper. The button is there for about an hour after step 2.
+4. macOS asks once more. Confirm, and type your Mac password. You only do this once.
 
-To check your download, run `shasum -a 256 {{ZIP}}`. The line it prints should start with:
+If you would rather not run an app Apple has not checked, build it yourself: `pnpm install && pnpm mac`. The README has the details.
+
+To check your download, run `shasum -a 256 {{DMG}}`. The line it prints should start with:
 
 ```
 {{SHA256}}
 ```
+
+`appcast.xml`, also under Assets, is the file installed apps read to find this version. You do not need to download it.
 
 To connect an AI agent, see [docs/agents.md](https://github.com/arjunkambj/open-wisper/blob/main/docs/agents.md). The `wisper` tool is inside the app, at `Open Wisper.app/Contents/MacOS/wisper`.
 

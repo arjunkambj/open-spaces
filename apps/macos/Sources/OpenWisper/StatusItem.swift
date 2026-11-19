@@ -9,14 +9,16 @@ import WisperMacUI
 final class StatusItem: NSObject, NSMenuDelegate {
   private let model: AppModel
   private let controls: MacControls
+  private let updater: AppUpdater?
   private let item: NSStatusItem
   private let menu = NSMenu()
   private var microphones: [AudioDevice] = []
   private var iconWatch: Watch<MenuBarContent.Icon>?
 
-  init(model: AppModel, controls: MacControls) {
+  init(model: AppModel, controls: MacControls, updater: AppUpdater?) {
     self.model = model
     self.controls = controls
+    self.updater = updater
     item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     super.init()
     menu.delegate = self
@@ -32,7 +34,7 @@ final class StatusItem: NSObject, NSMenuDelegate {
 
   /// The lines of the menu as they are right now.
   var entries: [MenuEntry] {
-    MenuBarContent.entries(for: model, microphones: microphones)
+    MenuBarContent.entries(for: model, microphones: microphones, waitingUpdate: updater?.waitingVersion)
   }
 
   func menuNeedsUpdate(_ menu: NSMenu) {

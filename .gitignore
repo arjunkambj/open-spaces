@@ -10,6 +10,8 @@ node_modules/
 .build-*/
 .swiftpm/
 Package.resolved
+# The Mac app has one outside library, the updater. Its exact version is kept.
+!/apps/macos/Package.resolved
 
 # Xcode. The iOS project is made from apps/ios/project.yml by XcodeGen.
 DerivedData/
@@ -24,7 +26,10 @@ build/
 dist/
 ios-logs/
 
-# Local settings and secrets. An API key never belongs in the repo.
+# Local settings and secrets. An API key never belongs in the repo, and neither does a
+# signing key: scripts/setup-signing keeps those in ~/.config/open-wisper/signing.
 .env
 .env.*
 *.local
+*.p12
+*.keychain-db

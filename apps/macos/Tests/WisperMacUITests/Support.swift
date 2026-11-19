@@ -33,7 +33,9 @@ struct Stage {
 
   /// - transcribeDelay: how long turning speech into text takes.
   /// - withMonitor: give the controls a shortcut monitor (not started), to see what they ask of it.
+  /// - host: what the app offers the shared screens, such as a check for updates.
   init(
+    host: HostActions = HostActions(),
     hasKey: Bool = true,
     captureFailure: WisperError? = nil,
     revealDelay: Duration = .zero,
@@ -54,6 +56,7 @@ struct Stage {
         languageModel: FakeLanguageModel(text: "Hello there."),
         target: target,
         permissions: FakePermissions(statuses: [.microphone: .granted, .accessibility: .granted]),
+        host: host,
         checkAPIKey: { _ in }
       )
     )

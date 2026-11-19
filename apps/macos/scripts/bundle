@@ -12,49 +12,80 @@
 # What goes into the app:
 #   Contents/MacOS/OpenWisper        the app itself
 #   Contents/MacOS/wisper            the command-line tool for agents
+#   Contents/Frameworks/Sparkle.framework    the updater (see UPDATES below)
 #   Contents/Info.plist              from Resources/Info.plist, with the version filled in
 #   Contents/Resources/AppIcon.icns  from Resources/ (made by scripts/make-icon.swift)
 #   Contents/Resources/MenuBarTemplate.pdf   the menu bar mark, from assets/
 #   Contents/Resources/*.bundle      resource bundles SwiftPM made for the targets, if any
 #
-# The version comes from apps/macos/package.json. The build number is the
-# number of commits.
+# Settings, all optional, read from the environment:
+#   OPEN_WISPER_VERSION        the version, such as 0.2.0. Default: apps/macos/package.json.
+#   OPEN_WISPER_BUILD          the build number. Default: worked out as described below.
+#   OPEN_WISPER_SWIFT_FLAGS    more options for every `swift build`, such as "-j 4".
+#   OPEN_WISPER_SIGN_IDENTITY  a certificate to sign with, or "-" for none (see scripts/signing.sh).
 #
-# SIGNING, AND WHY macOS KEEPS FORGETTING PERMISSIONS
+# VERSION AND BUILD NUMBER
 #
-# By default the app is signed "ad hoc": no certificate, just a seal over the
-# files. macOS ties the Microphone, Accessibility and System Audio permissions
-# to that seal, and the seal changes with every build. So after each rebuild
-# macOS treats the app as a stranger: the switches in System Settings look on
-# but do nothing, and you have to remove the app from each list and add it
-# again.
+# The version (CFBundleShortVersionString) is what people read: 0.1.0.
 #
-# The fix is to sign with a certificate, which stays the same between builds.
-# A free one you make yourself is enough for your own Mac:
+# The build number (CFBundleVersion) is what the updater compares: an update is offered
+# when its build number is higher than that of the app that is running. It has two
+# parts, "100.33":
+#   - the version as one number: major x 10000 + minor x 100 + patch (0.1.0 is 100,
+#     1.2.3 is 10203);
+#   - the number of commits.
+# The version comes first, so a newer version is always a newer build, however the
+# branch it was built from was merged. Minor and patch must stay below 100.
 #
-#   1. Open Keychain Access. Menu: Keychain Access > Certificate Assistant >
-#      Create a Certificate...
-#   2. Name: Open Wisper Dev. Identity Type: Self-Signed Root.
-#      Certificate Type: Code Signing. Create.
-#   3. Build with it:
-#        OPEN_WISPER_SIGN_IDENTITY="Open Wisper Dev" apps/macos/scripts/bundle
-#      (put the export in your shell profile to make it stick). The first time,
-#      macOS asks whether codesign may use the key: choose Always Allow.
-#   4. Grant the permissions once more. From then on they survive rebuilds.
+# SIGNING, AND WHY macOS CAN FORGET PERMISSIONS
 #
-# To hand the app to other people, set OPEN_WISPER_SIGN_IDENTITY to a
-# "Developer ID Application: ..." certificate instead and notarise the result;
-# a self-made certificate is only trusted on the Mac that made it.
+# macOS ties the Microphone, Accessibility and System Audio permissions to the signature
+# of an app. Which signature a build gets is decided in scripts/signing.sh:
 #
-# The app is signed with the hardened runtime and one entitlement, the
-# microphone (Resources/OpenWisper.entitlements). Typing into other apps and
-# the global shortcuts need no entitlement, only the Accessibility permission.
+#   - With the certificate from `scripts/setup-signing` (run it once, it is free and asks
+#     for nothing), every build is signed by the same certificate. Permissions given once
+#     keep working after a rebuild and after an update, and the app can update itself.
+#     Releases built on GitHub use the same certificate.
+#   - With no certificate the app is signed "ad hoc": just a seal over the files, which
+#     changes with every build. macOS then treats each build as a stranger: the switches
+#     in System Settings look on but do nothing, until you remove the app from each list
+#     and add it again.
+#   - With OPEN_WISPER_SIGN_IDENTITY="Developer ID Application: ..." the app is signed for
+#     handing to other people with no warning from macOS (it must also be notarised). That
+#     needs a paid Apple developer account. A certificate you make yourself is not known
+#     to other people's Macs, so they are asked to allow the app the first time.
+#
+# Everything is signed from the inside out: the updater's own helper programs, then the
+# updater, then the `wisper` tool, then the app, which seals all of it. All with the
+# hardened runtime. The app has one entitlement of its own, the microphone
+# (Resources/OpenWisper.entitlements). Typing into other apps and the global shortcuts
+# need no entitlement, only the Accessibility permission.
+#
+# Without an Apple Developer ID, one more entitlement is added: the one that lets the app
+# load a library that has no Apple team name on it. macOS otherwise refuses to load the
+# updater, because a certificate you made yourself carries no team name. To make sure
+# the app can only ever load the updater inside its own bundle, every other place the
+# program would look for libraries is taken out of it first.
+#
+# UPDATES
+#
+# The app updates itself with Sparkle (https://sparkle-project.org), the one library in
+# this project that we did not write. Info.plist names the address the app asks for new
+# versions (SUFeedURL) and the public half of the key that every update must be signed
+# with (SUPublicEDKey). `scripts/dmg` makes the disk image for a release, and
+# `scripts/appcast` signs it and writes the list of versions the app reads.
+#
+# Only a build made with the project's keys looks for updates: one signed with a
+# certificate, by someone whose update key (from scripts/setup-signing) is the one in
+# Info.plist. In every other build the address is left out, so the app has no
+# "Check for Updates…" and never asks. Otherwise a build of your own would be offered
+# the project's release and be replaced by it.
 #
 # DOCK ICON
 #
 # Info.plist sets LSUIElement, so the app starts as a menu-bar app with no
 # Dock icon (nothing bounces in the Dock when it opens at login). The app
-# shows a Dock icon itself while its main window is open, with
+# shows a Dock icon itself while its main window or an update is on screen, with
 # NSApp.setActivationPolicy(.regular), and goes back to .accessory after.
 set -euo pipefail
 
@@ -67,6 +98,8 @@ trap 'fail "stopped at line $LINENO (see the output above)."' ERR
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 root="$(cd "$here/../.." && pwd)"
 swiftw="$root/scripts/swiftw"
+# shellcheck source=apps/macos/scripts/signing.sh
+source "$here/scripts/signing.sh"
 
 config=release
 open_after=0
@@ -89,7 +122,11 @@ info="$here/Resources/Info.plist"
 entitlements="$here/Resources/OpenWisper.entitlements"
 icon="$here/Resources/AppIcon.icns"
 menu_bar_mark="$root/assets/menubar-template.pdf"
-identity="${OPEN_WISPER_SIGN_IDENTITY:--}"
+# Extra options for `swift build`, split on spaces.
+swift_flags=()
+if [[ -n "${OPEN_WISPER_SWIFT_FLAGS:-}" ]]; then
+  read -r -a swift_flags <<<"$OPEN_WISPER_SWIFT_FLAGS"
+fi
 
 [[ -x "$swiftw" ]] || fail "cannot find $swiftw."
 [[ -f "$info" ]] || fail "missing $info."
@@ -99,36 +136,132 @@ identity="${OPEN_WISPER_SIGN_IDENTITY:--}"
 plutil -lint "$info" >/dev/null || fail "$info is not a valid property list."
 plutil -lint "$entitlements" >/dev/null || fail "$entitlements is not a valid property list."
 
-version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$here/package.json" | head -1)"
-[[ -n "$version" ]] || fail "no \"version\" found in $here/package.json."
-build_number="$(git -C "$root" rev-list --count HEAD 2>/dev/null || true)"
-[[ "$build_number" =~ ^[0-9]+$ ]] || build_number=1
+load_signing || fail "could not get the signing certificate ready."
 
-echo "==> Building Open Wisper $version ($config)"
-(cd "$here" && "$swiftw" build -c "$config" --product OpenWisper)
-app_bin="$(cd "$here" && "$swiftw" build -c "$config" --show-bin-path)"
+# --- Version and build number ------------------------------------------------------------
+
+version="${OPEN_WISPER_VERSION:-}"
+if [[ -z "$version" ]]; then
+  version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$here/package.json" | head -1)"
+fi
+[[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.]+)?$ ]] ||
+  fail "the version '$version' is not of the form 1.2.3 (or 1.2.3-beta.1)."
+major=$((10#${BASH_REMATCH[1]}))
+minor=$((10#${BASH_REMATCH[2]}))
+patch=$((10#${BASH_REMATCH[3]}))
+((minor < 100 && patch < 100)) || fail "in version $version the second and third numbers must stay below 100."
+((major * 10000 + minor * 100 + patch > 0)) || fail "the version must be above 0.0.0."
+
+build_number="${OPEN_WISPER_BUILD:-}"
+if [[ -z "$build_number" ]]; then
+  commits="$(git -C "$root" rev-list --count HEAD 2>/dev/null || true)"
+  [[ "$commits" =~ ^[0-9]+$ ]] || commits=0
+  # A copy of the repository with only its newest commits counts too few of them. That
+  # is fine for trying a build, and wrong for one that will be handed out as an update.
+  if [[ "$sign_kind" != adhoc && "$(git -C "$root" rev-parse --is-shallow-repository 2>/dev/null)" == true ]]; then
+    fail "this copy of the repository does not have its full history, so the build number would be wrong. Fetch it all (git fetch --unshallow; in GitHub Actions: fetch-depth: 0)."
+  fi
+  build_number="$((major * 10000 + minor * 100 + patch)).$commits"
+fi
+[[ "$build_number" =~ ^[1-9][0-9]{0,8}(\.[0-9]{1,9}){0,2}$ ]] ||
+  fail "the build number '$build_number' must be one to three numbers with dots between them, the first above zero."
+
+# --- Build -------------------------------------------------------------------------------
+
+echo "==> Building Open Wisper $version, build $build_number ($config)"
+(cd "$here" && "$swiftw" build -c "$config" --product OpenWisper ${swift_flags[@]+"${swift_flags[@]}"})
+app_bin="$(cd "$here" && "$swiftw" build -c "$config" --show-bin-path ${swift_flags[@]+"${swift_flags[@]}"})"
 [[ -x "$app_bin/OpenWisper" ]] || fail "the build did not produce $app_bin/OpenWisper."
+# SwiftPM puts the updater next to the app it built. If a version of SwiftPM does not, it
+# is still in the download SwiftPM unpacked, a few folders up.
+sparkle="$app_bin/Sparkle.framework"
+if [[ ! -f "$sparkle/Versions/B/Sparkle" ]]; then
+  folder="$app_bin"
+  while [[ "$folder" != "$here" && "$folder" != / ]]; do
+    folder="$(dirname "$folder")"
+    found=("$folder"/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-*/Sparkle.framework)
+    if [[ -f "${found[0]}/Versions/B/Sparkle" ]]; then
+      sparkle="${found[0]}"
+      break
+    fi
+  done
+fi
+[[ -f "$sparkle/Versions/B/Sparkle" ]] || fail "the build did not leave the updater (Sparkle.framework) in $app_bin."
 
 echo "==> Building the wisper tool ($config)"
-(cd "$root/packages/agent" && "$swiftw" build -c "$config" --product wisper)
-tool_bin="$(cd "$root/packages/agent" && "$swiftw" build -c "$config" --show-bin-path)"
+(cd "$root/packages/agent" && "$swiftw" build -c "$config" --product wisper ${swift_flags[@]+"${swift_flags[@]}"})
+tool_bin="$(cd "$root/packages/agent" && "$swiftw" build -c "$config" --show-bin-path ${swift_flags[@]+"${swift_flags[@]}"})"
 [[ -x "$tool_bin/wisper" ]] || fail "the build did not produce $tool_bin/wisper."
+
+# --- Put the app together ----------------------------------------------------------------
 
 echo "==> Putting the app together"
 mkdir -p "$out"
 staging="$(mktemp -d "$out/.staging.XXXXXX")"
-cleanup() { rm -rf "$staging"; }
+cleanup() { rm -rf "${staging:?}"; }
 trap cleanup EXIT
 staged="$staging/$app_name.app"
-mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Resources"
+mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Resources" "$staged/Contents/Frameworks"
 
 cp "$app_bin/OpenWisper" "$staged/Contents/MacOS/OpenWisper"
 cp "$tool_bin/wisper" "$staged/Contents/MacOS/wisper"
 chmod 755 "$staged/Contents/MacOS/OpenWisper" "$staged/Contents/MacOS/wisper"
 
+# The updater. `cp -R` keeps the links inside the framework as links, which it needs.
+framework="$staged/Contents/Frameworks/Sparkle.framework"
+cp -R "$sparkle" "$framework"
+# Files only a compiler reads have no place in a finished app.
+for extra in Headers PrivateHeaders Modules; do
+  rm -rf "${framework:?}/${extra:?}" "${framework:?}/Versions/B/${extra:?}"
+done
+[[ -L "$framework/Versions/Current" && -L "$framework/Sparkle" ]] ||
+  fail "the links inside Sparkle.framework were lost while copying it."
+
+# Where a program looks for the libraries it loads is written into it. The build leaves
+# folders of this Mac in there, which mean nothing on another Mac, and which would let
+# anything that can write to such a folder slip its own code into the app. So only two
+# places are kept: the system's Swift libraries, and for the app its own Frameworks folder.
+library_paths() {
+  otool -l "$1" | awk '$1 == "cmd" { rpath = ($2 == "LC_RPATH") } rpath && $1 == "path" { print $2 }'
+}
+tidy_library_paths() {
+  local program="$1" path
+  while IFS= read -r path; do
+    [[ "$path" == /usr/lib/swift ]] && continue
+    # (It warns that the signature no longer holds. The program is signed further down.)
+    install_name_tool -delete_rpath "$path" "$program" 2>/dev/null
+  done < <(library_paths "$program")
+}
+tidy_library_paths "$staged/Contents/MacOS/OpenWisper"
+tidy_library_paths "$staged/Contents/MacOS/wisper"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$staged/Contents/MacOS/OpenWisper" 2>/dev/null
+for program in OpenWisper wisper; do
+  if library_paths "$staged/Contents/MacOS/$program" | grep -v -x -e /usr/lib/swift -e "@executable_path/../Frameworks" >&2; then
+    fail "$program would still look for libraries in the folders above."
+  fi
+done
+
 cp "$info" "$staged/Contents/Info.plist"
 plutil -replace CFBundleShortVersionString -string "$version" "$staged/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$build_number" "$staged/Contents/Info.plist"
+
+# Only a build made with the project's keys looks for updates. Any other build would be
+# offered the project's release, which would replace it with a differently signed app:
+# a build of your own would vanish, and its permissions with it. Without the address to
+# ask, the app has no "Check for Updates…" and never asks.
+updates_off=""
+if [[ "$sign_kind" == adhoc ]]; then
+  updates_off="it is not signed with a certificate"
+elif [[ "$sign_kind" == own ]]; then
+  trusted="$(plutil -extract SUPublicEDKey raw "$staged/Contents/Info.plist" 2>/dev/null || true)"
+  mine="$(tr -d '[:space:]' <"$signing_dir/update-key.pub" 2>/dev/null || true)"
+  if [[ -z "$mine" || "$trusted" != "$mine" ]]; then
+    updates_off="your update key is not the one in Info.plist (SUPublicEDKey)"
+  fi
+fi
+if [[ -n "$updates_off" ]]; then
+  plutil -remove SUFeedURL "$staged/Contents/Info.plist"
+fi
 printf 'APPL????' >"$staged/Contents/PkgInfo"
 
 cp "$icon" "$staged/Contents/Resources/AppIcon.icns"
@@ -139,7 +272,6 @@ cp "$menu_bar_mark" "$staged/Contents/Resources/MenuBarTemplate.pdf"
 shopt -s nullglob
 for bin in "$app_bin" "$tool_bin"; do
   for resources in "$bin"/*.bundle; do
-    rm -rf "$staged/Contents/Resources/$(basename "$resources")"
     cp -R "$resources" "$staged/Contents/Resources/"
   done
 done
@@ -148,48 +280,71 @@ shopt -u nullglob
 # Stray Finder attributes make codesign refuse the bundle.
 xattr -cr "$staged"
 
-# A Developer ID signature needs a time stamp from Apple's server (notarising checks for
-# it). Any other signature does not, and asking for one would make the build need the
-# network. The identity may be given by name or by its fingerprint, so the keychain's
-# own list is looked at too.
-is_developer_id() {
-  [[ "$identity" == "Developer ID "* ]] && return 0
-  security find-identity -v -p codesigning 2>/dev/null |
-    grep -F -- "$identity" | grep -q '"Developer ID '
-}
+# --- Sign --------------------------------------------------------------------------------
 
-if [[ "$identity" == "-" ]]; then
-  echo "==> Signing (ad hoc: macOS will forget permissions after the next build; see the top of this script)"
-  stamp=(--timestamp=none)
-elif is_developer_id; then
-  echo "==> Signing with: $identity"
-  stamp=(--timestamp)
-else
-  echo "==> Signing with: $identity (your own certificate: no time stamp, so no network is needed)"
-  stamp=(--timestamp=none)
+echo "==> Signing with $(describe_signing)"
+if [[ "$sign_kind" == adhoc ]]; then
+  echo "    WARNING: macOS will forget this build's permissions after the next build."
+  echo "    Run scripts/setup-signing once to stop that. See the top of this script."
 fi
-# Inside first, then the app, which seals everything in it.
-codesign --force --options runtime "${stamp[@]}" --sign "$identity" \
-  --identifier dev.openwisper.mac.wisper "$staged/Contents/MacOS/wisper"
-codesign --force --options runtime "${stamp[@]}" --sign "$identity" \
-  --entitlements "$entitlements" "$staged"
+if [[ -n "$updates_off" ]]; then
+  echo "    This build will not look for updates: $updates_off."
+fi
+
+# Without an Apple team name on the certificate, macOS will not let the app load the
+# updater unless the app says it may load libraries signed by someone else.
+app_entitlements="$staging/app.entitlements"
+cp "$entitlements" "$app_entitlements"
+if [[ "$sign_kind" != developer-id ]]; then
+  plutil -insert 'com\.apple\.security\.cs\.disable-library-validation' -bool true "$app_entitlements"
+fi
+
+# Inside first: the updater's helpers, the updater, our tool, then the app, which seals
+# everything in it. This is the order Sparkle's own notes on signing by hand give.
+inside="$framework/Versions/B"
+sign "$inside/XPCServices/Installer.xpc"
+sign --preserve-metadata=entitlements "$inside/XPCServices/Downloader.xpc"
+sign "$inside/Autoupdate"
+sign "$inside/Updater.app"
+sign "$framework"
+sign --identifier dev.openwisper.mac.wisper "$staged/Contents/MacOS/wisper"
+sign --entitlements "$app_entitlements" "$staged"
+
+# --- Check -------------------------------------------------------------------------------
 
 echo "==> Checking"
 plutil -lint "$staged/Contents/Info.plist" >/dev/null
 codesign --verify --deep --strict "$staged"
-for path in Contents/MacOS/OpenWisper Contents/MacOS/wisper Contents/Resources/AppIcon.icns; do
+for path in Contents/MacOS/OpenWisper Contents/MacOS/wisper Contents/Resources/AppIcon.icns \
+  Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle \
+  Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate; do
   [[ -s "$staged/$path" ]] || fail "$path is missing from the app."
 done
 bundle_id="$(plutil -extract CFBundleIdentifier raw "$staged/Contents/Info.plist")"
 [[ "$bundle_id" == "dev.openwisper.mac" ]] || fail "unexpected bundle id '$bundle_id'."
 
+# What macOS will hold a later build to before it lets it keep this one's permissions.
+requirement="$(codesign -dr - "$staged" 2>&1 | sed -n 's/^#\{0,1\} *designated => //p')"
+if [[ "$sign_kind" == own ]]; then
+  expected="certificate leaf = H\"$(printf '%s' "$sign_identity" | tr 'A-F' 'a-f')\""
+  [[ "$requirement" == *"$expected"* ]] ||
+    fail "the app's signature is not tied to the certificate. Got: $requirement"
+fi
+
+# The app must start and find the updater inside itself. `--help` prints a few lines and
+# quits before any window, sound or permission.
+"$staged/Contents/MacOS/OpenWisper" --help >/dev/null ||
+  fail "the finished app does not start. It may not be finding Contents/Frameworks/Sparkle.framework."
+"$staged/Contents/MacOS/wisper" --help >/dev/null || fail "the wisper tool in the app does not start."
+
 # Swap the finished app in.
-rm -rf "$app"
+rm -rf "${app:?}"
 mv "$staged" "$app"
 # Tell Finder and the Dock that the icon may have changed.
 touch "$app"
 
 echo "==> Done: $app (version $version, build $build_number)"
+echo "    Signature: $requirement"
 if [[ "$open_after" == 1 ]]; then
   open "$app"
 fi

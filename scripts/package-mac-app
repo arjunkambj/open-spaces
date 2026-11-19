@@ -3,7 +3,9 @@
 #
 # Run apps/macos/scripts/bundle first. This finds the bundle it made, checks
 # that its code signature is intact (an ad hoc signature counts), and writes a
-# zip that keeps the bundle whole. Used by CI and by the release workflow.
+# zip that keeps the bundle whole. CI uses it to attach the app to a run, so a
+# pull request can be tried without building. A release is a disk image
+# instead: see apps/macos/scripts/dmg.
 set -euo pipefail
 zip_path="${1:?usage: package-mac-app <zip-path>}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

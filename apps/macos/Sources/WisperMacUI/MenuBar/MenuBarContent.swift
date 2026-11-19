@@ -15,6 +15,8 @@ public struct MenuEntry: Equatable, Sendable {
     /// Use this input device; `nil` is the Mac's own choice.
     case pickMicrophone(String?)
     case openSettings
+    /// Look for a new version of the app now, or show the one that was found.
+    case checkForUpdates
     /// Keep the resting pill out of sight for an hour, or bring it back.
     case hidePill
     case showPill
@@ -64,7 +66,12 @@ public enum MenuBarContent {
 
   /// The menu, top to bottom.
   /// - microphones: the input devices to offer; the menu bar item looks them up.
-  public static func entries(for model: AppModel, microphones: [AudioDevice]) -> [MenuEntry] {
+  /// - waitingUpdate: the version of an update that was found and waits for an answer, such as "0.2.0".
+  public static func entries(
+    for model: AppModel,
+    microphones: [AudioDevice],
+    waitingUpdate: String? = nil
+  ) -> [MenuEntry] {
     let settings = model.settings
     var entries = [
       MenuEntry("Open Open Wisper", .action(.openHub)),
@@ -87,6 +94,12 @@ public enum MenuBarContent {
       .separator,
       MenuEntry("Microphone", .submenu(microphoneEntries(microphones, chosen: settings.microphoneID))),
       MenuEntry("Settings…", .action(.openSettings), shortcut: KeyCombo(keyCode: 43, modifiers: [.command])),
+    ]
+    // Only where the app can update itself: not in the demo, and not in a build with no bundle.
+    if model.host.checkForUpdates != nil {
+      entries.append(MenuEntry(updateTitle(waiting: waitingUpdate), .action(.checkForUpdates)))
+    }
+    entries += [
       .separator,
       MenuEntry(dictationHint(settings), .note),
       .separator,
@@ -125,6 +138,7 @@ public enum MenuBarContent {
     switch command {
     case .openHub: controls.open(.hub)
     case .openSettings: controls.open(.settings)
+    case .checkForUpdates: model.host.checkForUpdates?()
     case .toggleMeeting: controls.toggleMeeting()
     case .pasteLast: controls.pasteLast()
     case .pickMicrophone(let id): model.update { $0.microphoneID = id }
@@ -146,6 +160,12 @@ public enum MenuBarContent {
       entries.append(MenuEntry("Chosen microphone (not connected)", .note, isChecked: true))
     }
     return entries
+  }
+
+  /// The update line: it names the version once one was found.
+  static func updateTitle(waiting version: String?) -> String {
+    guard let version, !version.isEmpty else { return "Check for Updates…" }
+    return "Install Update \(version)…"
   }
 
   static func dictationHint(_ settings: WisperDomain.Settings) -> String {

@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+# setup-signing: make the two keys that let Open Wisper update itself, once per maintainer.
+#
+#   scripts/setup-signing             make what is missing, check everything, say where it is
+#   scripts/setup-signing --github    the same, then give GitHub Actions what it needs to
+#                                     build a release (three repository secrets)
+#   scripts/setup-signing --github --repo owner/name    for a repository other than this one
+#
+# Safe to run again and again: it never replaces a key that exists.
+#
+# WHAT IT MAKES, AND WHY
+#
+# 1. A code-signing certificate, "Open Wisper Self-Signed". macOS ties the Microphone and
+#    Accessibility permissions to the certificate an app is signed with. With no certificate
+#    every build looks like a new app and the permissions stop working. With one certificate
+#    for every build, on this Mac and on GitHub, they carry over from version to version.
+#    It is free and made on this Mac. It is not an Apple Developer ID, so macOS still asks a
+#    person who downloads the app to allow it the first time.
+#
+# 2. An update signing key (the kind called EdDSA, or ed25519). Every release is signed with
+#    the private half. The public half is in the app, in Info.plist under SUPublicEDKey. The
+#    app refuses any update that was not signed with the private half, so nobody else can
+#    hand your users an update, even if they take over the download server.
+#
+# WHERE IT ALL GOES
+#
+# In ~/.config/open-wisper/signing (override with OPEN_WISPER_SIGNING_DIR), a folder only
+# you can open. Nothing secret is ever written into the repository or printed.
+#
+#   identity.p12                 the certificate and its private key           SECRET
+#   identity.p12.password        the password of that file                     SECRET
+#   update-key                   the private half of the update signing key    SECRET
+#   signing.keychain-db          a keychain of its own, holding the certificate, so signing
+#                                never asks for a password and your own keychain is not touched
+#   signing.keychain.password    the password of that keychain                 SECRET
+#   update-key.pub               the public half of the update signing key     not secret
+#   certificate.sha1             the fingerprint of the certificate            not secret
+#
+# BACK IT UP. If identity.p12, its password or update-key is lost, apps already installed can
+# no longer be updated: people would have to download the app again by hand. To move to
+# another Mac, copy those three files into the same folder there and run this script.
+set -euo pipefail
+
+say() { printf '%s\n' "$*"; }
+fail() {
+  printf '\nsetup-signing: %s\n' "$*" >&2
+  exit 1
+}
+trap 'fail "stopped at line $LINENO (see the output above)."' ERR
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+dir="${OPEN_WISPER_SIGNING_DIR:-$HOME/.config/open-wisper/signing}"
+name="Open Wisper Self-Signed"
+info_plist="$root/apps/macos/Resources/Info.plist"
+
+github=0
+repo=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --github) github=1 ;;
+    --repo)
+      [[ $# -ge 2 ]] || fail "--repo needs a value, like owner/name."
+      repo="$2"
+      shift
+      ;;
+    -h | --help)
+      sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) fail "unknown option '$1'. Use --github, --repo or --help." ;;
+  esac
+  shift
+done
+
+# Always the system's own tools, so a different openssl on the PATH cannot change the result.
+openssl=/usr/bin/openssl
+for tool in "$openssl" /usr/bin/security /usr/bin/codesign; do
+  [[ -x "$tool" ]] || fail "cannot find $tool."
+done
+command -v swift >/dev/null || fail "cannot find swift. Install Apple's Command Line Tools: xcode-select --install"
+
+# Every file made from here on can be read by you alone.
+umask 077
+mkdir -p "$dir"
+chmod 700 "$dir"
+dir="$(cd "$dir" && pwd -P)"
+if git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  fail "$dir is inside a git repository. Keys must never be put where they could be committed."
+fi
+
+p12="$dir/identity.p12"
+p12_password="$dir/identity.p12.password"
+update_key="$dir/update-key"
+update_key_public="$dir/update-key.pub"
+keychain="$dir/signing.keychain-db"
+keychain_password="$dir/signing.keychain.password"
+fingerprint_file="$dir/certificate.sha1"
+
+scratch="$(mktemp -d "$dir/.work.XXXXXX")"
+cleanup() { rm -rf "$scratch"; }
+trap cleanup EXIT
+
+# `security` is given its commands on standard input, so that a password is never an
+# argument of a running program, where other programs could read it.
+keychain_command() {
+  /usr/bin/security -i >/dev/null 2>&1
+}
+
+# --- 1. The certificate ------------------------------------------------------------------
+
+if [[ -s "$p12" && -s "$p12_password" ]]; then
+  say "==> The certificate is already there."
+elif [[ -e "$p12" || -e "$p12_password" ]]; then
+  fail "only one of identity.p12 and identity.p12.password is in $dir. Put both back, or remove both to start again."
+else
+  say "==> Making the certificate \"$name\""
+  cat >"$scratch/request.cnf" <<EOF
+[req]
+distinguished_name = subject
+x509_extensions = extensions
+prompt = no
+[subject]
+CN = $name
+[extensions]
+basicConstraints = critical,CA:false
+keyUsage = critical,digitalSignature
+extendedKeyUsage = critical,codeSigning
+subjectKeyIdentifier = hash
+EOF
+  # Good for 20 years. A signature made with a certificate that has run out stops being
+  # accepted, so this is long on purpose.
+  "$openssl" req -x509 -newkey rsa:3072 -nodes -sha256 -days 7300 -config "$scratch/request.cnf" \
+    -keyout "$scratch/key.pem" -out "$scratch/certificate.pem" >/dev/null 2>&1
+  "$openssl" rand -hex 24 >"$scratch/p12.password"
+  "$openssl" pkcs12 -export -inkey "$scratch/key.pem" -in "$scratch/certificate.pem" -name "$name" \
+    -out "$scratch/identity.p12" -passout "file:$scratch/p12.password"
+  rm -f "$scratch/key.pem"
+  mv "$scratch/p12.password" "$p12_password"
+  mv "$scratch/identity.p12" "$p12"
+  # A keychain made for an older certificate is of no use now.
+  if [[ -e "$keychain" ]]; then
+    /usr/bin/security delete-keychain "$keychain" >/dev/null 2>&1 || rm -f "$keychain"
+  fi
+fi
+
+# --- 2. The update signing key -----------------------------------------------------------
+
+if [[ -s "$update_key" ]]; then
+  say "==> The update signing key is already there."
+else
+  say "==> Making the update signing key"
+  # 32 random bytes in base64: the form Sparkle's tools read with --ed-key-file.
+  "$openssl" rand -base64 32 >"$scratch/update-key"
+  mv "$scratch/update-key" "$update_key"
+fi
+public_key="$(swift "$root/scripts/ed25519.swift" public-key "$update_key")"
+[[ -n "$public_key" ]] || fail "could not work out the public half of the update signing key."
+printf '%s\n' "$public_key" >"$update_key_public"
+
+# --- 3. A keychain of its own ------------------------------------------------------------
+
+# The fingerprint (SHA-1) of the certificate in the keychain, or nothing.
+fingerprint_in_keychain() {
+  /usr/bin/security find-identity -p codesigning "$keychain" 2>/dev/null |
+    sed -n 's/^ *[0-9]*) \([0-9A-F]\{40\}\) .*/\1/p' | head -1
+}
+
+unlock_keychain() {
+  printf 'unlock-keychain -p "%s" "%s"\n' "$(cat "$keychain_password")" "$keychain" | keychain_command
+}
+
+fingerprint=""
+if [[ -e "$keychain" && -s "$keychain_password" ]] && unlock_keychain; then
+  fingerprint="$(fingerprint_in_keychain)"
+fi
+if [[ -n "$fingerprint" ]]; then
+  say "==> The signing keychain is already there."
+else
+  say "==> Making the signing keychain"
+  if [[ -e "$keychain" ]]; then
+    /usr/bin/security delete-keychain "$keychain" >/dev/null 2>&1 || rm -f "$keychain"
+  fi
+  "$openssl" rand -hex 24 >"$keychain_password"
+  printf 'create-keychain -p "%s" "%s"\n' "$(cat "$keychain_password")" "$keychain" | keychain_command
+  # No time limit and no locking when the Mac sleeps: a locked keychain would ask for its password.
+  /usr/bin/security set-keychain-settings "$keychain"
+  unlock_keychain
+  printf 'import "%s" -k "%s" -f pkcs12 -P "%s" -T /usr/bin/codesign\n' \
+    "$p12" "$keychain" "$(cat "$p12_password")" | keychain_command
+  # Lets Apple's own signing tool use the key without a question on screen.
+  printf 'set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "%s" "%s"\n' \
+    "$(cat "$keychain_password")" "$keychain" | keychain_command
+  fingerprint="$(fingerprint_in_keychain)"
+  [[ -n "$fingerprint" ]] || fail "the certificate did not go into the keychain. Is identity.p12.password the right password?"
+fi
+printf '%s\n' "$fingerprint" >"$fingerprint_file"
+chmod 600 "$dir"/identity.p12 "$dir"/identity.p12.password "$dir"/update-key \
+  "$dir"/signing.keychain-db "$dir"/signing.keychain.password
+chmod 644 "$update_key_public" "$fingerprint_file"
+
+# --- 4. Try both keys --------------------------------------------------------------------
+
+say "==> Checking that signing works"
+cp /usr/bin/true "$scratch/probe"
+/usr/bin/codesign --force --options runtime --timestamp=none --keychain "$keychain" \
+  --sign "$fingerprint" --identifier dev.openwisper.probe "$scratch/probe" 2>/dev/null ||
+  fail "codesign could not sign with the certificate in $keychain."
+/usr/bin/codesign --verify --strict "$scratch/probe"
+requirement="$(/usr/bin/codesign -dr - "$scratch/probe" 2>&1 | sed -n 's/^designated => //p')"
+lower_fingerprint="$(printf '%s' "$fingerprint" | tr 'A-F' 'a-f')"
+[[ "$requirement" == *"certificate leaf = H\"$lower_fingerprint\""* ]] ||
+  fail "the signature is not tied to the certificate. Got: $requirement"
+
+# Sparkle's own signing tool is there once the Mac app has been built.
+sign_update="$(find "$root/apps/macos" -maxdepth 6 -type f -name sign_update -path '*/artifacts/sparkle/Sparkle/bin/*' 2>/dev/null | head -1)"
+if [[ -n "$sign_update" ]]; then
+  printf 'Open Wisper update signing check\n' >"$scratch/message"
+  signature="$("$sign_update" --ed-key-file "$update_key" -p "$scratch/message")"
+  swift "$root/scripts/ed25519.swift" verify "$public_key" "$signature" "$scratch/message" ||
+    fail "a signature made by Sparkle's sign_update does not match the public key."
+  say "    The certificate signs, and Sparkle's tool signs with the update key."
+else
+  say "    The certificate signs. (Sparkle's signing tool is not here yet. Build the Mac app"
+  say "    once, then run this again to check the update key with it too.)"
+fi
+
+# --- 5. Give GitHub Actions what a release needs -----------------------------------------
+
+if [[ "$github" == 1 ]]; then
+  command -v gh >/dev/null || fail "cannot find gh, GitHub's command-line tool. See https://cli.github.com"
+  if [[ -z "$repo" ]]; then
+    repo="$(cd "$root" && gh repo view --json nameWithOwner --jq .nameWithOwner)"
+  fi
+  [[ "$repo" == */* ]] || fail "could not tell which GitHub repository this is. Pass --repo owner/name."
+  say "==> Saving three secrets for GitHub Actions in $repo"
+  # Each value goes in on standard input, never as an argument. GitHub stores them
+  # encrypted and shows them to nobody, only to the release workflow.
+  base64 <"$p12" | gh secret set MAC_SIGNING_P12_BASE64 --repo "$repo"
+  gh secret set MAC_SIGNING_P12_PASSWORD --repo "$repo" <"$p12_password"
+  gh secret set SPARKLE_ED_PRIVATE_KEY --repo "$repo" <"$update_key"
+fi
+
+# --- 6. Say what there is ----------------------------------------------------------------
+
+in_app=""
+if [[ -f "$info_plist" ]]; then
+  in_app="$(plutil -extract SUPublicEDKey raw "$info_plist" 2>/dev/null || true)"
+fi
+
+say ""
+say "Ready."
+say ""
+say "  Folder (only you can open it):  $dir"
+say "  Certificate:                    $name"
+say "  Certificate fingerprint (SHA-1): $fingerprint"
+say "  Update signing key, public half: $public_key"
+say ""
+if [[ "$in_app" == "$public_key" ]]; then
+  say "The app already trusts this update key (SUPublicEDKey in apps/macos/Resources/Info.plist)."
+else
+  say "NEXT STEP: the app does not trust this update key yet. Put the public half into"
+  say "apps/macos/Resources/Info.plist as the value of SUPublicEDKey:"
+  say ""
+  say "  plutil -replace SUPublicEDKey -string '$public_key' apps/macos/Resources/Info.plist"
+  say ""
+  say "Until then, the release scripts refuse to sign an update the app would not accept."
+fi
+say ""
+say "apps/macos/scripts/bundle now signs every build with the certificate, by itself."
+say "Back up identity.p12, identity.p12.password and update-key from the folder above."

@@ -21,6 +21,7 @@
     "format": "swift format format --in-place --recursive --parallel apps packages",
     "mac": "pnpm --filter @open-wisper/macos run dev",
     "mac:bundle": "pnpm --filter @open-wisper/macos run bundle",
+    "mac:dmg": "pnpm --filter @open-wisper/macos run dmg",
     "ios:generate": "scripts/ios generate",
     "ios:build": "scripts/ios build",
     "ios:test": "scripts/ios test"

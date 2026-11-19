@@ -41,7 +41,8 @@ Knowing the design helps you judge what counts as a problem.
 ### Your data
 
 - **Everything else stays on your device** as plain files in the app's data folder. The folder and its files can be opened by your user account only. They are not encrypted by Open Wisper. Anything that runs as you can read them, the same as your documents.
-- **The only network calls** go to OpenAI, or to the compatible server you chose. Your audio and text are sent there to be turned into text and notes. There is no Open Wisper server, no account, no analytics and no tracking.
+- **Your audio and text go only** to OpenAI, or to the compatible server you chose, to be turned into text and notes. There is no Open Wisper server, no account, no analytics and no tracking.
+- **The Mac app makes one other kind of request:** about once a day it asks GitHub whether there is a newer version, and it downloads that version when you say yes. The request carries the app's name and version. It carries none of your data and nothing about your Mac. "Updates" below has the details.
 - **On a Mac, text is typed by pasting.** Open Wisper borrows the clipboard for a moment and then puts back what you had there. The text it places is marked so that clipboard-history apps know to skip it.
 - **On an iPhone, your text goes to the clipboard.** That copy stays on the phone (it is not handed to your other Apple devices) and iOS clears it after 10 minutes.
 
@@ -67,9 +68,18 @@ The `wisper` command-line tool, which is also the MCP server, runs on your own M
 
 The "Safety" part of [docs/agents.md](docs/agents.md) has the full list.
 
-### Downloads
+### Downloads and updates
 
-**Downloads are not signed with an Apple developer certificate yet.** Until they are, the safest way to get the app is to build it from this source code.
+**The Mac app is signed with a certificate the project made itself, not with an Apple developer certificate, and it is not notarized.** Here is what that does and does not mean.
+
+- **What the certificate does.** Every release is signed with the same certificate. That is how macOS knows a new version is the same app as the old one, so the permissions you gave (Microphone, Accessibility, System Audio Recording) carry over an update.
+- **What it does not prove.** Anyone can make a certificate with this name. It is not checked by Apple and says nothing about who built the app, and Apple has not scanned the app for malware. That is why macOS asks you to allow the app the first time you open it. The first download is only as safe as the place you got it from: use the Releases page of this repository, compare the SHA-256 printed in the release notes, or build the app from this source code.
+- **How an update is checked.** The project holds a second key, used only for updates. Each release's disk image is signed with it, and so is the small file that lists the newest version. The public half of that key is inside the app you already have. Before the app opens a download it checks the signature against that key, and it refuses a download or a list that does not match. Someone who took over the download page, or who sits between you and GitHub, cannot make your app install something else, because they do not have the key.
+- **What an update cannot do.** It cannot be older than the version you have. It is never installed without your yes.
+- **Where the keys are.** On the maintainer's Mac and in GitHub's encrypted secrets for this repository, which only the release workflow can read. They are never in the source code. Someone who stole both keys could publish an update that installed apps would accept. That would be a serious problem, and we want to hear about anything that could lead to it.
+- **One thing that is weaker than with an Apple certificate.** macOS can make an app refuse to load code that comes from another developer. A certificate with no Apple team behind it cannot use that check, so it is off, and the app loads its one outside library, the updater, from inside its own bundle only. A program that already runs as you could still change the app on disk, as it could change your documents. The app cannot defend against that (see "Not security problems").
+
+An app you built yourself, with your own certificate or none, does not look for updates at all.
 
 ## What we would like to hear about
 
@@ -77,6 +87,8 @@ The "Safety" part of [docs/agents.md](docs/agents.md) has the full list.
 - Audio or text being sent to any place other than the server you set.
 - A web page, a document or a link making Open Wisper start dictation, record a meeting without asking you, or stop a recording.
 - The agent tool reading the API key, changing settings, replacing a file, or writing a file it should have refused.
+- The app installing an update that was not signed with the project's update key, or an older version than the one it had.
+- A signing key showing up anywhere it should not be: in the source code, in a build log, or in a release.
 - Another user account on the same Mac being able to read your Open Wisper data.
 
 ## Not security problems

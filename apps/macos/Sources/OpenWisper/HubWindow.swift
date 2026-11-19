@@ -35,9 +35,7 @@ final class HubWindow: NSObject, NSWindowDelegate {
   func show() {
     let window = window ?? makeWindow()
     self.window = window
-    if NSApp.activationPolicy() != .regular {
-      NSApp.setActivationPolicy(.regular)
-    }
+    DockIcon.show(for: .hub)
     window.makeKeyAndOrderFront(nil)
     // The Dock icon and the menu bar only turn up when the app is activated a turn later.
     DispatchQueue.main.async {
@@ -120,10 +118,10 @@ final class HubWindow: NSObject, NSWindowDelegate {
   // MARK: - NSWindowDelegate
 
   func windowWillClose(_ notification: Notification) {
-    // Back to a menu bar app, once the window is really gone.
+    // Back to a menu bar app, once the window is really gone (and no update is on screen).
     DispatchQueue.main.async { [weak self] in
       guard let self, !self.isOpen else { return }
-      NSApp.setActivationPolicy(.accessory)
+      DockIcon.hide(for: .hub)
     }
   }
 

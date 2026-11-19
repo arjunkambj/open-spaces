@@ -166,6 +166,38 @@ import WisperMac
     #expect(meeting?.shortcut == Settings.defaultShortcuts[.toggleMeeting])
   }
 
+  @Test func itOffersAnUpdateCheckOnlyWhereTheAppCanUpdateItself() async {
+    // The demo, and a build that is not a finished app, have no way to update.
+    let without = await Stage()
+    let plain = MenuBarContent.entries(for: without.model, microphones: microphones)
+    #expect(!plain.contains { $0.kind == .action(.checkForUpdates) })
+    MenuBarContent.perform(.checkForUpdates, model: without.model, controls: without.controls)
+
+    let checks = Checks()
+    let stage = await Stage(host: HostActions(checkForUpdates: { checks.count += 1 }))
+    let entries = MenuBarContent.entries(for: stage.model, microphones: microphones)
+    let titles = titles(entries)
+    #expect(titles.contains("Check for Updates…"))
+    // It sits right under Settings, and Quit stays last.
+    #expect(titles.firstIndex(of: "Check for Updates…") == titles.firstIndex(of: "Settings…").map { $0 + 1 })
+    #expect(titles.last == "Quit Open Wisper")
+    MenuBarContent.perform(.checkForUpdates, model: stage.model, controls: stage.controls)
+    #expect(checks.count == 1)
+  }
+
+  @Test func anUpdateThatIsWaitingIsOfferedByItsVersion() async {
+    let stage = await Stage(host: HostActions(checkForUpdates: {}))
+    let entries = MenuBarContent.entries(for: stage.model, microphones: microphones, waitingUpdate: "0.2.0")
+    let update = entries.first { $0.kind == .action(.checkForUpdates) }
+    #expect(update?.title == "Install Update 0.2.0…")
+    #expect(MenuBarContent.updateTitle(waiting: "") == "Check for Updates…")
+  }
+
+  @MainActor
+  private final class Checks {
+    var count = 0
+  }
+
   @Test func itOffersToStopAMeetingThatIsRunning() async {
     let stage = await Stage()
     stage.controls.toggleMeeting()
@@ -251,13 +283,11 @@ import WisperMac
     first.section = .snippets
     first.theme = .dark
     first.sidebarHidden = true
-    first.tipDismissed = true
 
     let second = HubNavigation(defaults: defaults)
     #expect(second.section == .snippets)
     #expect(second.theme == .dark)
     #expect(second.sidebarHidden)
-    #expect(second.tipDismissed)
   }
 
   @Test func showingAMeetingGoesToMeetingsAndClosesSettings() {
