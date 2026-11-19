@@ -147,7 +147,7 @@ CI can also take pictures of the iPhone app in a simulator. That takes about eig
 
 ## Making a release
 
-A release is a GitHub Release with two files: the disk image people download (`Open-Wisper-<version>.dmg`), and `appcast.xml`, the small file installed apps read to find out there is a new version. Publishing a release is what hands the update to everyone who has the app.
+A release is a GitHub Release with three files: the disk image (`Open-Wisper-<version>.dmg`), a copy of it under the fixed name `Open-Wisper.dmg` (what the website's download button points at), and `appcast.xml`, the small file installed apps read to find out there is a new version. Publishing a release is what hands the update to everyone who has the app.
 
 Only a maintainer with push access can do this.
 

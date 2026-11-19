@@ -1,0 +1,26 @@
+---
+import { download } from "../content";
+import { latestRelease } from "../release";
+
+interface Props {
+  size?: "small" | "large";
+}
+
+const { size = "large" } = Astro.props;
+const { downloadUrl } = await latestRelease();
+---
+
+{
+  size === "small" ? (
+    <a href={downloadUrl} class="button h-9 px-4 text-sm">
+      {download.shortButton}
+    </a>
+  ) : (
+    <a href={downloadUrl} class="button h-12 px-6 text-base">
+      <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10 3v10m0 0 4-4m-4 4-4-4M4 16.5h12" />
+      </svg>
+      {download.button}
+    </a>
+  )
+}

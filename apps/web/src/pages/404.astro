@@ -1,0 +1,16 @@
+---
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+import { notFound, site } from "../content";
+import Page from "../layouts/Page.astro";
+---
+
+<Page title={`${notFound.title} · ${site.name}`} hidden>
+  <Header />
+  <main class="mx-auto w-full max-w-6xl px-5 py-28 text-center sm:px-8 sm:py-40">
+    <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">{notFound.title}</h1>
+    <p class="mt-4 text-lg text-stone-600 dark:text-stone-300">{notFound.text}</p>
+    <p class="mt-8"><a href="/" class="link">{notFound.link}</a></p>
+  </main>
+  <Footer />
+</Page>

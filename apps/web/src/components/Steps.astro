@@ -1,0 +1,18 @@
+---
+import { steps } from "../content";
+---
+
+<section id="how" class="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+  <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">{steps.title}</h2>
+  <ol class="mt-10 grid gap-10 md:grid-cols-3">
+    {
+      steps.items.map((step, index) => (
+        <li class="border-t border-stone-900/15 pt-5 dark:border-white/15">
+          <span class="text-pine dark:text-pine-bright text-sm font-semibold tabular-nums">{index + 1}</span>
+          <h3 class="mt-2 text-xl font-semibold tracking-tight">{step.title}</h3>
+          <p class="mt-2 text-pretty text-stone-600 dark:text-stone-300">{step.text}</p>
+        </li>
+      ))
+    }
+  </ol>
+</section>

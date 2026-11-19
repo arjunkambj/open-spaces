@@ -1,9 +1,12 @@
 name: Release
 
 # Pushing a tag like v0.1.0 builds the macOS app, signs it, and publishes a GitHub
-# Release with two files:
+# Release with three files:
 #
-#   Open-Wisper-0.1.0.dmg   the disk image people download
+#   Open-Wisper-0.1.0.dmg   the disk image; installed apps download this one to update
+#   Open-Wisper.dmg         the same disk image under a name that never changes, so the
+#                           website's Download button can always point at
+#                           releases/latest/download/Open-Wisper.dmg
 #   appcast.xml             the list of versions the app reads to update itself
 #
 # Apps that are already installed ask for
@@ -142,14 +145,20 @@ jobs:
         run: |
           dmg="apps/macos/build/update/Open-Wisper-$OPEN_WISPER_VERSION.dmg"
           feed="apps/macos/build/update/appcast.xml"
+          # A copy with a fixed name, for the website. It is made outside build/update, and
+          # after the feed was written and checked: the feed names only the versioned file.
+          fixed="$RUNNER_TEMP/Open-Wisper.dmg"
+          cp "$dmg" "$fixed"
+          cmp "$dmg" "$fixed"
           if gh release view "$TAG" >/dev/null 2>&1; then
             # The disk image first: the feed must never point at a file that is not there yet.
             gh release upload "$TAG" "$dmg" --clobber
+            gh release upload "$TAG" "$fixed" --clobber
             gh release upload "$TAG" "$feed" --clobber
           else
             prerelease=()
             [[ "$TAG" == *-* ]] && prerelease=(--prerelease)
-            gh release create "$TAG" "$dmg" "$feed" --verify-tag --title "Open Wisper $TAG" \
+            gh release create "$TAG" "$dmg" "$fixed" "$feed" --verify-tag --title "Open Wisper $TAG" \
               --notes-file release-notes.md --generate-notes "${prerelease[@]}"
           fi
       - name: Remove the signing keys
