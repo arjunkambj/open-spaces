@@ -66,19 +66,23 @@ struct DictationPipeline: Sendable {
     await transcriber.prepare()
   }
 
-  /// The longest the tidying of `heard` may take: `limit`, or less for a short dictation
+  /// The longest the tidying of a dictation may take, in seconds. When the language model has
+  /// not answered by then, the words are inserted as they were heard: they are ready, and
+  /// nobody should wait on a slow server for polish. Commands are not affected (they have no
+  /// text without the model).
+  static let cleanUpLimit: TimeInterval = 12
+
+  /// The longest the tidying of `heard` may take: `cleanUpLimit`, or less for a short dictation
   /// tidied by OpenAI. There a few words are done in about a second, so waiting twelve for
   /// them helps nobody. A long dictation takes the model longer to write out, and gets up to
   /// the whole limit. So does a server of the person's own, which may be a slow one.
-  static func cleanUpTime(for heard: String, limit: TimeInterval, openAI: Bool) -> TimeInterval {
-    openAI ? min(limit, 5 + Double(DictationText.wordCount(heard)) / 12) : limit
+  static func cleanUpTime(for heard: String, openAI: Bool) -> TimeInterval {
+    openAI ? min(cleanUpLimit, 5 + Double(DictationText.wordCount(heard)) / 12) : cleanUpLimit
   }
 
   /// - Parameters:
   ///   - context: where the text is going.
   ///   - selection: for a command, the text it is to change. Empty when it is to write something new.
-  ///   - cleanUpLimit: the longest the tidying of a dictation may take, in seconds. After that
-  ///     the words go in as they were heard.
   ///   - live: the live session that heard this recording while it was made, if there was one.
   ///     It is ended before this returns.
   ///   - duration: the length of the recording in seconds. Only used with `live`.
@@ -87,9 +91,8 @@ struct DictationPipeline: Sendable {
     mode: DictationMode,
     context: DictationContext,
     selection: String,
-    cleanUpLimit: TimeInterval,
-    live: LiveTake? = nil,
-    duration: TimeInterval = 0
+    live: LiveTake?,
+    duration: TimeInterval
   ) async -> Outcome {
     // Whatever happens below, the live session does not outlive this call.
     defer { live?.cancel() }
@@ -135,8 +138,7 @@ struct DictationPipeline: Sendable {
           heard,
           settings: settings,
           setting: setting,
-          snippets: snippets,
-          limit: cleanUpLimit
+          snippets: snippets
         )
       case .command:
         let began = ContinuousClock.now
@@ -159,8 +161,7 @@ struct DictationPipeline: Sendable {
     _ heard: String,
     settings: Settings,
     setting: DictationPrompts.Setting,
-    snippets: [Snippet],
-    limit: TimeInterval
+    snippets: [Snippet]
   ) async -> (text: String, cleanUpMs: Int?) {
     let expansions = DictationText.expansions(from: snippets)
     if let snippet = expansions.whole(heard) { return (snippet, nil) }
@@ -182,11 +183,7 @@ struct DictationPipeline: Sendable {
         effort: CompletionRequest.Effort.none
       )
       let began = ContinuousClock.now
-      let patience = Self.cleanUpTime(
-        for: heard,
-        limit: limit,
-        openAI: (try? settings.apiServer())?.isOpenAI ?? false
-      )
+      let patience = Self.cleanUpTime(for: heard, openAI: (try? settings.apiServer())?.isOpenAI ?? false)
       if let reply = await reply(to: request, within: patience),
         let cleaned = DictationText.acceptedCleanUp(reply, of: heard)
       {
@@ -207,7 +204,7 @@ struct DictationPipeline: Sendable {
     let (answers, feed) = AsyncStream.makeStream(of: String?.self)
     let call = Task { feed.yield(try? await languageModel.complete(request)) }
     let timer = Task {
-      try? await Task.sleep(for: .seconds(max(seconds, 0)))
+      try? await Task.sleep(for: .seconds(seconds))
       feed.yield(nil)
     }
     defer {

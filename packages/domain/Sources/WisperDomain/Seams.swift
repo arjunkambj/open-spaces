@@ -1,7 +1,7 @@
 import Foundation
 
 // The seams of Open Wisper. Each protocol here has a real adapter in another
-// package and an in-memory adapter in `Fakes.swift`.
+// package. `Fakes.swift` holds the in-memory ones that demo mode and the snapshots use.
 //
 //   Library        -> WisperStore.FileLibrary          (files on disk)
 //   SecretStore    -> WisperStore.KeychainSecretStore  (Keychain)
@@ -98,23 +98,11 @@ extension Library {
 public protocol SecretStore: Sendable {
   /// The saved key, when it was saved for `host`. `nil` when there is no key
   /// or it belongs to another server. Host names are compared without regard
-  /// to case. A key saved before hosts were recorded counts as OpenAI's.
+  /// to case.
   func apiKey(for host: String) async throws -> String?
   /// Saves `key` as the key for `host`, replacing any key saved before.
   /// Pass `nil` (or an empty key) to remove the saved key, whatever its host.
   func setAPIKey(_ key: String?, host: String) async throws
-}
-
-extension SecretStore {
-  /// The saved key, when it was saved for OpenAI itself.
-  public func apiKey() async throws -> String? {
-    try await apiKey(for: APIServer.openAIHost)
-  }
-
-  /// Saves `key` as the key for OpenAI itself. Pass `nil` to remove the saved key.
-  public func setAPIKey(_ key: String?) async throws {
-    try await setAPIKey(key, host: APIServer.openAIHost)
-  }
 }
 
 // MARK: - Transcription
@@ -364,10 +352,6 @@ public protocol CaptureSession: Sendable {
   func cancel() async
 }
 
-extension CaptureSession {
-  public var frames: AsyncStream<AudioFrames> { AsyncStream { $0.finish() } }
-}
-
 /// Records audio into files.
 public protocol AudioCapture: Sendable {
   /// Input devices that can be used for the microphone track.
@@ -448,25 +432,20 @@ extension WisperError {
 // MARK: - Paths
 
 public enum WisperPaths {
-  /// Environment variable that overrides the data folder (used by tests and by agents).
+  /// Environment variable that overrides the data folder.
   public static let homeVariable = "OPEN_WISPER_HOME"
 
   /// Where Open Wisper keeps its files: `$OPEN_WISPER_HOME` when set,
   /// otherwise `Application Support/Open Wisper`.
   public static func defaultRoot(
-    environment: [String: String] = ProcessInfo.processInfo.environment,
-    fileManager: FileManager = .default
+    environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> URL {
     if let override = environment[homeVariable], !override.isEmpty {
       return URL(fileURLWithPath: (override as NSString).expandingTildeInPath, isDirectory: true)
     }
-    let base =
-      fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-      .appendingPathComponent("Library/Application Support", isDirectory: true)
-    return base.appendingPathComponent("Open Wisper", isDirectory: true)
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("Open Wisper", isDirectory: true)
   }
-
 }
 
 // MARK: - App links
@@ -494,11 +473,10 @@ public enum WisperLink: Sendable, Equatable {
 
   /// The link with a ticket attached. See `LinkTicket`.
   public func url(ticket: String?) -> URL {
-    guard let ticket, !ticket.isEmpty,
-      var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    else { return url }
+    guard let ticket, !ticket.isEmpty else { return url }
+    var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!
     parts.queryItems = (parts.queryItems ?? []) + [URLQueryItem(name: "ticket", value: ticket)]
-    return parts.url ?? url
+    return parts.url!
   }
 
   /// The ticket a link carries, if any.
@@ -639,9 +617,7 @@ public enum LinkTicket {
 
   /// Whether `ticket` was issued in this data folder within the last minute.
   /// A ticket is used up by this call.
-  public static func redeem(_ ticket: String?, in root: URL = WisperPaths.defaultRoot(), now: Date = Date())
-    -> Bool
-  {
+  public static func redeem(_ ticket: String?, in root: URL = WisperPaths.defaultRoot()) -> Bool {
     // A ticket is a bare name made of letters, digits and dashes: never a path.
     guard let ticket, (32...128).contains(ticket.count),
       ticket.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") })
@@ -650,7 +626,7 @@ public enum LinkTicket {
     guard let made = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.creationDate] as? Date
     else { return false }
     guard (try? FileManager.default.removeItem(at: file)) != nil else { return false }
-    let age = now.timeIntervalSince(made)
+    let age = Date().timeIntervalSince(made)
     return age >= -5 && age <= lifetime
   }
 

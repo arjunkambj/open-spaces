@@ -1,11 +1,11 @@
 import Foundation
 import WisperDomain
 
-// The real outside world: this process's standard streams, and the running
+// The outside world: this process's standard streams, and the running
 // Open Wisper app.
 
 extension WisperAgent.Environment {
-  /// The real clock, time zone, data folder and app.
+  /// The data folder and this program, as this process finds them.
   public static func live() -> WisperAgent.Environment {
     let variables = ProcessInfo.processInfo.environment
     let home = variables[WisperPaths.homeVariable].flatMap { $0.isEmpty ? nil : $0 }
@@ -18,9 +18,7 @@ extension WisperAgent.Environment {
         fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments.first ?? "wisper"
       )
       .standardizedFileURL.path,
-      workingDirectory: URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true),
-      openLink: Live.open,
-      appIsRunning: Live.appIsRunning
+      workingDirectory: URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     )
   }
 }
@@ -181,7 +179,7 @@ enum Live {
     }
 
     /// Hands a link to the Open Wisper app without bringing it to the front.
-    @Sendable static func open(_ url: URL) async throws {
+    static func open(_ url: URL) async throws {
       let result = try await launch("/usr/bin/open", ["-g", url.absoluteString])
       guard result.code == 0 else {
         throw AgentError.failed(
@@ -192,8 +190,8 @@ enum Live {
     }
 
     /// Looks for the app among the running programs. The app is the program
-    /// inside `Open Wisper.app` that is not this tool.
-    @Sendable static func appIsRunning() async -> Bool? {
+    /// inside `Open Wisper.app` that is not this tool. `nil` when that cannot be told.
+    static func appIsRunning() async -> Bool? {
       guard let result = try? await launch("/bin/ps", ["-axo", "comm="], capture: true), result.code == 0
       else { return nil }
       return result.output.split(separator: "\n").contains { line in
@@ -204,10 +202,10 @@ enum Live {
       }
     }
   #else
-    @Sendable static func open(_ url: URL) async throws {
+    static func open(_ url: URL) async throws {
       throw AgentError.failed("Recording can only be started and stopped from a Mac.")
     }
 
-    @Sendable static func appIsRunning() async -> Bool? { nil }
+    static func appIsRunning() async -> Bool? { nil }
   #endif
 }

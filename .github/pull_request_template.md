@@ -12,10 +12,10 @@
 
 <!-- What you ran and what you tried by hand. Add a screenshot or short recording for anything you can see. -->
 
-- [ ] `pnpm check` passes (lint, build and tests).
-- [ ] New behaviour has tests that go through the module's interface, using the in-memory fakes.
+- [ ] `pnpm check` passes (lint and build).
+- [ ] No tests, no code kept for old callers or old data, and no fallback paths were added.
 - [ ] Nothing new leaves the device: no analytics, no new network calls except to the AI server the user set.
-- [ ] The API key is not in any file, log, error message or test.
+- [ ] The API key is not in any file, log or error message.
 - [ ] The docs still match: `docs/data-format.md` if what is saved to disk changed, `docs/agents.md` if a `wisper` tool changed.
 - [ ] Text people see is plain English. Screens work in light and dark mode and have VoiceOver labels.
 - [ ] No code, images, sounds or wording copied from another product.

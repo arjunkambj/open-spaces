@@ -34,7 +34,7 @@ Knowing the design helps you judge what counts as a problem.
 
 ### Your API key
 
-- **It lives only in the system Keychain**, on this device. It is not synced to iCloud. It is never written to a file, a log, an error message or a test.
+- **It lives only in the system Keychain**, on this device. It is not synced to iCloud. It is never written to a file, a log or an error message.
 - **It belongs to one server.** The key is saved together with the name of the server it is for, and it is sent only to that server. If the server address in your settings changes, by your hand or anyone else's, the key is not sent to the new address.
 - **A wrong server address is an error.** A custom address must start with `http://` or `https://` and name a server. If it does not, nothing is sent anywhere. Open Wisper never quietly sends your audio to OpenAI instead.
 

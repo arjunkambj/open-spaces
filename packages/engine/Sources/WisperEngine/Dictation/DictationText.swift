@@ -147,7 +147,7 @@ enum DictationText {
   /// Shown on the history entry of a dictation the app never got to finish.
   static let interrupted = "Open Wisper closed before this dictation was finished. Try it again."
 
-  /// Why a failed command from before selections were kept cannot be run again.
+  /// Why a failed command whose entry does not hold the selected text cannot be run again.
   static let selectionNotKept =
     "This command cannot be tried again, because the text it was for was not kept. "
     + "Select the text and say the command again."

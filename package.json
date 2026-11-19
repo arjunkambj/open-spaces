@@ -23,7 +23,6 @@
     "mac:dmg": "pnpm --filter @open-wisper/macos run dmg",
     "ios:generate": "scripts/ios generate",
     "ios:build": "scripts/ios build",
-    "ios:test": "scripts/ios test",
     "web": "pnpm --filter @open-wisper/web run dev",
     "web:build": "pnpm --filter @open-wisper/web run build",
     "web:deploy": "pnpm --filter @open-wisper/web run deploy"

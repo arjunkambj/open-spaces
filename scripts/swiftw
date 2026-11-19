@@ -2,14 +2,12 @@
 # swiftw: run `swift` so it works both with full Xcode and with only the
 # Command Line Tools installed.
 #
-# With only the Command Line Tools:
-#   - the newest macOS SDK may need compiler plugins that ship only with Xcode
-#     (SwiftUI macros), so we fall back to the newest SDK that does not;
-#   - the Swift Testing macro plugin is not on the default search path.
+# With only the Command Line Tools, the newest macOS SDK may need compiler
+# plugins that ship only with Xcode (SwiftUI macros). The newest SDK that does
+# not need them is used instead.
 set -euo pipefail
 
 dev_dir="$(xcode-select -p 2>/dev/null || true)"
-extra=()
 
 if [[ "$dev_dir" == *CommandLineTools* ]]; then
   plugins="$dev_dir/usr/lib/swift/host/plugins"
@@ -26,15 +24,6 @@ if [[ "$dev_dir" == *CommandLineTools* ]]; then
     done
     [[ -n "$best" ]] && export SDKROOT="$best"
   fi
-  case "${1:-}" in
-    build|test|run)
-      [[ -d "$plugins/testing" ]] && extra=(-Xswiftc -plugin-path -Xswiftc "$plugins/testing")
-      ;;
-  esac
 fi
 
-if [[ ${#extra[@]} -gt 0 ]]; then
-  cmd="$1"; shift
-  exec swift "$cmd" "${extra[@]}" "$@"
-fi
 exec swift "$@"

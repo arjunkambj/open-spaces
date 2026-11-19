@@ -20,11 +20,8 @@ public struct WisperAgent: Sendable {
   /// - Parameters:
   ///   - library: Where the data lives. It is only created when a command needs it,
   ///     so `wisper --help` never touches the disk.
-  ///   - environment: The outside world. Tests pass their own.
-  public init(
-    library: @autoclosure @escaping @Sendable () -> any Library,
-    environment: Environment = .live()
-  ) {
+  ///   - environment: Where the data folder and this program are.
+  public init(library: @autoclosure @escaping @Sendable () -> any Library, environment: Environment) {
     source = LazyLibrary(library)
     self.environment = environment
   }
@@ -35,7 +32,7 @@ public struct WisperAgent: Sendable {
   ///
   /// `["mcp"]` serves the Model Context Protocol on `io` until the input ends.
   @discardableResult
-  public func run(_ arguments: [String], io: IO = .standard()) async -> Int32 {
+  public func run(_ arguments: [String], io: IO) async -> Int32 {
     await CommandLineFrontEnd(source: source, environment: environment, io: io).run(arguments)
   }
 
@@ -59,12 +56,9 @@ public struct WisperAgent: Sendable {
     }
   }
 
-  /// The world outside the library: the clock, the running app, this program's own location.
+  /// Where things are: the data folder, and this program itself.
   public struct Environment: Sendable {
-    public var now: @Sendable () -> Date
-    /// Dates are written with this zone's offset.
-    public var timeZone: TimeZone
-    /// The data folder, for `wisper doctor`.
+    /// The data folder.
     public var dataFolder: URL
     /// The value of `OPEN_WISPER_HOME` when the data folder was moved with it.
     public var homeOverride: String?
@@ -72,34 +66,6 @@ public struct WisperAgent: Sendable {
     public var executablePath: String
     /// Relative paths given to the tool are resolved against this folder.
     public var workingDirectory: URL
-    /// Hands a `WisperLink` URL to the Open Wisper app. Throws when that is not possible.
-    public var openLink: @Sendable (URL) async throws -> Void
-    /// Whether the app seems to be running. `nil` when that cannot be told.
-    public var appIsRunning: @Sendable () async -> Bool?
-    /// How long to wait for the app to act on a link before giving up.
-    public var appWait: Duration
-
-    public init(
-      now: @escaping @Sendable () -> Date = { Date() },
-      timeZone: TimeZone = .current,
-      dataFolder: URL,
-      homeOverride: String? = nil,
-      executablePath: String,
-      workingDirectory: URL,
-      openLink: @escaping @Sendable (URL) async throws -> Void,
-      appIsRunning: @escaping @Sendable () async -> Bool?,
-      appWait: Duration = .seconds(8)
-    ) {
-      self.now = now
-      self.timeZone = timeZone
-      self.dataFolder = dataFolder
-      self.homeOverride = homeOverride
-      self.executablePath = executablePath
-      self.workingDirectory = workingDirectory
-      self.openLink = openLink
-      self.appIsRunning = appIsRunning
-      self.appWait = appWait
-    }
   }
 }
 

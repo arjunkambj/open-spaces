@@ -15,13 +15,14 @@ actor MeetingTranscription {
     var model: String
     var language: String?
     var vocabulary: [String]
-    /// How many chunks are transcribed at the same time.
-    var concurrency: Int
-    /// How often one chunk is tried before it is left for a later retry.
-    var attempts: Int
-    /// The wait before the second try. Later tries wait longer.
-    var retryDelay: Duration
   }
+
+  /// How many chunks are transcribed at the same time.
+  private static let concurrency = 4
+  /// How often one chunk is tried before it is left for a later retry.
+  private static let attempts = 3
+  /// The wait before a chunk's second try. Later tries wait longer.
+  private static let retryDelay: Duration = .seconds(2)
 
   struct Progress: Sendable, Equatable {
     /// The transcript so far, oldest first, with echoes removed.
@@ -150,7 +151,7 @@ actor MeetingTranscription {
   private var isIdle: Bool { active.isEmpty && waiting.isEmpty }
 
   private func pump() {
-    while !stopped, active.count < max(1, options.concurrency), !waiting.isEmpty {
+    while !stopped, active.count < MeetingTranscription.concurrency, !waiting.isEmpty {
       let index = waiting.removeFirst()
       active.insert(index)
       let chunk = manifest.chunks[index]
@@ -209,7 +210,7 @@ actor MeetingTranscription {
       language: options.language,
       vocabulary: options.vocabulary
     )
-    let attempts = max(1, options.attempts)
+    let attempts = MeetingTranscription.attempts
     var failure = WisperError.noSpeech
     for attempt in 1...attempts {
       do {
@@ -222,7 +223,7 @@ actor MeetingTranscription {
         failure = .invalidResponse(error.localizedDescription)
       }
       guard MeetingTranscription.isWorthRetrying(failure), attempt < attempts else { break }
-      try? await Task.sleep(for: options.retryDelay * attempt)
+      try? await Task.sleep(for: MeetingTranscription.retryDelay * attempt)
     }
     return .failure(failure)
   }

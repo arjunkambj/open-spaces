@@ -177,9 +177,9 @@ enum FileAccess {
   /// Moves a file that cannot be read out of the way, as `<name>.corrupt-<timestamp>`, so
   /// nothing is lost and the app can carry on. Returns where it went.
   @discardableResult
-  static func setAside(_ url: URL, now: Date = Date()) throws -> URL {
-    let stamp = Timestamp.string(from: Date(timeIntervalSince1970: now.timeIntervalSince1970.rounded(.down)))
-      .filter { $0 != "-" && $0 != ":" }
+  static func setAside(_ url: URL) throws -> URL {
+    let now = Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
+    let stamp = Timestamp.string(from: now).filter { $0 != "-" && $0 != ":" }
     let base = url.lastPathComponent + ".corrupt-" + stamp
     let folder = url.deletingLastPathComponent()
     for attempt in 1...100 {
@@ -193,10 +193,11 @@ enum FileAccess {
     )
   }
 
-  /// Removes hidden files left behind by a write that was cut short (a crash or a power cut).
-  static func removeStaleTemporaryFiles(in folder: URL, olderThan age: TimeInterval = 3_600) {
+  /// Removes hidden files left behind, an hour or more ago, by a write that was cut short (a
+  /// crash or a power cut).
+  static func removeStaleTemporaryFiles(in folder: URL) {
     guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return }
-    let cutoff = Int(Date().timeIntervalSince1970 - age)
+    let cutoff = Int(Date().timeIntervalSince1970 - 3_600)
     for name in names where name.hasPrefix(temporaryPrefix) {
       let url = folder.appendingPathComponent(name)
       if let signature = FileSignature.of(url), signature.modifiedSeconds < cutoff { unlink(url.path) }

@@ -9,21 +9,13 @@ import WisperDomain
 struct Client: Sendable {
   private let secrets: any SecretStore
   private let address: @Sendable () async throws -> String?
-  private let connections: Connections
-  private let pause: @Sendable (TimeInterval) async throws -> Void
+  private let connections = Connections()
   private let memory = Memory()
 
   /// - Parameter address: the text of the custom server address, or `nil` for OpenAI itself.
-  init(
-    secrets: any SecretStore,
-    address: @escaping @Sendable () async throws -> String?,
-    connections: Connections,
-    pause: @escaping @Sendable (TimeInterval) async throws -> Void
-  ) {
+  init(secrets: any SecretStore, address: @escaping @Sendable () async throws -> String?) {
     self.secrets = secrets
     self.address = address
-    self.connections = connections
-    self.pause = pause
   }
 
   // MARK: Interface
@@ -283,7 +275,7 @@ struct Client: Sendable {
       // Wait 0.5 s, then 1 s, unless the server says how long.
       let pauseFor = failure.retryAfter ?? 0.5 * pow(2, Double(attempt - 1))
       guard pauseFor <= Client.longestWait else { throw failure.error }
-      try await pause(pauseFor)
+      try await Task.sleep(for: .seconds(pauseFor))
       attempt += 1
     }
   }

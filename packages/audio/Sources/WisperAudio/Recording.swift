@@ -35,16 +35,12 @@ final class Recording: CaptureSession, @unchecked Sendable {
   private var pendingLevels: [Float] = []
   private var isPacing = false
 
-  /// Starts recording `request` from `sources` (one per requested track).
+  /// Starts recording `request` from `sources` (one per requested track). This moment counts
+  /// as second 0 of the capture.
   ///
-  /// - Parameter origin: The `HostClock` time that counts as second 0.
   /// - Throws: Whatever a source throws when it cannot start. Nothing is left running.
-  static func start(
-    _ request: CaptureRequest,
-    sources: [AudioTrack: any AudioSource],
-    origin: TimeInterval = HostClock.now()
-  ) throws -> Recording {
-    let recording = Recording(request: request, tracks: Set(sources.keys), origin: origin)
+  static func start(_ request: CaptureRequest, sources: [AudioTrack: any AudioSource]) throws -> Recording {
+    let recording = Recording(request: request, tracks: Set(sources.keys), origin: HostClock.now())
     var running: [any AudioSource] = []
     do {
       for track in AudioTrack.allCases {

@@ -37,30 +37,16 @@ public final class MeetingEngine {
   /// next start; set it to `nil` to dismiss it.
   public var lastError: String?
 
-  /// The numbers the engine works with. Tests make them small.
-  struct Tuning: Sendable {
-    /// Length of one audio chunk. Long enough to give the transcriber context, short enough
-    /// that the live transcript moves and a crash loses little.
-    var chunkSeconds: TimeInterval = 30
-    /// How many chunks are transcribed at the same time.
-    var concurrency = 4
-    /// How often one chunk is tried before it is left for a later retry.
-    var attempts = 3
-    /// The wait before a chunk's second try. Later tries wait longer.
-    var retryDelay: Duration = .seconds(2)
-    /// The shortest time between two saves of the transcript while recording.
-    var liveSaveInterval: Duration = .seconds(5)
-    /// The most transcript text, in characters, sent to the language model in one request.
-    /// About 15,000 tokens: an hour of talk fits in one or two requests, and a small local
-    /// model can still take it.
-    var notesCharacterLimit = 60_000
-    /// Whether this kind of device can record what other apps play. Where it cannot, the
-    /// engine does not ask for it, and has nothing to tell the user about it.
-    var recordsSystemAudio = MeetingEngine.deviceRecordsSystemAudio
-  }
+  /// Length of one audio chunk, in seconds. Long enough to give the transcriber context, short
+  /// enough that the live transcript moves and a crash loses little.
+  private static let chunkSeconds: TimeInterval = 30
+  /// The shortest time between two saves of the transcript while recording.
+  private static let liveSaveInterval: Duration = .seconds(5)
 
-  /// A Mac can record the sound of other apps. An iPhone or iPad cannot.
-  private nonisolated static var deviceRecordsSystemAudio: Bool {
+  /// Whether this kind of device can record what other apps play: a Mac can, an iPhone or
+  /// iPad cannot. Where it cannot, the engine does not ask for it, and has nothing to tell
+  /// the user about it.
+  private static var recordsSystemAudio: Bool {
     #if os(macOS)
       true
     #else
@@ -90,7 +76,6 @@ public final class MeetingEngine {
   @ObservationIgnored private let capture: any AudioCapture
   @ObservationIgnored private let transcriber: any Transcriber
   @ObservationIgnored private let notes: MeetingNotesWriter
-  @ObservationIgnored private let tuning: Tuning
   @ObservationIgnored private var recording: Recording?
   @ObservationIgnored private var isStarting = false
   /// The meeting `start` is setting up, before `live` is set.
@@ -98,33 +83,16 @@ public final class MeetingEngine {
   /// The meetings being recorded or processed. See `update`.
   @ObservationIgnored private var held: [Meeting.ID: Held] = [:]
 
-  public convenience init(
+  public init(
     library: any Library,
     capture: any AudioCapture,
     transcriber: any Transcriber,
     languageModel: any LanguageModel
   ) {
-    self.init(
-      library: library,
-      capture: capture,
-      transcriber: transcriber,
-      languageModel: languageModel,
-      tuning: Tuning()
-    )
-  }
-
-  init(
-    library: any Library,
-    capture: any AudioCapture,
-    transcriber: any Transcriber,
-    languageModel: any LanguageModel,
-    tuning: Tuning
-  ) {
     self.library = library
     self.capture = capture
     self.transcriber = transcriber
-    self.tuning = tuning
-    notes = MeetingNotesWriter(languageModel: languageModel, characterLimit: tuning.notesCharacterLimit)
+    notes = MeetingNotesWriter(languageModel: languageModel)
   }
 
   public var isRecording: Bool { live != nil }
@@ -147,6 +115,7 @@ public final class MeetingEngine {
     lastError = nil
 
     let settings = try await library.settings()
+    let options = try await transcriptionOptions(settings)
     let startedAt = Date()
     let given = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let meeting = Meeting(
@@ -169,11 +138,7 @@ public final class MeetingEngine {
     }
 
     held[id] = Held(meeting: meeting, directory: directory)
-    let transcription = MeetingTranscription(
-      directory: directory,
-      transcriber: transcriber,
-      options: await transcriptionOptions(settings)
-    )
+    let transcription = MeetingTranscription(directory: directory, transcriber: transcriber, options: options)
     live = Live(meetingID: id, title: meeting.title, startedAt: startedAt)
 
     let chunks = Task {
@@ -200,10 +165,10 @@ public final class MeetingEngine {
       }
       requestSave.finish()
     }
-    let saver = Task { [weak self, pause = tuning.liveSaveInterval] in
+    let saver = Task { [weak self] in
       for await _ in saveRequests {
         await self?.saveLive(id)
-        try? await Task.sleep(for: pause)
+        try? await Task.sleep(for: MeetingEngine.liveSaveInterval)
       }
     }
     recording = Recording(
@@ -315,7 +280,7 @@ public final class MeetingEngine {
       let settings = try await library.settings()
       directory = try await library.audioDirectory(forMeeting: id)
       held[id] = Held(meeting: meeting, directory: directory)
-      transcription = await resumeTranscription(in: directory, settings: settings)
+      transcription = try await resumeTranscription(in: directory, settings: settings)
       let state = await transcription.progress()
       // Nothing is missing, or what is missing is gone for good and the meeting says so.
       let isSettled = meeting.failure == nil || meeting.failure == MeetingEngine.partLost
@@ -355,18 +320,19 @@ public final class MeetingEngine {
   /// crash or quit are finished from the audio on disk. Returns once they are
   /// marked `.processing`; the work goes on in the background, as after `stop`.
   public func recoverUnfinished() async {
-    guard let meetings = try? await library.meetings() else { return }
-    let settings = (try? await library.settings()) ?? Settings()
+    guard let meetings = try? await library.meetings(), let settings = try? await library.settings()
+    else { return }
     for meeting in meetings where meeting.status == .recording || meeting.status == .processing {
       let id = meeting.id
       guard !isBusy(id) else { continue }
       processing.insert(id)
-      guard let directory = try? await library.audioDirectory(forMeeting: id) else {
+      guard let directory = try? await library.audioDirectory(forMeeting: id),
+        let transcription = try? await resumeTranscription(in: directory, settings: settings)
+      else {
         processing.remove(id)
         continue
       }
       held[id] = Held(meeting: meeting, directory: directory)
-      let transcription = await resumeTranscription(in: directory, settings: settings)
       let audioEnd = await transcription.progress().end
       _ = try? await update(id) { meeting in
         meeting.status = .processing
@@ -397,11 +363,11 @@ public final class MeetingEngine {
         tracks: tracks,
         microphoneID: settings.microphoneID,
         directory: directory,
-        chunkSeconds: tuning.chunkSeconds
+        chunkSeconds: MeetingEngine.chunkSeconds
       )
     }
     // Where system audio cannot be recorded at all there is nothing to try, and nothing to tell.
-    guard settings.meetings.captureSystemAudio, tuning.recordsSystemAudio else {
+    guard settings.meetings.captureSystemAudio, MeetingEngine.recordsSystemAudio else {
       return try await capture.start(request([.microphone]))
     }
     do {
@@ -422,16 +388,19 @@ public final class MeetingEngine {
 
   /// The transcript of a meeting an earlier run or an earlier try left unfinished, picked up
   /// from the audio in its folder.
-  private func resumeTranscription(in directory: URL, settings: Settings) async -> MeetingTranscription {
+  private func resumeTranscription(
+    in directory: URL,
+    settings: Settings
+  ) async throws -> MeetingTranscription {
     await MeetingTranscription.resuming(
       in: directory,
       transcriber: transcriber,
-      options: await transcriptionOptions(settings)
+      options: try await transcriptionOptions(settings)
     )
   }
 
-  private func transcriptionOptions(_ settings: Settings) async -> MeetingTranscription.Options {
-    let words = ((try? await library.words()) ?? []).map(\.text)
+  private func transcriptionOptions(_ settings: Settings) async throws -> MeetingTranscription.Options {
+    let words = try await library.words().map(\.text)
     var seen: Set<String> = []
     let vocabulary = (words + [settings.userName])
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -439,10 +408,7 @@ public final class MeetingEngine {
     return MeetingTranscription.Options(
       model: settings.transcriptionModel,
       language: settings.language,
-      vocabulary: vocabulary,
-      concurrency: tuning.concurrency,
-      attempts: tuning.attempts,
-      retryDelay: tuning.retryDelay
+      vocabulary: vocabulary
     )
   }
 
@@ -468,20 +434,20 @@ public final class MeetingEngine {
     await transcription.retryUnfinished()
     await transcription.waitUntilIdle()
     let result = await transcription.progress()
-    let settings = (try? await library.settings()) ?? Settings()
 
     var problem: WisperError?
-    var failure: String?
-    let nothingHeard = result.unfinished > 0 && result.segments.isEmpty
-    if result.unfinished > 0 {
-      let error = result.error ?? .captureFailed("part of the recording could not be read")
-      problem = error
-      failure =
-        (nothingHeard ? MeetingEngine.transcriptFailed : MeetingEngine.partFailed) + " "
-        + MeetingEngine.words(for: error, settings)
-    }
-
     do {
+      let settings = try await library.settings()
+      var failure: String?
+      let nothingHeard = result.unfinished > 0 && result.segments.isEmpty
+      if result.unfinished > 0 {
+        let error = result.error ?? .captureFailed("part of the recording could not be read")
+        problem = error
+        failure =
+          (nothingHeard ? MeetingEngine.transcriptFailed : MeetingEngine.partFailed) + " "
+          + MeetingEngine.words(for: error, settings)
+      }
+
       // The transcript is saved before the notes are asked for, so it is there to read meanwhile.
       let transcribed = try await update(id) { meeting in
         if result.chunkCount > 0 { meeting.segments = result.segments }

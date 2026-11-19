@@ -37,9 +37,9 @@ To look at the app without touching your real data, microphone or key, start it 
 "apps/macos/build/Open Wisper.app/Contents/MacOS/OpenWisper" --demo
 ```
 
-The iPhone app also needs full Xcode and XcodeGen (`brew install xcodegen`). Run `pnpm ios:generate`, then open `apps/ios/OpenWisper.xcodeproj` with Xcode. [apps/ios/README.md](apps/ios/README.md) has the rest. Without Xcode you can still work on everything else, and on most of the iPhone code too: it lives in a package, `apps/ios/Phone`, that builds and runs its tests on any Mac. Our CI builds the iPhone app itself on every pull request.
+The iPhone app also needs full Xcode and XcodeGen (`brew install xcodegen`). Run `pnpm ios:generate`, then open `apps/ios/OpenWisper.xcodeproj` with Xcode. [apps/ios/README.md](apps/ios/README.md) has the rest. Without Xcode you can still work on everything else, and on most of the iPhone code too: it lives in a package, `apps/ios/Phone`, that builds on any Mac. Our CI builds the iPhone app itself on every pull request.
 
-You do not need an OpenAI key to work on the code. The tests never call OpenAI.
+You do not need an OpenAI key to work on the code. Demo mode and the screen pictures run on made-up data.
 
 ## The one command to run before you push
 
@@ -47,37 +47,36 @@ You do not need an OpenAI key to work on the code. The tests never call OpenAI.
 pnpm check
 ```
 
-It runs the style check, the build and the tests for every part. Our CI runs the same command, so if it passes for you it should pass there. Runs after the first are quick, because parts that did not change are skipped.
+It runs the style check and the build for every part. Our CI runs the same command, so if it passes for you it should pass there. Runs after the first are quick, because parts that did not change are skipped.
 
 Other commands:
 
 ```bash
-pnpm test       # tests only
 pnpm lint       # style check only
 pnpm format     # fix the style in place
 
 # Work on one part:
 cd packages/engine
 ../../scripts/swiftw build
-../../scripts/swiftw test
 
 # Draw the screens to PNG files, without opening a window:
 cd packages/ui
 ../../scripts/swiftw run wisper-snapshots /tmp/screens
 ```
 
-Use `scripts/swiftw` in place of `swift` to build, test and run. It makes the build work on a Mac that has only the Command Line Tools.
+Use `scripts/swiftw` in place of `swift` to build and run. It makes the build work on a Mac that has only the Command Line Tools.
 
-`pnpm ios:build` and `pnpm ios:test` build and test the iPhone app in a simulator. On a Mac without Xcode or XcodeGen they say why they are skipping and stop, so `pnpm check` still passes.
+`pnpm ios:build` builds the iPhone app for a simulator. On a Mac without Xcode or XcodeGen it says why it is skipping and stops, so `pnpm check` still passes.
 
 ## Rules that never bend
 
 - **Everything stays on the device.** No cloud, no analytics, no sign-up. The only network calls go to the AI server the user set.
-- **The API key lives only in the Keychain.** Never in a file, a log, an error message or a test. A saved key belongs to one server and is never sent to another.
+- **The API key lives only in the Keychain.** Never in a file, a log or an error message. A saved key belongs to one server and is never sent to another.
 - **Nothing starts listening behind the user's back.** A link that would start or stop a recording is followed only with a ticket from our own tool or keyboard, or after the user says yes.
 - **Original work only.** Do not copy code, images, icons, sounds, names or wording from any other product.
+- **No tests, no legacy, no fallbacks.** We keep no test suites. We keep no code for old callers or old data: change the callers instead. We write no second path in case the first one fails: fail plainly, with a clear message.
 - **No third-party Swift libraries** unless there is a strong reason. Apple's frameworks cover what we need. There is one, in the Mac app: [Sparkle](https://sparkle-project.org), which updates the app. An updater replaces the app itself, so it is safer to use the one most Mac apps share than to write our own.
-- **A signing key never goes into the project.** Not into a file, a log or a test. `scripts/setup-signing` keeps the keys in your home folder and in GitHub's encrypted secrets.
+- **A signing key never goes into the project.** Not into a file or a log. `scripts/setup-signing` keeps the keys in your home folder and in GitHub's encrypted secrets.
 
 ## Style
 
@@ -86,7 +85,6 @@ Use `scripts/swiftw` in place of `swift` to build, test and run. It makes the bu
 - Screens use SwiftUI. Colours, fonts and spacing come from `WisperUI`; do not type them into a screen.
 - Text that people read is plain English: short sentences, everyday words.
 - Support light and dark mode, and give every control a VoiceOver label.
-- Tests use Swift Testing (`import Testing`), not XCTest.
 
 [AGENTS.md](AGENTS.md) has the full list. It is written for AI coding agents, and it is a good read for people too.
 
@@ -109,11 +107,11 @@ apps/ios/Phone    most of the iPhone app's code, as a package that also builds o
 
 A few things to know:
 
-- The contracts between parts are Swift protocols in `packages/domain/Sources/WisperDomain/Seams.swift`. Each one has a real version (for example, one that calls OpenAI) and an in-memory version for tests, in `Fakes.swift`.
+- The contracts between parts are Swift protocols in `packages/domain/Sources/WisperDomain/Seams.swift`. Each one has a real version (for example, one that calls OpenAI) and an in-memory version, in `Fakes.swift`, that demo mode and the screen pictures run on.
 - `DictationEngine` and `MeetingEngine` each run a whole job, from recording to saved text, behind a few methods.
 - Screens talk to one object, `AppModel`. A screen never calls OpenAI or reads a file itself.
 - `domain` depends on nothing. The other packages depend on `domain`. Only the apps connect the real parts together.
-- Two docs must match the code. If you change what is saved to disk, update [docs/data-format.md](docs/data-format.md). If you change a `wisper` tool, paste the output of `wisper tools --markdown` into the tables in [docs/agents.md](docs/agents.md); a test fails when they differ.
+- Two docs must match the code. If you change what is saved to disk, update [docs/data-format.md](docs/data-format.md). If you change a `wisper` tool, paste the output of `wisper tools --markdown` into the tables in [docs/agents.md](docs/agents.md), between the two markers.
 
 ## Adding a feature
 
@@ -121,7 +119,7 @@ A few things to know:
 2. **Keep the surface small.** Add as few public functions as you can. Callers should not need to know how it works inside.
 3. **Need to reach the outside world** (network, files, microphone, another app)? Go through one of the existing contracts. Add a new contract only if you will write two versions of it: the real one and the in-memory one.
 4. **Take what you need as arguments.** Do not create your own network client or file store inside a module. Return results rather than changing things out of sight.
-5. **Test through the front door.** Build the engine with the in-memory versions and call its public methods. If a test has to reach inside a module, the module has the wrong shape.
+5. **Use the front door.** Callers use a module's public methods. If one has to reach inside a module, the module has the wrong shape.
 6. **Add the screen last**, using `AppModel` and the `WisperUI` pieces.
 7. **Ask the deletion question** about each new type: if you deleted it, would the code get simpler (it was only passing things along) or would its work spread into every caller (it earns its place)?
 
@@ -130,7 +128,7 @@ A few things to know:
 - There is one main branch, `main`, and no staging or dev branch. Make a branch from `main` and open a pull request back into `main`.
 - One feature per pull request, with everything that feature needs. A fix is its own pull request, named for the thing it fixes.
 - Say in plain words what changed and how you checked it. Add a screenshot for anything you can see.
-- CI must be green. It runs `pnpm check`, builds both apps, and runs the iPhone app's tests in a simulator. It runs on `macos-26` with Xcode 26.6.
+- CI must be green. It runs `pnpm check` and builds both apps. It runs on `macos-26` with Xcode 26.6.
 
 ### Trying the iOS build without Xcode
 

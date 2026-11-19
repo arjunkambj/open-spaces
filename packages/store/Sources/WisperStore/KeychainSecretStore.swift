@@ -8,22 +8,12 @@ import WisperDomain
 /// iCloud, and it can be read after the first unlock following a restart, so dictation
 /// works while the screen is locked.
 ///
-/// The host the key was saved for is kept on the same item, as its comment. An item with no
-/// comment was saved before hosts were recorded and counts as a key for OpenAI itself.
+/// The host the key was saved for is kept on the same item, as its comment.
 ///
 /// On macOS the item lives in the user's login keychain, because the newer kind of keychain
 /// is closed to apps that are not signed with a developer identity.
 public struct KeychainSecretStore: SecretStore {
-  private let service: String
-  private let accessGroup: String?
-
-  /// - Parameters:
-  ///   - service: the name the item is filed under.
-  ///   - accessGroup: on iOS, a keychain group shared with the keyboard extension. Not used on macOS.
-  public init(service: String = "dev.openwisper", accessGroup: String? = nil) {
-    self.service = service
-    self.accessGroup = accessGroup
-  }
+  public init() {}
 
   public func apiKey(for host: String) async throws -> String? {
     try await KeychainSecretStore.offThePool { [self] in
@@ -38,10 +28,8 @@ public struct KeychainSecretStore: SecretStore {
       guard let item = found as? [String: Any], let data = item[kSecValueData as String] as? Data,
         let key = String(data: data, encoding: .utf8), !key.isEmpty
       else { return nil }
-      let comment =
-        (item[kSecAttrComment as String] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      let savedFor = comment.isEmpty ? APIServer.openAIHost : comment
       // A key is only ever handed out for the server it was saved for.
+      guard let savedFor = item[kSecAttrComment as String] as? String else { return nil }
       return APIServer.sameHost(savedFor, host) ? key : nil
     }
   }
@@ -67,29 +55,19 @@ public struct KeychainSecretStore: SecretStore {
         item[kSecAttrLabel] = "Open Wisper: API key"
         item[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlock
         status = SecItemAdd(item as CFDictionary, nil)
-        // Somebody else added it in between. Theirs is replaced.
-        if status == errSecDuplicateItem {
-          status = SecItemUpdate(query as CFDictionary, value as CFDictionary)
-        }
       }
       try KeychainSecretStore.check(status, "saved")
     }
   }
 
-  private static let account = "openai-api-key"
-
   /// What picks out the one item.
   private var itemQuery: [CFString: Any] {
-    var query: [CFString: Any] = [
+    [
       kSecClass: kSecClassGenericPassword,
-      kSecAttrService: service,
-      kSecAttrAccount: KeychainSecretStore.account,
+      kSecAttrService: "dev.openwisper",
+      kSecAttrAccount: "openai-api-key",
       kSecAttrSynchronizable: false,
     ]
-    #if !os(macOS)
-      if let accessGroup { query[kSecAttrAccessGroup] = accessGroup }
-    #endif
-    return query
   }
 
   /// The Keychain can wait for the user (to unlock it, or to allow access), so its calls

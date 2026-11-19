@@ -43,53 +43,8 @@ public struct OpenAI: Sendable {
   ///     address, or `nil` for OpenAI itself. Read on every request. Pass the text untouched,
   ///     so an address that cannot be used is reported instead of ignored. An error it throws
   ///     (the settings could not be read) fails the request: nothing is sent.
-  ///   - session: A session to carry the requests, for a caller that needs its own. Leave it
-  ///     out: the adapter then keeps sessions of its own, and replaces one whose connections
-  ///     cannot be trusted any more (see "Connections" above). A session passed in is used as
-  ///     it is and never replaced.
-  public init(
-    secrets: any SecretStore,
-    address: @escaping @Sendable () async throws -> String?,
-    session: URLSession? = nil
-  ) {
-    self.init(
-      secrets: secrets,
-      address: address,
-      connections: session.map { Connections(fixed: $0) } ?? Connections()
-    ) { seconds in
-      try await Task.sleep(for: .seconds(seconds))
-    }
-  }
-
-  /// The earlier form of `init(secrets:address:session:)`, which takes the address already
-  /// made into a URL. Prefer the other one: text that could not be made into a URL arrives
-  /// here as `nil`, which means OpenAI, so that mistake cannot be reported.
-  public init(
-    secrets: any SecretStore,
-    baseURL: @escaping @Sendable () async -> URL? = { nil },
-    session: URLSession? = nil
-  ) {
-    self.init(secrets: secrets, address: { await baseURL()?.absoluteString }, session: session)
-  }
-
-  /// `pause` waits between retries. Tests pass one that returns at once.
-  init(
-    secrets: any SecretStore,
-    address: @escaping @Sendable () async throws -> String?,
-    connections: Connections,
-    pause: @escaping @Sendable (TimeInterval) async throws -> Void
-  ) {
-    client = Client(secrets: secrets, address: address, connections: connections, pause: pause)
-  }
-
-  /// The same, on one session that is never replaced.
-  init(
-    secrets: any SecretStore,
-    address: @escaping @Sendable () async throws -> String?,
-    session: URLSession,
-    pause: @escaping @Sendable (TimeInterval) async throws -> Void
-  ) {
-    self.init(secrets: secrets, address: address, connections: Connections(fixed: session), pause: pause)
+  public init(secrets: any SecretStore, address: @escaping @Sendable () async throws -> String?) {
+    client = Client(secrets: secrets, address: address)
   }
 
   /// Turns audio files into text with the model named in each request.
