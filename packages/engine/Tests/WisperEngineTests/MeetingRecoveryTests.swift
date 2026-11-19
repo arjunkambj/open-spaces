@@ -49,7 +49,8 @@ struct MeetingRecoveryTests {
   }
 
   @Test(arguments: Record.allCases, [true, false])
-  func aMeetingIsFinishedFromItsAudioFilesWhateverTheRecordSays(record: Record, keepAudio: Bool) async throws {
+  func aMeetingIsFinishedFromItsAudioFilesWhateverTheRecordSays(record: Record, keepAudio: Bool) async throws
+  {
     let rig = try await MeetingDiskRig(keepAudio: keepAudio)
     let (meeting, audio) = try await rig.interruptedMeeting()
     for name in Self.fourFiles { try MeetingAudio.writeM4A(2, to: audio.appendingPathComponent(name)) }
@@ -80,7 +81,9 @@ struct MeetingRecoveryTests {
       #expect(manifest.chunks.map(\.file) == Self.fourFiles)
       #expect(manifest.chunks.allSatisfy { $0.state == .done })
       #expect(try permissions(audio) == 0o700)
-      for name in rig.files(in: audio) { #expect(try permissions(audio.appendingPathComponent(name)) == 0o600) }
+      for name in rig.files(in: audio) {
+        #expect(try permissions(audio.appendingPathComponent(name)) == 0o600)
+      }
     } else {
       // Gone, but only now that all of it was transcribed.
       #expect(!FileManager.default.fileExists(atPath: audio.path))
@@ -314,7 +317,9 @@ struct MeetingRecoveryTests {
 
     #expect(try await rig.library.meeting(id) == nil)
     #expect(try await rig.library.meetings().isEmpty)
-    #expect(!FileManager.default.fileExists(atPath: rig.folder(id).appendingPathComponent("meeting.json").path))
+    #expect(
+      !FileManager.default.fileExists(atPath: rig.folder(id).appendingPathComponent("meeting.json").path)
+    )
     #expect(rig.files(in: rig.audioFolder(id)).isEmpty)
   }
 

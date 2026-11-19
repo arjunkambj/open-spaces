@@ -378,7 +378,9 @@ struct RecordingTests {
       Set(
         try scratch.files.map { name in
           let path = scratch.url.appendingPathComponent(name).path
-          return try #require(try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int)
+          return try #require(
+            try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int
+          )
         }
       )
     }

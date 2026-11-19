@@ -5,7 +5,19 @@
 
 Open Wisper is a free, open-source app for macOS and iOS that turns your voice into text. Hold a key, speak, and clean text appears in whatever app you are typing in; it can also record your meetings and write the notes.
 
-<!-- screenshots -->
+![The Open Wisper window on a Mac, showing dictation history and stats](docs/images/mac-home.png)
+
+| Recording a meeting | The floating pill, in each state |
+| --- | --- |
+| ![The Meetings screen with a live recording](docs/images/mac-meeting.png) | ![The small pill that sits at the bottom of the screen](docs/images/mac-pill.jpg) |
+
+<p align="center">
+  <img src="docs/images/iphone-dictate.png" alt="Dictating on iPhone" width="260">
+  &nbsp;&nbsp;
+  <img src="docs/images/iphone-meeting.png" alt="A meeting on iPhone" width="260">
+</p>
+
+All pictures show made-up sample data.
 
 > **Status: early.** This is a first version. Some things will be rough or broken. The macOS app is the main focus. The iOS app is newer and less tested. There is no signed download yet, so for now you build it yourself. Bug reports are welcome.
 

@@ -322,7 +322,11 @@ enum MeetingAudio {
     let status = samples.withUnsafeMutableBytes { bytes in
       var list = AudioBufferList(
         mNumberBuffers: 1,
-        mBuffers: AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(bytes.count), mData: bytes.baseAddress)
+        mBuffers: AudioBuffer(
+          mNumberChannels: 1,
+          mDataByteSize: UInt32(bytes.count),
+          mData: bytes.baseAddress
+        )
       )
       return ExtAudioFileWrite(file, count, &list)
     }
@@ -336,8 +340,12 @@ enum MeetingAudio {
     let sound = tone(seconds).map { Int16(($0 * Float(Int16.max)).rounded()) }
     var data = Data()
     func add(_ text: String) { data.append(contentsOf: text.utf8) }
-    func add32(_ value: Int) { withUnsafeBytes(of: UInt32(value).littleEndian) { data.append(contentsOf: $0) } }
-    func add16(_ value: Int) { withUnsafeBytes(of: UInt16(value).littleEndian) { data.append(contentsOf: $0) } }
+    func add32(_ value: Int) {
+      withUnsafeBytes(of: UInt32(value).littleEndian) { data.append(contentsOf: $0) }
+    }
+    func add16(_ value: Int) {
+      withUnsafeBytes(of: UInt16(value).littleEndian) { data.append(contentsOf: $0) }
+    }
     add("RIFF")
     add32(36 + sound.count * 2)
     add("WAVE")
