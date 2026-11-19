@@ -2,7 +2,7 @@
 
 The one page to read before building a screen. Everything here is `public` in the module `WisperUI` and works on macOS 14.4+ and iOS 17+.
 
-The look: a quiet tool on warm paper. A warm off-white window, a slightly lighter page, and as few boxes as possible: lists sit right on the page with hairlines between their rows, and only groups of settings and things that are live get a soft warm-grey fill. One type voice, the system sans (SF), with size, weight and space doing the work that colour and borders would. Near-black primary buttons. One accent colour, a deep pine green, used sparingly. Dark mode is warm near-black.
+The look: a quiet tool on warm paper. The greys are the "stone" scale (a warm grey; the steps are listed in `Design/Colors.swift`): a stone-100 window, a slightly lighter stone-50 page, and as few boxes as possible: lists sit right on the page with hairlines between their rows, and only groups of settings and things that are live get a soft warm-grey fill. One type voice, the system sans (SF), with size, weight and space doing the work that colour and borders would. Near-black primary buttons. One accent colour, a deep pine green, used sparingly. Dark mode is warm near-black.
 
 ## Rules
 
