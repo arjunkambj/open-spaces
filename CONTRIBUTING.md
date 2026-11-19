@@ -21,7 +21,17 @@ pnpm install
 pnpm mac        # build and open the macOS app
 ```
 
-The iOS app also needs full Xcode and XcodeGen (`brew install xcodegen`). Run `pnpm ios:generate`, then open the project in `apps/ios` with Xcode. Without Xcode you can still work on everything else: our CI builds the iOS app for you on every pull request.
+The first build takes a few minutes. The app lands in `apps/macos/build/Open Wisper.app`.
+
+macOS ties the permissions you give (Microphone, Accessibility, System Audio Recording) to one exact build, so after a rebuild they can stop working until you remove the app from each list and add it again. If you rebuild often, sign with a certificate you make yourself. It takes a few minutes, and the steps are at the top of `apps/macos/scripts/bundle`.
+
+To look at the app without touching your real data, microphone or key, start it on made-up data:
+
+```bash
+"apps/macos/build/Open Wisper.app/Contents/MacOS/OpenWisper" --demo
+```
+
+The iPhone app also needs full Xcode and XcodeGen (`brew install xcodegen`). Run `pnpm ios:generate`, then open `apps/ios/OpenWisper.xcodeproj` with Xcode. [apps/ios/README.md](apps/ios/README.md) has the rest. Without Xcode you can still work on everything else, and on most of the iPhone code too: it lives in a package, `apps/ios/Phone`, that builds and runs its tests on any Mac. Our CI builds the iPhone app itself on every pull request.
 
 You do not need an OpenAI key to work on the code. The tests never call OpenAI.
 
@@ -44,20 +54,28 @@ pnpm format     # fix the style in place
 cd packages/engine
 ../../scripts/swiftw build
 ../../scripts/swiftw test
+
+# Draw the screens to PNG files, without opening a window:
+cd packages/ui
+../../scripts/swiftw run wisper-snapshots /tmp/screens
 ```
 
 Use `scripts/swiftw` in place of `swift` to build, test and run. It makes the build work on a Mac that has only the Command Line Tools.
 
+`pnpm ios:build` and `pnpm ios:test` build and test the iPhone app in a simulator. On a Mac without Xcode or XcodeGen they say why they are skipping and stop, so `pnpm check` still passes.
+
 ## Rules that never bend
 
 - **Everything stays on the device.** No cloud, no analytics, no sign-up. The only network calls go to the AI server the user set.
-- **The API key lives only in the Keychain.** Never in a file, a log, an error message or a test.
+- **The API key lives only in the Keychain.** Never in a file, a log, an error message or a test. A saved key belongs to one server and is never sent to another.
+- **Nothing starts listening behind the user's back.** A link that would start or stop a recording is followed only with a ticket from our own tool or keyboard, or after the user says yes.
 - **Original work only.** Do not copy code, images, icons, sounds, names or wording from any other product.
 - **No third-party Swift libraries** unless there is a strong reason. Apple's frameworks cover what we need.
 
 ## Style
 
-- Swift 6. Two-space indent, lines up to 110 characters. `pnpm format` does it for you, and `pnpm lint` must print nothing.
+- Swift 6. Two-space indent, lines up to 110 characters. `pnpm format` does it for you, and `pnpm lint` must pass.
+- CI builds with Xcode 26.6 (Swift 6.3), which can be older than the Swift on your Mac. If something builds for you and fails on CI, that is the first thing to check.
 - Screens use SwiftUI. Colours, fonts and spacing come from `WisperUI`; do not type them into a screen.
 - Text that people read is plain English: short sentences, everyday words.
 - Support light and dark mode, and give every control a VoiceOver label.
@@ -78,7 +96,8 @@ packages/engine   the dictation and meeting logic
 packages/ui       shared colours, fonts and screens
 packages/agent    the `wisper` tool and the MCP server
 apps/macos        the macOS app
-apps/ios          the iOS app and its keyboard
+apps/ios          the iPhone app, its keyboard and its Lock Screen notice
+apps/ios/Phone    most of the iPhone app's code, as a package that also builds on a Mac
 ```
 
 A few things to know:
@@ -87,6 +106,7 @@ A few things to know:
 - `DictationEngine` and `MeetingEngine` each run a whole job, from recording to saved text, behind a few methods.
 - Screens talk to one object, `AppModel`. A screen never calls OpenAI or reads a file itself.
 - `domain` depends on nothing. The other packages depend on `domain`. Only the apps connect the real parts together.
+- Two docs must match the code. If you change what is saved to disk, update [docs/data-format.md](docs/data-format.md). If you change a `wisper` tool, paste the output of `wisper tools --markdown` into the tables in [docs/agents.md](docs/agents.md); a test fails when they differ.
 
 ## Adding a feature
 
@@ -103,7 +123,7 @@ A few things to know:
 - There is one main branch, `main`, and no staging or dev branch. Make a branch from `main` and open a pull request back into `main`.
 - One feature per pull request, with everything that feature needs. A fix is its own pull request, named for the thing it fixes.
 - Say in plain words what changed and how you checked it. Add a screenshot for anything you can see.
-- CI must be green. It runs `pnpm check` and builds both apps.
+- CI must be green. It runs `pnpm check`, builds both apps, and runs the iPhone app's tests in a simulator. It runs on `macos-26` with Xcode 26.6.
 
 ### Trying the iOS build without Xcode
 
@@ -115,6 +135,8 @@ gh run list --branch ci/try-my-change --limit 1
 ```
 
 Delete the branch when you are done: `git push origin --delete ci/try-my-change`.
+
+CI can also take pictures of the iPhone app in a simulator. That takes about eight minutes, so it happens only when asked: start the CI workflow by hand (Actions > CI > Run workflow), or use a name that starts with `ios`, such as `scripts/ci-try ios-my-change`. The pictures are the `ios-screenshots` download of that run.
 
 ## Licence
 

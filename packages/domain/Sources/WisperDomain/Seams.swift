@@ -8,6 +8,8 @@ import Foundation
 //   Transcriber    -> WisperAI.OpenAITranscriber       (OpenAI audio API)
 //   LanguageModel  -> WisperAI.OpenAILanguageModel     (OpenAI chat API)
 //   AudioCapture   -> WisperAudio.SystemAudioCapture   (AVFoundation / Core Audio)
+//   TextTarget     -> WisperMac.MacTextTarget          (the app you are typing in)
+//   Permissions    -> WisperMac.MacPermissions         (system permission prompts)
 
 // MARK: - Library
 

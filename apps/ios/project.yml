@@ -21,7 +21,7 @@ settings:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    # Signing is yours to set up: pick your team in Xcode, or put it in Local.xcconfig.
+    # Signing is yours to set up: pick your team in Xcode.
     # See README.md.
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic

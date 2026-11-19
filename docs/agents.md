@@ -282,7 +282,7 @@ links the app answers to:
 | `openwisper://meetings/start?title=Standup` | Starts recording with a title |
 | `openwisper://meetings/stop` | Stops the recording |
 | `openwisper://meetings/<id>` | Shows that meeting |
-| `openwisper://dictation/toggle` | Starts or stops dictation |
+| `openwisper://dictation/toggle` | Starts or stops dictation, but only with a ticket. The iPhone keyboard sends one. A bare link is not followed |
 | `openwisper://hub` | Shows the main window |
 
 Anything on your Mac can open such a link: a web page, a document, a message. So the app does not simply

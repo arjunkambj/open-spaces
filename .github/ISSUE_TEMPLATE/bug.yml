@@ -58,7 +58,7 @@ body:
     attributes:
       label: AI server
       description: OpenAI, or another OpenAI-compatible server? Which models? (No keys, no private addresses.)
-      placeholder: OpenAI, gpt-4o-mini-transcribe + gpt-4.1-mini
+      placeholder: OpenAI, gpt-transcribe + gpt-6-luna
   - type: textarea
     id: more
     attributes:

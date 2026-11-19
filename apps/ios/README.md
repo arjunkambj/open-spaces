@@ -8,6 +8,7 @@ the only thing that leaves is audio and text sent to OpenAI with your own key.
 
 ```
 project.yml   the Xcode project, as text. XcodeGen turns it into OpenWisper.xcodeproj
+              and Generated/ (the targets' Info.plist files). Neither is kept in git
 App/          the app target: entry point, Shortcuts actions, icon, launch screen
 Keyboard/     the keyboard extension target: one small class
 Widgets/      the widget extension target: the Lock Screen notice for a recording
@@ -64,10 +65,12 @@ Signing is not set up in the project, because it is yours to choose.
    **OpenWisperKeyboard** and **OpenWisperWidgets**. Under Signing & Capabilities, pick
    your team.
 2. Change the bundle IDs. `dev.openwisper.ios` belongs to this project, so Apple will not
-   let another team use it. In `project.yml`, change the three `PRODUCT_BUNDLE_IDENTIFIER`
-   lines that start with `dev.openwisper.ios` to something of your own, such as
+   let another team use it. In `project.yml`, change the `PRODUCT_BUNDLE_IDENTIFIER` lines
+   of the three targets you just signed (`dev.openwisper.ios`, `dev.openwisper.ios.keyboard`
+   and `dev.openwisper.ios.widgets`) to something of your own, such as
    `com.yourname.wisper`, `com.yourname.wisper.keyboard` and `com.yourname.wisper.widgets`.
-   The two extensions' IDs must start with the app's ID.
+   The two extensions' IDs must start with the app's ID. The fourth line, for
+   **OpenWisperTests**, can stay as it is.
 3. Change the App Group, in three places that must match:
    - `App/OpenWisper.entitlements`
    - `Keyboard/OpenWisperKeyboard.entitlements`
@@ -75,6 +78,10 @@ Signing is not set up in the project, because it is yours to choose.
 
    Use a name of your own that starts with `group.`, such as `group.com.yourname.wisper`.
 4. Run `pnpm ios:generate` and build to your phone.
+
+These changes are for your own copy. Keep them out of a pull request. Three checks in
+`Tests/BundleTests.swift` name the project's own bundle IDs, so `pnpm ios:test` fails on
+them in a copy with changed IDs.
 
 ### Why the App Group matters
 
@@ -169,10 +176,11 @@ cd apps/ios/Phone
 
 `wisper-phone-snapshots` draws the phone's own screens and the keyboard on a phone-sized
 canvas, in light and dark, without a simulator. Look at the pictures after every change to
-a screen. `scripts/screenshots` does the same with the real app in a simulator. CI takes
-those pictures only when asked, because they take about eight minutes: start the CI
-workflow by hand (Actions > CI > Run workflow), or run `scripts/ci-try ios` from the repo
-root. They are the `ios-screenshots` download of that run.
+a screen. `scripts/screenshots` (in this folder) does the same with the real app in a
+simulator; run `pnpm ios:build` first. CI takes those pictures only when asked, because
+they take about eight minutes: start the CI workflow by hand (Actions > CI > Run
+workflow), or run `scripts/ci-try ios` from the repo root. They are the `ios-screenshots`
+download of that run.
 
 An App Intent that a widget shows as a button (the Stop button on the Lock Screen) must be
 compiled into the app and the widget extension both. Such files go in `Shared/`.

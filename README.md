@@ -30,23 +30,26 @@ Open Wisper is an independent open-source project. It is not affiliated with Wis
 - **Dictate anywhere.** Hold a key, talk, let go. The text is typed into the app you are using.
 - **Hands-free mode.** Press once to start, press again to stop. Good for long thoughts.
 - **Command mode.** Select some text, hold a key, and say how to change it ("make this shorter").
+- **A small pill at the bottom of the screen.** It shows when Open Wisper is listening. You can also click it to dictate.
 - **Personal dictionary.** Teach it names and words it keeps getting wrong.
 - **Snippets.** Say a short phrase ("my calendar link") and get a longer piece of text.
 - **Writing style per kind of app.** Formal in email, casual in chat. You choose.
 - **History with stats.** See what you dictated, search it, and see your word count, speed and streak.
+- **Your words are not lost.** If a dictation fails, its audio is kept and you can try it again from Home. (If you told the app not to keep history, nothing is kept.)
 
 **Meetings**
 
 - **Record a meeting.** It records your microphone and what your Mac plays, so both sides of a call are captured.
 - **Transcript with speakers.** Lines are marked "Me" or "Others".
 - **AI notes.** A summary, key points, decisions and action items, written when the meeting ends.
-- **Ask about a meeting.** Ask a question and get an answer from that meeting's transcript.
-- **Markdown export.** Take your notes anywhere.
+- **Ask about a meeting.** Ask a question and get an answer from that meeting's transcript and notes.
+- **Markdown export.** Copy, share or save a meeting as a Markdown file.
+- **Safe from a crash.** If the app closes in the middle of a meeting, the audio is kept. The next time you open the app, it finishes the meeting from that audio.
 
 **Everything else**
 
 - **Works with your AI agent.** A command-line tool and an MCP server let an agent such as Claude read your meetings and notes and add to them. (MCP is a common way for AI agents to use outside tools.)
-- **iOS app with a keyboard.** Dictate on your phone, in any app.
+- **iPhone app with a keyboard.** Tap, speak, and the text is on your clipboard. The app's keyboard has a Dictate key and a key that types your latest dictation, so you can use it from any app. The iPhone app records meetings too.
 - **Use your own server.** Point it at any server that speaks the same language as OpenAI's, such as a proxy or a model running on your own machine.
 
 ## How it works
@@ -56,7 +59,11 @@ Open Wisper is an independent open-source project. It is not affiliated with Wis
 3. A second, quick request tidies the text: it removes "um" and "uh", fixes punctuation, and applies your writing style. You can turn this off.
 4. The text is typed into your app.
 
-That is the only thing that leaves your device, and it goes only to OpenAI (or the server you chose instead).
+Meetings work the same way: the audio is turned into text piece by piece while you talk, and the notes are written when you stop.
+
+Out of the box, Open Wisper asks for the model `gpt-transcribe` to turn speech into text and `gpt-6-luna` to tidy it and write notes. You can pick other models in Settings.
+
+**What leaves your device.** Your audio and the text made from it. To get spelling and style right, a few more things go along: your name, your dictionary words, and the name of the app you are typing into. Command mode also sends the text you selected. Meeting notes and questions send that meeting's title, transcript and notes. All of it goes only to OpenAI, or to the server you chose instead.
 
 - **No account.** There is nothing to sign up for.
 - **No server of ours.** We do not run one. We never see your audio, your text or your key.
@@ -65,6 +72,13 @@ That is the only thing that leaves your device, and it goes only to OpenAI (or t
 
 What you send to OpenAI is covered by OpenAI's own data rules, and you pay OpenAI for what you use.
 
+### Using your own server
+
+In Settings, under OpenAI, you can type the address of another server that works like OpenAI's.
+
+- **A saved key belongs to one server.** It is sent only to the server it was saved for. If you change the address, the old key stays behind and you add a key for the new server (if it needs one).
+- **A wrong address is an error.** The address must be a web address that starts with `http://` or `https://`. If it is not, nothing is sent anywhere. Open Wisper never falls back to OpenAI on its own.
+
 ## What you need
 
 - A Mac with **macOS 14.4 or newer**.
@@ -72,7 +86,7 @@ What you send to OpenAI is covered by OpenAI's own data rules, and you pay OpenA
 - To build it:
   - Apple's **Command Line Tools** (`xcode-select --install`) or Xcode, with Swift 6 or newer.
   - **Node.js 22 or newer** and **pnpm 12**. These only run the build commands. The app itself is all Swift.
-- For the iOS app as well: full **Xcode**, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`), and an iPhone or simulator with **iOS 17 or newer**.
+- For the iPhone app as well: full **Xcode** (26 or newer), [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`), and an iPhone or simulator with **iOS 17 or newer**.
 
 ## Build and run
 
@@ -87,18 +101,27 @@ pnpm install
 pnpm mac
 ```
 
-`pnpm mac` builds the app, wraps it into `Open Wisper.app`, and opens it. The first build takes a few minutes. The app then asks for your name, your API key and a few permissions.
+`pnpm mac` builds the app, wraps it into `Open Wisper.app`, and opens it. The first build takes a few minutes. The app then asks for your name, your API key and a few permissions, and lets you try the shortcut.
 
-### iOS
+The finished app is at `apps/macos/build/Open Wisper.app`. You can move it into your Applications folder.
 
-The iOS app needs full Xcode.
+**If you build it more than once:** macOS ties the permissions you gave to one exact build. After a rebuild, the switches in System Settings can look on but do nothing. Remove Open Wisper from each list and add it again. To stop this from happening, sign the app with a certificate you make yourself, which takes a few minutes: the steps are at the top of [`apps/macos/scripts/bundle`](apps/macos/scripts/bundle).
+
+### iPhone
+
+The iPhone app needs full Xcode.
 
 ```bash
 pnpm install
 pnpm ios:generate
+open apps/ios/OpenWisper.xcodeproj
 ```
 
-This makes an Xcode project inside `apps/ios`. Open it in Xcode, choose your own team under **Signing & Capabilities** for each target, and run it on your iPhone or a simulator. To use the keyboard, add it in **Settings → General → Keyboard → Keyboards** on your phone.
+`pnpm ios:generate` makes the Xcode project, `apps/ios/OpenWisper.xcodeproj`. Pick an iPhone simulator and press Run. A simulator needs no other setup.
+
+To put it on your own iPhone you need to do three things first: pick your team for each of the three targets under **Signing & Capabilities**, change the app's IDs to ones of your own, and change the name of the folder the app shares with its keyboard. [apps/ios/README.md](apps/ios/README.md) has the steps.
+
+To turn on the keyboard, go to **Settings → General → Keyboard → Keyboards → Add New Keyboard** on your phone and pick Open Wisper. Then tap it in the list and turn on **Allow Full Access**. The app walks you through this the first time you open it.
 
 ## Permissions on first run
 
@@ -107,10 +130,14 @@ macOS asks before an app can listen or type for you. Open Wisper asks for three 
 | Permission | Why it is needed | Needed for |
 | --- | --- | --- |
 | **Microphone** | To hear you. | Dictation and meetings |
-| **Accessibility** | To type the text into the app you are using, to read the text you selected for command mode, and to notice your shortcut keys while you are in another app. | Dictation |
+| **Accessibility** | To type the text into the app you are using, to read the text you selected for command mode, and to notice your shortcut keys while you are in another app. | Dictation, and every shortcut |
 | **System Audio Recording** | To record what your Mac plays, which is how the other people on a call get into the transcript. | Meetings only |
 
-You can change any of these later in **System Settings → Privacy & Security**. If you do not want your Mac's sound recorded, turn that off in Open Wisper's settings; meetings then record only your microphone.
+You can skip any of them and allow it later. Without Accessibility, the shortcuts do not work and no text can be typed for you. You can change any of these in **System Settings → Privacy & Security**.
+
+If you do not want your Mac's sound recorded, turn off **Record computer audio** in Open Wisper's Settings, under Meetings. Meetings then record only your microphone.
+
+The iPhone app asks only for the microphone.
 
 ## Shortcuts
 
@@ -124,11 +151,35 @@ These are the defaults on macOS. You can change every one of them in Settings.
 | Paste last transcript | `⌃ Control` + `⌘ Command` + `V` | Insert your most recent dictation again. |
 | Start or stop meeting recording | `⌃ Control` + `⌥ Option` + `M` | Record a meeting from anywhere. |
 
+Good to know:
+
+- **You can change your mind while holding `fn`.** Start with `fn`, then add `Space` to go hands-free or `⌃ Control` for command mode. It stays one recording, and nothing you said so far is lost.
+- **`Esc` throws a recording away.** Once the text is being written, `Esc` no longer cancels it.
+- **Pressing `fn` alone ends a hands-free recording**, the same as pressing `fn` + `Space` again.
+- **A dictation stops by itself after 10 minutes** and types what it has, so a stuck key cannot record for hours.
+- **If `fn` opens the emoji picker,** open System Settings → Keyboard and set "Press 🌐 key to" to "Do Nothing". The app reminds you when this is needed.
+
 ## Connect an agent
 
-Open Wisper comes with a command-line tool called `wisper` and an MCP server. With them, an AI agent can look through your meetings and dictations, read notes, and write notes back. Changes an agent makes show up in the app right away.
+Open Wisper comes with a command-line tool called `wisper`, which is also an MCP server. It sits inside the app, at `Open Wisper.app/Contents/MacOS/wisper`. With it, an AI agent can look through your meetings and dictations, read notes, add notes and action items, and start or stop a meeting recording. Changes an agent makes show up in the app right away.
 
-See [docs/agents.md](docs/agents.md) for how to set it up and what it can do.
+The tool is kept on a short lead:
+
+- It works only with the files in your data folder. It makes no network calls and cannot read your API key.
+- It cannot change your settings, start dictation, or type into another app.
+- When it saves a meeting for you, it only ever makes a new `.md` file. It never replaces a file.
+
+In the app, **Settings → Agents** has the lines to copy into your AI tool. See [docs/agents.md](docs/agents.md) for the full setup and everything the tool can do.
+
+### Links
+
+Other tools can open links that start with `openwisper://`, such as `openwisper://meetings/start`. Any web page or document can open such a link too, so the app is careful with the ones that would make it listen:
+
+- A link from the `wisper` tool carries a one-time ticket that proves where it came from. The app follows it at once.
+- A link with no ticket that asks to record a meeting makes the app ask you first.
+- A link with no ticket that asks to start dictation or stop a recording is not followed.
+
+Links that only show something, such as a meeting, always work. [docs/agents.md](docs/agents.md) lists the links.
 
 ## Where your data lives
 
@@ -140,13 +191,16 @@ On macOS, everything is in one folder:
 
 The files are JSON, Markdown and audio. You can read them, back them up, or delete them yourself. Your API key is not in that folder; it is in the Keychain.
 
+On an iPhone, the same files are kept inside the app's own storage, in a folder the app shares with its keyboard.
+
 See [docs/data-format.md](docs/data-format.md) for what each file holds.
 
 ## Project layout
 
 ```
 apps/macos        the macOS app
-apps/ios          the iOS app and its keyboard
+apps/ios          the iPhone app, its keyboard and its Lock Screen notice
+apps/ios/Phone    most of the iPhone app's code, as a package that also builds on a Mac
 packages/domain   the shared types and the contracts between parts
 packages/store    saving to files and to the Keychain
 packages/ai       talking to OpenAI
@@ -154,7 +208,8 @@ packages/audio    recording the microphone and system audio
 packages/engine   the dictation and meeting logic
 packages/ui       shared colours, fonts and screens
 packages/agent    the `wisper` tool and the MCP server
-docs              guides
+assets            the app icon and the menu bar mark
+docs              guides, and the pictures on this page
 scripts           build and CI scripts
 ```
 
@@ -175,8 +230,7 @@ Ideas, not promises:
 
 - A signed download, so you do not have to build it yourself.
 - Transcription that runs fully on your device, with no API key.
-- A more complete iOS app.
-- More languages for the app's own text.
+- More languages for the app's own text. Today it is in English only.
 
 Have an idea? [Open an issue](https://github.com/arjunkambj/open-wisper/issues/new/choose).
 
