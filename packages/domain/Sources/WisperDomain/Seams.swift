@@ -356,6 +356,31 @@ public enum WisperLink: Sendable, Equatable {
 
   public static let scheme = "openwisper"
 
+  /// Whether this link makes the app start listening or cut a recording short.
+  /// The app acts on such a link without asking only when it carries a valid
+  /// `LinkTicket`; any other sender (a web page, a document) gets a question first.
+  public var needsTrust: Bool {
+    switch self {
+    case .startMeeting, .stopMeeting, .toggleDictation: true
+    case .showMeeting, .showHub: false
+    }
+  }
+
+  /// The link with a ticket attached. See `LinkTicket`.
+  public func url(ticket: String?) -> URL {
+    guard let ticket, !ticket.isEmpty,
+      var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { return url }
+    parts.queryItems = (parts.queryItems ?? []) + [URLQueryItem(name: "ticket", value: ticket)]
+    return parts.url ?? url
+  }
+
+  /// The ticket a link carries, if any.
+  public static func ticket(in url: URL) -> String? {
+    URLComponents(url: url, resolvingAgainstBaseURL: false)?
+      .queryItems?.first { $0.name == "ticket" }?.value
+  }
+
   public var url: URL {
     var parts = URLComponents()
     parts.scheme = WisperLink.scheme
@@ -386,7 +411,9 @@ public enum WisperLink: Sendable, Equatable {
     let path = parts.path.split(separator: "/").map(String.init)
     switch (parts.host?.lowercased(), path.first) {
     case ("meetings", "start"):
-      self = .startMeeting(title: parts.queryItems?.first { $0.name == "title" }?.value)
+      // A title is a short label. Anything longer is cut, and line breaks are dropped.
+      let title = parts.queryItems?.first { $0.name == "title" }?.value
+      self = .startMeeting(title: title.map(WisperLink.tidyTitle).flatMap { $0.isEmpty ? nil : $0 })
     case ("meetings", "stop"):
       self = .stopMeeting
     case ("meetings", let id?):
@@ -436,4 +463,86 @@ public protocol Permissions: AnyObject {
   /// the user is in System Settings, so poll `status` to see it change.
   @discardableResult
   func request(_ permission: Permission) async -> PermissionStatus
+}
+
+extension WisperLink {
+  /// One line, at most 120 characters.
+  static func tidyTitle(_ title: String) -> String {
+    let oneLine = title.split(whereSeparator: \.isNewline).joined(separator: " ")
+    return String(oneLine.trimmingCharacters(in: .whitespaces).prefix(120))
+  }
+}
+
+/// Proof that a link was sent by something that can already write the data
+/// folder (the bundled `wisper` tool, the keyboard extension), and not by a
+/// web page or a document.
+///
+/// The sender calls `issue` and puts the ticket in the link
+/// (`WisperLink.url(ticket:)`). The app calls `redeem` with the ticket from
+/// the link it received. A ticket works once, and only for a minute.
+public enum LinkTicket {
+  /// How long a ticket stays valid.
+  public static let lifetime: TimeInterval = 60
+
+  /// Writes a fresh ticket into the data folder and returns it.
+  public static func issue(in root: URL = WisperPaths.defaultRoot()) throws -> String {
+    let folder = self.folder(in: root)
+    do {
+      try FileManager.default.createDirectory(
+        at: folder,
+        withIntermediateDirectories: true,
+        attributes: [.posixPermissions: 0o700]
+      )
+      sweep(folder)
+      let ticket = UUID().uuidString + UUID().uuidString
+      let file = folder.appendingPathComponent(ticket)
+      guard
+        FileManager.default.createFile(
+          atPath: file.path,
+          contents: Data(),
+          attributes: [.posixPermissions: 0o600]
+        )
+      else { throw WisperError.storage("The data folder could not be written.") }
+      return ticket
+    } catch let error as WisperError {
+      throw error
+    } catch {
+      throw WisperError.storage(error.localizedDescription)
+    }
+  }
+
+  /// Whether `ticket` was issued in this data folder within the last minute.
+  /// A ticket is used up by this call.
+  public static func redeem(_ ticket: String?, in root: URL = WisperPaths.defaultRoot(), now: Date = Date())
+    -> Bool
+  {
+    // A ticket is a bare name made of letters, digits and dashes: never a path.
+    guard let ticket, (32...128).contains(ticket.count),
+      ticket.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") })
+    else { return false }
+    let file = folder(in: root).appendingPathComponent(ticket)
+    guard let made = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.creationDate] as? Date
+    else { return false }
+    guard (try? FileManager.default.removeItem(at: file)) != nil else { return false }
+    let age = now.timeIntervalSince(made)
+    return age >= -5 && age <= lifetime
+  }
+
+  private static func folder(in root: URL) -> URL {
+    root.appendingPathComponent(".tickets", isDirectory: true)
+  }
+
+  /// Removes tickets nobody used.
+  private static func sweep(_ folder: URL) {
+    let old = Date().addingTimeInterval(-lifetime * 2)
+    let files =
+      (try? FileManager.default.contentsOfDirectory(
+        at: folder,
+        includingPropertiesForKeys: [.creationDateKey]
+      )) ?? []
+    for file in files {
+      let made = (try? file.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast
+      if made < old { try? FileManager.default.removeItem(at: file) }
+    }
+  }
 }

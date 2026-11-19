@@ -627,10 +627,17 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     return segments.map(\.end).max() ?? 0
   }
 
+  /// A time as whole seconds, safe for any number a file or a server may hold
+  /// (negative, huge or not a number), so a bad time can never crash a caller.
+  public static func wholeSeconds(_ time: TimeInterval) -> Int {
+    guard time.isFinite else { return 0 }
+    return Int(min(max(time, 0), 359_999))
+  }
+
   /// The transcript as plain text, one line per segment: `[mm:ss] Speaker: text`.
   public var transcriptText: String {
     segments.sorted { $0.start < $1.start }.map { segment in
-      let total = Int(segment.start)
+      let total = Meeting.wholeSeconds(segment.start)
       let stamp = String(format: "%02d:%02d", total / 60, total % 60)
       return "[\(stamp)] \(segment.speaker.label): \(segment.text)"
     }.joined(separator: "\n")
@@ -645,7 +652,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     dateFormat.dateFormat = "yyyy-MM-dd HH:mm"
     var lines = ["# \(title)", ""]
     var facts = ["**Date:** \(dateFormat.string(from: startedAt))"]
-    if duration > 0 { facts.append("**Length:** \(max(1, Int((duration / 60).rounded()))) min") }
+    if duration > 0 { facts.append("**Length:** \(max(1, Meeting.wholeSeconds(duration + 30) / 60)) min") }
     if !tags.isEmpty { facts.append("**Tags:** \(tags.joined(separator: ", "))") }
     lines.append(facts.joined(separator: "  \n"))
     func section(_ heading: String, _ body: [String]) {
