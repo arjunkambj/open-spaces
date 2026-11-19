@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# bundle: build Open Wisper and wrap it into "Open Wisper.app".
+#
+#   apps/macos/scripts/bundle            release build -> apps/macos/build/Open Wisper.app
+#   apps/macos/scripts/bundle --debug    debug build (faster to compile, slower to run)
+#   apps/macos/scripts/bundle --open     open the app when it is ready
+#
+# Needs only the Command Line Tools (no Xcode). Safe to run again and again:
+# the app is put together in a scratch folder and swapped in at the end, so a
+# failed run never leaves half an app behind.
+#
+# What goes into the app:
+#   Contents/MacOS/OpenWisper        the app itself
+#   Contents/MacOS/wisper            the command-line tool for agents
+#   Contents/Info.plist              from Resources/Info.plist, with the version filled in
+#   Contents/Resources/AppIcon.icns  from Resources/ (made by scripts/make-icon.swift)
+#   Contents/Resources/MenuBarTemplate.pdf   the menu bar mark, from assets/
+#   Contents/Resources/*.bundle      resource bundles SwiftPM made for the targets, if any
+#
+# The version comes from apps/macos/package.json. The build number is the
+# number of commits.
+#
+# SIGNING, AND WHY macOS KEEPS FORGETTING PERMISSIONS
+#
+# By default the app is signed "ad hoc": no certificate, just a seal over the
+# files. macOS ties the Microphone, Accessibility and System Audio permissions
+# to that seal, and the seal changes with every build. So after each rebuild
+# macOS treats the app as a stranger: the switches in System Settings look on
+# but do nothing, and you have to remove the app from each list and add it
+# again.
+#
+# The fix is to sign with a certificate, which stays the same between builds.
+# A free one you make yourself is enough for your own Mac:
+#
+#   1. Open Keychain Access. Menu: Keychain Access > Certificate Assistant >
+#      Create a Certificate...
+#   2. Name: Open Wisper Dev. Identity Type: Self-Signed Root.
+#      Certificate Type: Code Signing. Create.
+#   3. Build with it:
+#        OPEN_WISPER_SIGN_IDENTITY="Open Wisper Dev" apps/macos/scripts/bundle
+#      (put the export in your shell profile to make it stick). The first time,
+#      macOS asks whether codesign may use the key: choose Always Allow.
+#   4. Grant the permissions once more. From then on they survive rebuilds.
+#
+# To hand the app to other people, set OPEN_WISPER_SIGN_IDENTITY to a
+# "Developer ID Application: ..." certificate instead and notarise the result;
+# a self-made certificate is only trusted on the Mac that made it.
+#
+# The app is signed with the hardened runtime and one entitlement, the
+# microphone (Resources/OpenWisper.entitlements). Typing into other apps and
+# the global shortcuts need no entitlement, only the Accessibility permission.
+#
+# DOCK ICON
+#
+# Info.plist sets LSUIElement, so the app starts as a menu-bar app with no
+# Dock icon (nothing bounces in the Dock when it opens at login). The app
+# shows a Dock icon itself while its main window is open, with
+# NSApp.setActivationPolicy(.regular), and goes back to .accessory after.
+set -euo pipefail
+
+fail() {
+  printf '\nbundle: %s\n' "$*" >&2
+  exit 1
+}
+trap 'fail "stopped at line $LINENO (see the output above)."' ERR
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(cd "$here/../.." && pwd)"
+swiftw="$root/scripts/swiftw"
+
+config=release
+open_after=0
+for arg in "$@"; do
+  case "$arg" in
+    --debug) config=debug ;;
+    --open) open_after=1 ;;
+    -h | --help)
+      sed -n '2,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) fail "unknown option '$arg'. Use --debug, --open or --help." ;;
+  esac
+done
+
+app_name="Open Wisper"
+out="$here/build"
+app="$out/$app_name.app"
+info="$here/Resources/Info.plist"
+entitlements="$here/Resources/OpenWisper.entitlements"
+icon="$here/Resources/AppIcon.icns"
+menu_bar_mark="$root/assets/menubar-template.pdf"
+identity="${OPEN_WISPER_SIGN_IDENTITY:--}"
+
+[[ -x "$swiftw" ]] || fail "cannot find $swiftw."
+[[ -f "$info" ]] || fail "missing $info."
+[[ -f "$entitlements" ]] || fail "missing $entitlements."
+[[ -f "$icon" ]] || fail "missing $icon. Make it with: swift scripts/make-icon.swift"
+[[ -f "$menu_bar_mark" ]] || fail "missing $menu_bar_mark. Make it with: swift scripts/make-icon.swift"
+plutil -lint "$info" >/dev/null || fail "$info is not a valid property list."
+plutil -lint "$entitlements" >/dev/null || fail "$entitlements is not a valid property list."
+
+version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$here/package.json" | head -1)"
+[[ -n "$version" ]] || fail "no \"version\" found in $here/package.json."
+build_number="$(git -C "$root" rev-list --count HEAD 2>/dev/null || true)"
+[[ "$build_number" =~ ^[0-9]+$ ]] || build_number=1
+
+echo "==> Building Open Wisper $version ($config)"
+(cd "$here" && "$swiftw" build -c "$config" --product OpenWisper)
+app_bin="$(cd "$here" && "$swiftw" build -c "$config" --show-bin-path)"
+[[ -x "$app_bin/OpenWisper" ]] || fail "the build did not produce $app_bin/OpenWisper."
+
+echo "==> Building the wisper tool ($config)"
+(cd "$root/packages/agent" && "$swiftw" build -c "$config" --product wisper)
+tool_bin="$(cd "$root/packages/agent" && "$swiftw" build -c "$config" --show-bin-path)"
+[[ -x "$tool_bin/wisper" ]] || fail "the build did not produce $tool_bin/wisper."
+
+echo "==> Putting the app together"
+mkdir -p "$out"
+staging="$(mktemp -d "$out/.staging.XXXXXX")"
+cleanup() { rm -rf "$staging"; }
+trap cleanup EXIT
+staged="$staging/$app_name.app"
+mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Resources"
+
+cp "$app_bin/OpenWisper" "$staged/Contents/MacOS/OpenWisper"
+cp "$tool_bin/wisper" "$staged/Contents/MacOS/wisper"
+chmod 755 "$staged/Contents/MacOS/OpenWisper" "$staged/Contents/MacOS/wisper"
+
+cp "$info" "$staged/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "$version" "$staged/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "$build_number" "$staged/Contents/Info.plist"
+printf 'APPL????' >"$staged/Contents/PkgInfo"
+
+cp "$icon" "$staged/Contents/Resources/AppIcon.icns"
+cp "$menu_bar_mark" "$staged/Contents/Resources/MenuBarTemplate.pdf"
+
+# Resource bundles SwiftPM made for targets that declare resources. The
+# generated code looks for them in the app's Resources folder.
+shopt -s nullglob
+for bin in "$app_bin" "$tool_bin"; do
+  for resources in "$bin"/*.bundle; do
+    rm -rf "$staged/Contents/Resources/$(basename "$resources")"
+    cp -R "$resources" "$staged/Contents/Resources/"
+  done
+done
+shopt -u nullglob
+
+# Stray Finder attributes make codesign refuse the bundle.
+xattr -cr "$staged"
+
+if [[ "$identity" == "-" ]]; then
+  echo "==> Signing (ad hoc: macOS will forget permissions after the next build; see the top of this script)"
+  stamp=(--timestamp=none)
+else
+  echo "==> Signing with: $identity"
+  stamp=(--timestamp)
+fi
+# Inside first, then the app, which seals everything in it.
+codesign --force --options runtime "${stamp[@]}" --sign "$identity" \
+  --identifier dev.openwisper.mac.wisper "$staged/Contents/MacOS/wisper"
+codesign --force --options runtime "${stamp[@]}" --sign "$identity" \
+  --entitlements "$entitlements" "$staged"
+
+echo "==> Checking"
+plutil -lint "$staged/Contents/Info.plist" >/dev/null
+codesign --verify --deep --strict "$staged"
+for path in Contents/MacOS/OpenWisper Contents/MacOS/wisper Contents/Resources/AppIcon.icns; do
+  [[ -s "$staged/$path" ]] || fail "$path is missing from the app."
+done
+bundle_id="$(plutil -extract CFBundleIdentifier raw "$staged/Contents/Info.plist")"
+[[ "$bundle_id" == "dev.openwisper.mac" ]] || fail "unexpected bundle id '$bundle_id'."
+
+# Swap the finished app in.
+rm -rf "$app"
+mv "$staged" "$app"
+# Tell Finder and the Dock that the icon may have changed.
+touch "$app"
+
+echo "==> Done: $app (version $version, build $build_number)"
+if [[ "$open_after" == 1 ]]; then
+  open "$app"
+fi
