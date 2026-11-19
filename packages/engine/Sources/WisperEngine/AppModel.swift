@@ -14,19 +14,24 @@ public struct HostActions: Sendable {
   public var reveal: @MainActor @Sendable (URL) -> Void
   /// Global shortcuts changed: the host must re-register them.
   public var shortcutsChanged: @MainActor @Sendable () -> Void
+  /// Looks for a new version of the app now and shows what it finds.
+  /// `nil` where the app is updated some other way (the App Store on iPhone, a demo).
+  public var checkForUpdates: (@MainActor @Sendable () -> Void)?
 
   public init(
     agentToolPath: String? = nil,
     dataFolder: URL? = nil,
     setLaunchAtLogin: @escaping @MainActor @Sendable (Bool) -> Void = { _ in },
     reveal: @escaping @MainActor @Sendable (URL) -> Void = { _ in },
-    shortcutsChanged: @escaping @MainActor @Sendable () -> Void = {}
+    shortcutsChanged: @escaping @MainActor @Sendable () -> Void = {},
+    checkForUpdates: (@MainActor @Sendable () -> Void)? = nil
   ) {
     self.agentToolPath = agentToolPath
     self.dataFolder = dataFolder
     self.setLaunchAtLogin = setLaunchAtLogin
     self.reveal = reveal
     self.shortcutsChanged = shortcutsChanged
+    self.checkForUpdates = checkForUpdates
   }
 }
 
