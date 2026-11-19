@@ -172,20 +172,8 @@ echo "==> Building Open Wisper $version, build $build_number ($config)"
 (cd "$here" && "$swiftw" build -c "$config" --product OpenWisper ${swift_flags[@]+"${swift_flags[@]}"})
 app_bin="$(cd "$here" && "$swiftw" build -c "$config" --show-bin-path ${swift_flags[@]+"${swift_flags[@]}"})"
 [[ -x "$app_bin/OpenWisper" ]] || fail "the build did not produce $app_bin/OpenWisper."
-# SwiftPM puts the updater next to the app it built. If a version of SwiftPM does not, it
-# is still in the download SwiftPM unpacked, a few folders up.
+# SwiftPM puts the updater next to the app it built.
 sparkle="$app_bin/Sparkle.framework"
-if [[ ! -f "$sparkle/Versions/B/Sparkle" ]]; then
-  folder="$app_bin"
-  while [[ "$folder" != "$here" && "$folder" != / ]]; do
-    folder="$(dirname "$folder")"
-    found=("$folder"/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-*/Sparkle.framework)
-    if [[ -f "${found[0]}/Versions/B/Sparkle" ]]; then
-      sparkle="${found[0]}"
-      break
-    fi
-  done
-fi
 [[ -f "$sparkle/Versions/B/Sparkle" ]] || fail "the build did not leave the updater (Sparkle.framework) in $app_bin."
 
 echo "==> Building the wisper tool ($config)"

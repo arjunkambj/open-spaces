@@ -31,24 +31,17 @@ public final class MacTextTarget: TextTarget {
   /// Open Wisper was in front with no text field of its own in use.
   public var onCopied: (@MainActor () -> Void)?
 
-  private let clipboard: BorrowedPasteboard
+  private let clipboard = BorrowedPasteboard(.general)
   private let ownPID = ProcessInfo.processInfo.processIdentifier
-  /// Whether Open Wisper is the app in front. Tests answer this themselves.
-  private let isInFront: @MainActor () -> Bool
   /// The app the current dictation is for, set by `context()`.
   private var target: NSRunningApplication?
   private var restore: Task<Void, Never>?
 
-  public convenience init() {
-    let ownPID = ProcessInfo.processInfo.processIdentifier
-    self.init(clipboard: BorrowedPasteboard(.general)) {
-      NSWorkspace.shared.frontmostApplication?.processIdentifier == ownPID
-    }
-  }
+  public init() {}
 
-  init(clipboard: BorrowedPasteboard, isInFront: @escaping @MainActor () -> Bool) {
-    self.clipboard = clipboard
-    self.isInFront = isInFront
+  /// Whether Open Wisper is the app in front.
+  private func isInFront() -> Bool {
+    NSWorkspace.shared.frontmostApplication?.processIdentifier == ownPID
   }
 
   // MARK: - TextTarget
@@ -143,7 +136,7 @@ public final class MacTextTarget: TextTarget {
     }
   }
 
-  // MARK: - Copy fallback
+  // MARK: - Reading the selection by copying
 
   /// Reads the selection by pressing ⌘C and looking at the clipboard, then
   /// puts the user's clipboard back. Waits at most 300 ms for the copy.

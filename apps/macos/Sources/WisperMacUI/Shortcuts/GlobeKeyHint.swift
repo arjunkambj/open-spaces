@@ -15,8 +15,6 @@ struct GlobeKeyHint: View {
     case nothing
     /// macOS does this on fn, and fn is part of a shortcut.
     case conflict(GlobeKey.SystemUse)
-    /// The fix is saved, but macOS only follows it after the next login.
-    case afterLogin
     /// macOS would not take the change: the user has to do it by hand.
     case failed(GlobeKey.SystemUse)
   }
@@ -36,11 +34,6 @@ struct GlobeKeyHint: View {
           Button(MacControls.globeKeyFixTitle(for: use)) { controls.globeKey.fix() }
             .buttonStyle(.wisper(.tertiary, size: .small))
         }
-      case .afterLogin:
-        Banner(
-          title: "Almost done",
-          message: "macOS leaves the fn key to Open Wisper once you log out of your Mac and back in."
-        )
       case .failed(let use):
         Banner(
           .warning,
@@ -62,11 +55,8 @@ struct GlobeKeyHint: View {
   }
 
   static func stage(of setting: GlobeKeySetting, shortcuts: [ShortcutAction: KeyCombo]) -> Stage {
-    if setting.needsFix(for: shortcuts) {
-      return setting.outcome == .failed ? .failed(setting.systemUse) : .conflict(setting.systemUse)
-    }
-    if setting.outcome == .afterLogin, GlobeKey.isUsed(by: shortcuts) { return .afterLogin }
-    return .nothing
+    guard setting.needsFix(for: shortcuts) else { return .nothing }
+    return setting.outcome == .failed ? .failed(setting.systemUse) : .conflict(setting.systemUse)
   }
 
   static func message(for use: GlobeKey.SystemUse) -> String {

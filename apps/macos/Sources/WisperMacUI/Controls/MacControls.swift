@@ -95,10 +95,10 @@ public final class MacControls {
   }
 
   /// The message to show right now, if any.
-  public internal(set) var notice: Notice?
+  public private(set) var notice: Notice?
   /// True while a recording should look like one. Lags the engine by a moment
   /// for push to talk; see the type's description.
-  public internal(set) var showsRecording = false
+  public private(set) var showsRecording = false
   /// True from the moment a recording was asked to end until the engine has taken over.
   public private(set) var isWrappingUp = false
   /// False when the shortcuts cannot be heard because Accessibility access is missing.
@@ -116,14 +116,16 @@ public final class MacControls {
   @ObservationIgnored public let pillSpots: PillSpots
 
   @ObservationIgnored private let model: AppModel
-  /// Plays a sound. Only called for sounds that should really be heard.
-  @ObservationIgnored private let sound: @MainActor (SoundCue) -> Void
-  @ObservationIgnored private let revealDelay: Duration
-  @ObservationIgnored private let noticeTime: Duration
+  /// Plays the start, stop and error sounds. `nil` in the demo, which is silent.
+  @ObservationIgnored private let sounds: SoundPlayer?
+  /// How long push to talk waits before it looks and sounds like a recording.
+  private static let revealDelay: Duration = .milliseconds(150)
+  /// How long a notice stays up.
+  private static let noticeTime: Duration = .seconds(5)
   /// How long a notice that asks something stays up: long enough to read it and decide.
-  @ObservationIgnored var questionTime: Duration = .seconds(20)
+  private static let questionTime: Duration = .seconds(20)
   /// How long a held key waits for the last dictation before a notice says why nothing is recorded yet.
-  @ObservationIgnored var busyNoticeDelay: Duration = .milliseconds(600)
+  private static let busyNoticeDelay: Duration = .milliseconds(600)
 
   /// The hold action (push to talk, command mode) whose key is down and whose release ends the recording.
   @ObservationIgnored private var held: ShortcutAction?
@@ -144,50 +146,24 @@ public final class MacControls {
   @ObservationIgnored private var upkeep: Task<Void, Never>?
   @ObservationIgnored private var watches: [AnyObject] = []
 
+  /// The defaults are what the demo and the still pictures run on: nothing outside the
+  /// app's own windows is heard, read or changed.
   /// - monitor: the global shortcuts, or `nil` to run without them.
   /// - sounds: plays the start, stop and error sounds, or `nil` for silence.
-  /// - revealDelay: how long push to talk waits before it looks and sounds like a recording.
-  /// - noticeTime: how long a notice stays up.
   /// - globeKey: the Mac's fn-key setting. The default reads nothing and changes nothing.
   /// - pillSpots: where the pill was dragged to. The default remembers nothing.
-  public convenience init(
+  public init(
     model: AppModel,
     monitor: ShortcutMonitor? = nil,
     sounds: SoundPlayer? = nil,
-    revealDelay: Duration = .milliseconds(150),
-    noticeTime: Duration = .seconds(5),
-    globeKey: GlobeKeySetting? = nil,
-    pillSpots: PillSpots? = nil
-  ) {
-    self.init(
-      model: model,
-      monitor: monitor,
-      revealDelay: revealDelay,
-      noticeTime: noticeTime,
-      globeKey: globeKey,
-      pillSpots: pillSpots
-    ) { cue in
-      sounds?.play(cue)
-    }
-  }
-
-  /// - sound: plays one sound; tests pass a closure that only writes the sounds down.
-  init(
-    model: AppModel,
-    monitor: ShortcutMonitor? = nil,
-    revealDelay: Duration,
-    noticeTime: Duration,
-    globeKey: GlobeKeySetting? = nil,
-    pillSpots: PillSpots? = nil,
-    sound: @escaping @MainActor (SoundCue) -> Void
+    globeKey: GlobeKeySetting = GlobeKeySetting(system: .inert, memory: nil),
+    pillSpots: PillSpots = PillSpots(defaults: nil)
   ) {
     self.model = model
     self.monitor = monitor
-    self.sound = sound
-    self.revealDelay = revealDelay
-    self.noticeTime = noticeTime
-    self.globeKey = globeKey ?? GlobeKeySetting()
-    self.pillSpots = pillSpots ?? PillSpots()
+    self.sounds = sounds
+    self.globeKey = globeKey
+    self.pillSpots = pillSpots
     watches.append(
       Watch({ [model] in model.dictation.phase }) { [weak self] phase in self?.phaseChanged(to: phase) }
     )
@@ -361,8 +337,8 @@ public final class MacControls {
   private func wait(for action: ShortcutAction) {
     waiting = action
     waitNotice?.cancel()
-    waitNotice = Task { [weak self, busyNoticeDelay] in
-      try? await Task.sleep(for: busyNoticeDelay)
+    waitNotice = Task { [weak self] in
+      try? await Task.sleep(for: Self.busyNoticeDelay)
       guard !Task.isCancelled, let self, self.waiting == action else { return }
       self.sayBusy("Still writing the last one. Not listening yet.")
     }
@@ -458,8 +434,8 @@ public final class MacControls {
     showsRecording = false
     if quietly {
       let run = run
-      reveal = Task { [weak self, revealDelay] in
-        try? await Task.sleep(for: revealDelay)
+      reveal = Task { [weak self] in
+        try? await Task.sleep(for: Self.revealDelay)
         guard !Task.isCancelled, let self, self.run == run else { return }
         self.revealRecording()
       }
@@ -533,7 +509,7 @@ public final class MacControls {
         isProblem: false,
         answers: Notice.Answers(yes: "Fix it", no: "Not now")
       ),
-      for: questionTime
+      for: Self.questionTime
     )
   }
 
@@ -542,13 +518,6 @@ public final class MacControls {
     switch globeKey.fix() {
     case .now:
       show(Notice(message: "Done. macOS now leaves the fn key to Open Wisper.", isProblem: false))
-    case .afterLogin:
-      show(
-        Notice(
-          message: "Saved. It takes effect after you log out of your Mac and back in.",
-          isProblem: false
-        )
-      )
     case .failed:
       show(
         Notice(
@@ -607,7 +576,7 @@ public final class MacControls {
         self?.play(.error)
         return
       }
-      self?.sound(.start)
+      self?.sounds?.play(.start)
       self?.showMeetingProblem()
     }
   }
@@ -625,8 +594,7 @@ public final class MacControls {
   /// - status: what `LaunchAtLogin` reports now.
   /// - wanted: what the person just chose, or `nil` when only checking (at launch).
   public func noteLaunchAtLogin(_ status: LaunchAtLogin.Status, wanted: Bool? = nil) {
-    if let isOn = Self.launchAtLoginSetting(for: status, wanted: wanted), model.settings.launchAtLogin != isOn
-    {
+    if let isOn = Self.launchAtLoginSetting(for: status), model.settings.launchAtLogin != isOn {
       // A turn later, so this lands after the change that brought us here.
       Task { [model] in model.update { $0.launchAtLogin = isOn } }
     }
@@ -640,20 +608,16 @@ public final class MacControls {
       show(
         Notice(message: "macOS did not let Open Wisper open at login. Check Login Items.", fix: .loginItems)
       )
-    case .unavailable:
-      show(Notice(message: "Open at login only works when Open Wisper runs as an app."))
     }
   }
 
   /// What the setting should say given what macOS reports, or `nil` to leave it as it is.
-  nonisolated static func launchAtLoginSetting(for status: LaunchAtLogin.Status, wanted: Bool?) -> Bool? {
+  nonisolated static func launchAtLoginSetting(for status: LaunchAtLogin.Status) -> Bool? {
     switch status {
     case .on: true
     case .off: false
     // Asked for and waiting for the person's yes in System Settings: their choice stands.
     case .needsApproval: nil
-    // Not the bundled app, so macOS cannot be asked. Only take back a choice just made.
-    case .unavailable: wanted == true ? false : nil
     }
   }
 
@@ -707,12 +671,12 @@ public final class MacControls {
     show(Notice(message: "Copied to the clipboard", isProblem: false))
   }
 
-  /// - time: how long it stays up; `nil` is the usual `noticeTime`.
-  private func show(_ notice: Notice, for time: Duration? = nil) {
+  /// - time: how long it stays up.
+  private func show(_ notice: Notice, for time: Duration = noticeTime) {
     self.notice = notice
     noticeTimer?.cancel()
-    noticeTimer = Task { [weak self, noticeTime] in
-      try? await Task.sleep(for: time ?? noticeTime)
+    noticeTimer = Task { [weak self] in
+      try? await Task.sleep(for: time)
       guard !Task.isCancelled else { return }
       self?.dismissNotice()
     }
@@ -726,6 +690,6 @@ public final class MacControls {
 
   /// Plays `cue`, unless the person has switched sounds off.
   private func play(_ cue: SoundCue) {
-    if model.settings.playSounds { sound(cue) }
+    if model.settings.playSounds { sounds?.play(cue) }
   }
 }

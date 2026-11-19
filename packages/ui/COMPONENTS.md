@@ -351,5 +351,4 @@ From Swift (the Mac app does this for its own cases):
 
 ```swift
 try await SnapshotRenderer().render(cases, to: folder)             // light and dark files
-let data = try await SnapshotRenderer().png(of: snapshot, scheme: .dark)
 ```

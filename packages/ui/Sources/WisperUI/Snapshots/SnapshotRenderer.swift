@@ -16,7 +16,7 @@
   @MainActor
   public struct SnapshotRenderer {
     /// What went wrong while rendering.
-    public enum Failure: Error, LocalizedError, Equatable {
+    public enum Failure: Error, LocalizedError {
       case couldNotDraw(String)
       case couldNotEncode(String)
 
@@ -29,21 +29,11 @@
     }
 
     /// Pixels per point in the files.
-    public var scale: CGFloat
+    private static let scale: CGFloat = 2
     /// How long to let layout and `.task`s finish before capturing.
-    public var settle: Duration
-    /// Makes the app model for cases that do not bring their own.
-    public var makeModel: @MainActor () -> AppModel
+    private static let settle: Duration = .milliseconds(350)
 
-    public init(
-      scale: CGFloat = 2,
-      settle: Duration = .milliseconds(350),
-      makeModel: @escaping @MainActor () -> AppModel = { .demo() }
-    ) {
-      self.scale = scale
-      self.settle = settle
-      self.makeModel = makeModel
-    }
+    public init() {}
 
     /// Writes `<name>-light.png` and `<name>-dark.png` for every case into `folder`
     /// (created when missing) and returns the files in the order written.
@@ -52,13 +42,12 @@
     public func render(
       _ cases: [SnapshotCase],
       to folder: URL,
-      schemes: [ColorScheme] = [.light, .dark],
       progress: (URL) -> Void = { _ in }
     ) async throws -> [URL] {
       try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
       var written: [URL] = []
       for snapshot in cases {
-        for scheme in schemes {
+        for scheme in [ColorScheme.light, .dark] {
           let suffix = scheme == .dark ? "dark" : "light"
           let file = folder.appendingPathComponent("\(snapshot.name)-\(suffix).png")
           try await png(of: snapshot, scheme: scheme).write(to: file, options: .atomic)
@@ -70,9 +59,9 @@
     }
 
     /// The PNG data of one case in one colour scheme.
-    public func png(of snapshot: SnapshotCase, scheme: ColorScheme) async throws -> Data {
+    private func png(of snapshot: SnapshotCase, scheme: ColorScheme) async throws -> Data {
       _ = NSApplication.shared
-      let model = (snapshot.model ?? makeModel)()
+      let model = snapshot.model()
       await model.load()
 
       let size = snapshot.canvas.size
@@ -95,7 +84,7 @@
       window.orderFrontRegardless()
       defer { window.close() }
 
-      try? await Task.sleep(for: settle)
+      try? await Task.sleep(for: Self.settle)
       hosting.layoutSubtreeIfNeeded()
       window.displayIfNeeded()
       CATransaction.flush()
@@ -110,18 +99,19 @@
 
     /// Encodes at exactly `size * scale` pixels, whatever the density of the Mac's display.
     private func encode(_ image: CGImage, size: CGSize, name: String) throws -> Data {
-      let width = Int((size.width * scale).rounded())
-      let height = Int((size.height * scale).rounded())
+      let width = Int((size.width * Self.scale).rounded())
+      let height = Int((size.height * Self.scale).rounded())
       var output = image
       if image.width != width || image.height != height {
         guard
+          let space = CGColorSpace(name: CGColorSpace.sRGB),
           let context = CGContext(
             data: nil,
             width: width,
             height: height,
             bitsPerComponent: 8,
             bytesPerRow: 0,
-            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+            space: space,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
           )
         else { throw Failure.couldNotEncode(name) }

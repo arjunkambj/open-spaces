@@ -73,20 +73,18 @@ final class StatusItem: NSObject, NSMenuDelegate {
     }
   }
 
-  /// The Open Wisper mark from the app bundle. Run outside the bundle it is not there, so a system symbol stands in.
-  private static let mark: NSImage? = {
-    if let url = Bundle.main.url(forResource: "MenuBarTemplate", withExtension: "pdf"),
-      let image = NSImage(contentsOf: url)
-    {
-      image.isTemplate = true
-      let height: CGFloat = 16
-      if image.size.height > 0 {
-        image.size = CGSize(width: image.size.width * height / image.size.height, height: height)
-      }
-      image.accessibilityDescription = "Open Wisper"
-      return image
+  /// The Open Wisper mark, which the build script puts into the app bundle.
+  private static let mark: NSImage = {
+    guard let url = Bundle.main.url(forResource: "MenuBarTemplate", withExtension: "pdf"),
+      let image = NSImage(contentsOf: url), image.size.height > 0
+    else {
+      fatalError("MenuBarTemplate.pdf is not in the app. Build the app with apps/macos/scripts/bundle.")
     }
-    return symbol("waveform", says: "Open Wisper")
+    image.isTemplate = true
+    let height: CGFloat = 16
+    image.size = CGSize(width: image.size.width * height / image.size.height, height: height)
+    image.accessibilityDescription = "Open Wisper"
+    return image
   }()
 
   private static func symbol(_ name: String, says description: String) -> NSImage? {

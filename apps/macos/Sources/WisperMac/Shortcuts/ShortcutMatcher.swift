@@ -93,10 +93,6 @@ struct ShortcutMatcher: Sendable {
     var modifiers: Set<KeyCombo.Modifier>
   }
 
-  init(shortcuts: [ShortcutAction: KeyCombo] = [:]) {
-    self.shortcuts = shortcuts
-  }
-
   /// A shortcut is down and has not been released yet.
   var isHolding: Bool { heldModifierAction != nil || !heldKeyActions.isEmpty }
 
@@ -124,7 +120,7 @@ struct ShortcutMatcher: Sendable {
   /// held; never starts anything.
   mutating func resync(
     modifiers systemModifiers: Set<KeyCombo.Modifier>,
-    releasedKeys: Set<UInt16> = [],
+    releasedKeys: Set<UInt16>,
     at time: TimeInterval
   ) -> [ShortcutEvent] {
     var events = changeModifiers(to: modifiers.intersection(systemModifiers), at: time, mayFire: false)

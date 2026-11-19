@@ -41,9 +41,9 @@ final class HomeAudioPlayer {
       // Without this the ring/silent switch would mute the recording.
       let session = AVAudioSession.sharedInstance()
       if session.category != .playback && session.category != .playAndRecord {
-        try? session.setCategory(.playback, mode: .default)
+        try session.setCategory(.playback, mode: .default)
       }
-      try? session.setActive(true)
+      try session.setActive(true)
     #endif
     let player = try AVAudioPlayer(contentsOf: file)
     guard player.play() else { throw WisperError.storage("The recording could not be played.") }

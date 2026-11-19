@@ -98,7 +98,7 @@ public final class HubNavigation {
   }
 
   /// - defaults: where the choices are remembered, or `nil` to remember nothing (demo, snapshots).
-  public init(defaults: UserDefaults? = nil) {
+  public init(defaults: UserDefaults?) {
     self.defaults = defaults
     section = defaults?.string(forKey: Key.section).flatMap(Section.init(rawValue:)) ?? .home
     sidebarHidden = defaults?.bool(forKey: Key.sidebarHidden) ?? false

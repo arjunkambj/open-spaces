@@ -9,7 +9,7 @@ import WisperLive
 
 /// What the phone itself offers the screens, beyond what `AppModel` holds.
 ///
-/// The real one talks to UIKit. `quiet` does nothing, for snapshots and tests.
+/// The real one talks to UIKit. `quiet` does nothing, for the demo on a Mac and for snapshots.
 struct PhoneDevice: Sendable {
   var clipboard: Clipboard
   /// Keeps the screen from dimming and locking while `true`.
@@ -41,11 +41,10 @@ struct PhoneDevice: Sendable {
     keyboardIsOn: {
       // iOS has no call for this. It does keep the list of the person's keyboards in the
       // defaults every app can read, each named by the bundle ID of its extension.
-      guard let keyboards = UserDefaults.standard.object(forKey: "AppleKeyboards") as? [String] else {
-        return nil
-      }
-      let prefix = (Bundle.main.bundleIdentifier ?? "dev.openwisper.ios") + "."
-      return keyboards.contains { $0.hasPrefix(prefix) }
+      guard let keyboards = UserDefaults.standard.object(forKey: "AppleKeyboards") as? [String],
+        let app = Bundle.main.bundleIdentifier
+      else { return nil }
+      return keyboards.contains { $0.hasPrefix(app + ".") }
     },
     showRecording: { recording in
       #if os(iOS)

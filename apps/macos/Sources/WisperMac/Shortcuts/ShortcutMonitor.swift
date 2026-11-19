@@ -24,8 +24,6 @@ import WisperDomain
 ///   Everything else is passed on untouched (but see `holdsBackGlobeKey`).
 @MainActor
 public final class ShortcutMonitor {
-  public typealias Event = ShortcutEvent
-
   /// Called for every shortcut event.
   public var onEvent: (@MainActor (ShortcutEvent) -> Void)?
 
@@ -98,13 +96,4 @@ public final class ShortcutMonitor {
   public func start() -> Bool {
     tap.start()
   }
-
-  /// Stops watching. Anything held is reported as abandoned.
-  public func stop() {
-    tap.stop()
-  }
-
-  /// False before `start()`, after `stop()`, and after the Accessibility
-  /// permission was taken away while running (the monitor then stops itself).
-  public var isRunning: Bool { tap.isRunning }
 }

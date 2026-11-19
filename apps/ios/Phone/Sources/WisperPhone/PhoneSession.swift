@@ -27,7 +27,7 @@ public final class PhoneSession {
   }
 
   /// How the app was started. Read from the launch arguments.
-  public struct Launch: Equatable, Sendable {
+  public struct Launch: Sendable {
     /// Run on made-up data, in memory. Nothing is read from or written to the phone.
     public var demo = false
     /// In a demo, the state to open in, by name: `dictate-recording`, `meetings`,
@@ -93,8 +93,8 @@ public final class PhoneSession {
 
   /// The real app, or a demo on made-up data when `launch.demo` is set.
   ///
-  /// On a Mac it is always the demo: this package is built there only for its tests and
-  /// snapshots, and those must never touch a person's real library.
+  /// On a Mac it is always the demo: this package is built there only for its snapshots,
+  /// and those must never touch a person's real library.
   public convenience init(launch: Launch) {
     #if os(iOS)
       let model = launch.demo ? PhoneSession.demoModel(launch) : PhoneSession.liveModel(device: .live)
@@ -154,7 +154,7 @@ public final class PhoneSession {
   }
 
   /// Does what a link says. `trusted` is whether it came with a valid ticket.
-  func follow(_ link: WisperLink, trusted: Bool) async {
+  private func follow(_ link: WisperLink, trusted: Bool) async {
     guard await isSetUp() else { return }
     switch link {
     case .toggleDictation:
@@ -301,9 +301,7 @@ public final class PhoneSession {
 
   /// The real adapters, wired together. The only place that happens on the phone.
   private static func liveModel(device: PhoneDevice) -> AppModel {
-    let folder = SharedFolder()
-    folder.adoptLibrary()
-    let library = FileLibrary(root: folder.root)
+    let library = FileLibrary(root: SharedFolder().root)
     // The key stays in the app's own Keychain. The keyboard never needs it.
     let secrets = KeychainSecretStore()
     let openAI = OpenAI(
@@ -320,7 +318,7 @@ public final class PhoneSession {
         liveTranscriber: openAI.liveTranscriber,
         languageModel: openAI.languageModel,
         target: ClipboardTextTarget(clipboard: device.clipboard),
-        permissions: PhonePermissions(openSettings: device.openSettings),
+        permissions: PhonePermissions(),
         host: HostActions(),
         checkAPIKey: { key in try await openAI.check(key: key) }
       )

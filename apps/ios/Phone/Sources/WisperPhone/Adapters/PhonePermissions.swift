@@ -13,13 +13,8 @@ import WisperDomain
 @MainActor
 public final class PhonePermissions: Permissions {
   public let needed: [Permission] = [.microphone]
-  private let openSettings: @MainActor () -> Void
 
-  /// - openSettings: shows this app's page in the Settings app. iOS asks about the
-  ///   microphone only once; after a "no" that page is the only place to change it.
-  public init(openSettings: @escaping @MainActor () -> Void = PhonePermissions.openAppSettings) {
-    self.openSettings = openSettings
-  }
+  public init() {}
 
   public func status(_ permission: Permission) -> PermissionStatus {
     guard permission == .microphone else { return .granted }
@@ -37,7 +32,8 @@ public final class PhonePermissions: Permissions {
     switch status(.microphone) {
     case .granted: break
     case .notDetermined: _ = await AVAudioApplication.requestRecordPermission()
-    case .denied: openSettings()
+    // iOS asks only once. After a "no", the app's page in Settings is the only place to change it.
+    case .denied: Self.openAppSettings()
     }
     return status(.microphone)
   }

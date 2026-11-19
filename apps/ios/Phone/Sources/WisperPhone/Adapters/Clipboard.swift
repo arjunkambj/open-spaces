@@ -21,7 +21,7 @@ public struct Clipboard: Sendable {
   /// The clipboard every app on the phone shares. The text stays on this phone (it is not
   /// handed to the person's other devices) and iOS clears it after `lifetime`: dictated
   /// text can be private, and a clipboard is read by whatever app is opened next.
-  /// On a Mac, where this package is only built for its tests and snapshots, it does
+  /// On a Mac, where this package is only built for its snapshots, it does
   /// nothing: the person's clipboard is theirs.
   public static let system = Clipboard { text in
     #if canImport(UIKit)
@@ -39,11 +39,9 @@ public struct Clipboard: Sendable {
 /// clipboard, ready to paste. The keyboard extension offers the same text from the
 /// library with its Insert latest key.
 public actor ClipboardTextTarget: TextTarget {
-  /// The text most recently inserted, kept for as long as the app runs.
-  public private(set) var latest: String?
   private let clipboard: Clipboard
 
-  public init(clipboard: Clipboard = .system) {
+  public init(clipboard: Clipboard) {
     self.clipboard = clipboard
   }
 
@@ -56,7 +54,6 @@ public actor ClipboardTextTarget: TextTarget {
   public func selectedText() -> String? { nil }
 
   public func insert(_ text: String) async {
-    latest = text
     await clipboard.write(text)
   }
 }

@@ -8,7 +8,7 @@ import WisperUI
 // a menu bar item, a window that comes and goes and a panel that never takes focus
 // are all things AppKit does directly and SwiftUI's `App` only does in part.
 
-let launch = Launch(arguments: CommandLine.arguments, environment: ProcessInfo.processInfo.environment)
+let launch = Launch(arguments: CommandLine.arguments)
 
 switch launch.mode {
 case .help:

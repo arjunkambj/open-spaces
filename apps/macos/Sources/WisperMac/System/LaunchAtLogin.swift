@@ -3,8 +3,7 @@ import ServiceManagement
 
 /// Opens Open Wisper when the user logs in to their Mac.
 ///
-/// Only works for the bundled app (`Open Wisper.app`). Nothing here throws:
-/// when macOS says no, the status says why.
+/// Nothing here throws: when macOS says no, the status says why.
 @MainActor
 public enum LaunchAtLogin {
   public enum Status: Sendable, Equatable {
@@ -12,13 +11,10 @@ public enum LaunchAtLogin {
     case off
     /// Registered, but the user has to allow it in System Settings > General > Login Items.
     case needsApproval
-    /// Not running as an app bundle (a development build run from the terminal).
-    case unavailable
   }
 
   public static var status: Status {
-    guard isBundledApp else { return .unavailable }
-    return switch SMAppService.mainApp.status {
+    switch SMAppService.mainApp.status {
     case .enabled: .on
     case .requiresApproval: .needsApproval
     default: .off
@@ -30,7 +26,6 @@ public enum LaunchAtLogin {
   /// from a disk image or the user has blocked it in Login Items.
   @discardableResult
   public static func set(_ enabled: Bool) -> Status {
-    guard isBundledApp else { return .unavailable }
     let service = SMAppService.mainApp
     do {
       if enabled {
@@ -47,9 +42,5 @@ public enum LaunchAtLogin {
   /// Opens System Settings at Login Items, for `needsApproval`.
   public static func openSettings() {
     SMAppService.openSystemSettingsLoginItems()
-  }
-
-  private static var isBundledApp: Bool {
-    Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil
   }
 }
