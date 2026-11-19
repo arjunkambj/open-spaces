@@ -46,7 +46,7 @@ RoundedRectangle(cornerRadius: Wisper.Radius.card).fill(Wisper.Color.surface)
 
 ### Text: `.wisperText(_ style:, color:)`
 
-Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. (The name "Open Wisper" in `Wordmark` is the one place rounded letters are used, to go with the rounded bars of the mark.) Sizes follow the idiom and Dynamic Type.
+Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. (The name "Open Wisper" in `Wordmark` is the one place rounded letters are used, to go with the rounded line of the mark.) Sizes follow the idiom and Dynamic Type.
 
 | Style | Mac / iPhone | Use |
 | --- | --- | --- |
