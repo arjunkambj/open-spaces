@@ -23,11 +23,9 @@ enum Composition {
     let secrets = KeychainSecretStore()
     let openAI = OpenAI(
       secrets: secrets,
-      baseURL: {
-        // Read on every request, so a change in Settings takes effect at once.
-        let text = (try? await library.settings().apiBaseURL) ?? nil
-        return text.flatMap { URL(string: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-      }
+      // Read on every request, so a change in Settings takes effect at once. The address goes
+      // through as typed: an unusable one is an error, never a quiet switch to OpenAI.
+      address: { try await library.settings().apiBaseURL }
     )
     let monitor = ShortcutMonitor()
     let tool = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/wisper").path

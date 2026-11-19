@@ -435,15 +435,14 @@ public final class MacControls {
 
   /// What a click should do about a failure, told from its message.
   nonisolated static func fix(for message: String) -> Notice.Fix? {
-    for error in [WisperError.missingAPIKey, .invalidAPIKey] where message == error.errorDescription {
-      return .settings
-    }
     for permission in Permission.allCases {
       if let text = WisperError.permissionDenied(permission).errorDescription, message.hasPrefix(text) {
         return .permission(permission)
       }
     }
-    return nil
+    // Every message about the key or the server address, for OpenAI or a custom server, ends
+    // by pointing at Settings ("…in Settings."), so that is where a click goes.
+    return message.contains(" in Settings") ? .settings : nil
   }
 
   // MARK: - Meetings

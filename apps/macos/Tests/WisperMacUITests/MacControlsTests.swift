@@ -315,7 +315,7 @@ import WisperMac
     #expect(stage.controls.notice == nil)
   }
 
-  @Test func fixesAreToldFromTheMessage() {
+  @Test func fixesAreToldFromTheMessage() throws {
     #expect(MacControls.fix(for: WisperError.missingAPIKey.localizedDescription) == .settings)
     #expect(MacControls.fix(for: WisperError.invalidAPIKey.localizedDescription) == .settings)
     let insert = WisperError.permissionDenied(.accessibility).localizedDescription
@@ -323,6 +323,12 @@ import WisperMac
       MacControls.fix(for: insert + " Your text is saved in your history.") == .permission(.accessibility)
     )
     #expect(MacControls.fix(for: WisperError.noSpeech.localizedDescription) == nil)
+    #expect(MacControls.fix(for: WisperError.rateLimited.localizedDescription) == nil)
+    // A custom server's messages, and a bad address, lead to Settings too.
+    let server = try APIServer(address: "https://llm.example.com/v1")
+    #expect(MacControls.fix(for: WisperError.missingAPIKey.message(server: server)) == .settings)
+    #expect(MacControls.fix(for: WisperError.network("timed out").message(server: server)) == .settings)
+    #expect(MacControls.fix(for: WisperError.invalidServerAddress.localizedDescription) == .settings)
   }
 
   // MARK: Meetings, paste and the pill
