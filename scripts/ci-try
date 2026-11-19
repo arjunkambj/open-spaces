@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# ci-try <name>: push a snapshot of the working tree to the throwaway branch
+# ci/try-<name> so GitHub Actions builds it, without touching your branch,
+# index or working tree. Then follow the run with:
+#   gh run list --branch ci/try-<name> --limit 1
+#   gh run watch <id> --exit-status ; gh run view <id> --log-failed
+set -euo pipefail
+name="${1:?usage: ci-try <name>}"
+root="$(git rev-parse --show-toplevel)"; cd "$root"
+tmp_index="$(mktemp)"; trap 'rm -f "$tmp_index"' EXIT
+export GIT_INDEX_FILE="$tmp_index"
+git read-tree HEAD
+git add -A
+tree="$(git write-tree)"
+commit="$(git commit-tree "$tree" -p HEAD -m "ci try: $name")"
+git push -f origin "$commit:refs/heads/ci/try-$name"
+echo "pushed $commit to ci/try-$name"

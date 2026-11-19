@@ -1,0 +1,11 @@
+{
+  "name": "@open-wisper/domain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Models and seams shared by every Open Wisper module.",
+  "scripts": {
+    "build": "../../scripts/swiftw build",
+    "test": "../../scripts/swiftw test",
+    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests"
+  }
+}

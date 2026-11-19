@@ -1,0 +1,17 @@
+.DS_Store
+node_modules/
+.turbo/
+.build/
+.swiftpm/
+DerivedData/
+build/
+dist/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+Package.resolved
+.env
+.env.*
+*.local
+.build-*/

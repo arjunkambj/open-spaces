@@ -1,0 +1,22 @@
+{
+  "name": "@open-wisper/macos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open Wisper for macOS.",
+  "scripts": {
+    "build": "../../scripts/swiftw build",
+    "test": "../../scripts/swiftw test",
+    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests",
+    "bundle": "./scripts/bundle",
+    "dev": "./scripts/bundle && open 'build/Open Wisper.app'"
+  },
+  "dependencies": {
+    "@open-wisper/domain": "workspace:*",
+    "@open-wisper/store": "workspace:*",
+    "@open-wisper/ai": "workspace:*",
+    "@open-wisper/audio": "workspace:*",
+    "@open-wisper/engine": "workspace:*",
+    "@open-wisper/ui": "workspace:*",
+    "@open-wisper/agent": "workspace:*"
+  }
+}

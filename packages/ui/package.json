@@ -1,0 +1,15 @@
+{
+  "name": "@open-wisper/ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Design system: tokens and SwiftUI components.",
+  "scripts": {
+    "build": "../../scripts/swiftw build",
+    "test": "../../scripts/swiftw test",
+    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests"
+  },
+  "dependencies": {
+    "@open-wisper/domain": "workspace:*",
+    "@open-wisper/engine": "workspace:*"
+  }
+}

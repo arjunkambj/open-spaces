@@ -1,0 +1,20 @@
+{
+  "name": "open-wisper",
+  "private": true,
+  "description": "Open-source voice dictation and meeting notes for macOS and iOS. Local-first, bring your own OpenAI key.",
+  "license": "MIT",
+  "packageManager": "pnpm@12.21.0",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "swift format format --in-place --recursive --parallel apps packages",
+    "check": "turbo run lint build test",
+    "mac": "pnpm --filter @open-wisper/macos run dev",
+    "mac:bundle": "pnpm --filter @open-wisper/macos run bundle",
+    "ios:generate": "pnpm --filter @open-wisper/ios run generate"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  }
+}
