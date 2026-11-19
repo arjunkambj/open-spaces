@@ -202,9 +202,23 @@ chmod 644 "$update_key_public" "$fingerprint_file"
 
 say "==> Checking that signing works"
 cp /usr/bin/true "$scratch/probe"
-/usr/bin/codesign --force --options runtime --timestamp=none --keychain "$keychain" \
-  --sign "$fingerprint" --identifier dev.openwisper.probe "$scratch/probe" 2>/dev/null ||
-  fail "codesign could not sign with the certificate in $keychain."
+# On a build machine (GitHub Actions sets CI) codesign only reaches a key in a keychain that is
+# on the search list. That machine is thrown away afterwards, so adding ours there is safe.
+# On a person's Mac the search list is left alone.
+if [[ -n "${CI:-}" ]]; then
+  existing=()
+  while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%\"}"
+    line="${line#\"}"
+    [[ -n "$line" && "$line" != "$keychain" ]] && existing+=("$line")
+  done < <(/usr/bin/security list-keychains -d user)
+  /usr/bin/security list-keychains -d user -s "$keychain" ${existing[@]+"${existing[@]}"}
+fi
+if ! probe_error="$(/usr/bin/codesign --force --options runtime --timestamp=none --keychain "$keychain" \
+  --sign "$fingerprint" --identifier dev.openwisper.probe "$scratch/probe" 2>&1)"; then
+  fail "codesign could not sign with the certificate in $keychain. It said: $probe_error"
+fi
 /usr/bin/codesign --verify --strict "$scratch/probe"
 requirement="$(/usr/bin/codesign -dr - "$scratch/probe" 2>&1 | sed -n 's/^designated => //p')"
 lower_fingerprint="$(printf '%s' "$fingerprint" | tr 'A-F' 'a-f')"
