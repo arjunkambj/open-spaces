@@ -165,7 +165,7 @@ import WisperDomain
     #expect(try #require(server.requests.first).form.values("keywords[]") == ["Priya Raman", "b Acme /b"])
   }
 
-  @Test func givesShortAudioAShortWaitAndLongAudioALongOne() async throws {
+  @Test func givesShortAudioAShortAllowanceAndLongAudioALongOne() async throws {
     let server = Server(.ok(#"{"text": "Hi."}"#))
     let transcriber = server.openAI().transcriber
 
@@ -175,9 +175,10 @@ import WisperDomain
     let long = try recordings.file("long.m4a", bytes: Data(count: 4 * 1_024 * 1_024))
     _ = try await transcriber.transcribe(TranscriptionRequest(audio: long, model: "gpt-transcribe"))
 
-    #expect(server.requests[0].timeout == 20)
-    // More than the 60 seconds a request gets by default, so a few megabytes on a slow link get through.
-    #expect(server.requests[1].timeout > 100)
+    // The whole call, both tries included: under half a minute for a dictation of a few seconds.
+    #expect((20...30).contains(server.requests[0].timeout))
+    // Minutes for a long recording, so a few megabytes on a slow link get through.
+    #expect(server.requests[1].timeout > 600)
   }
 
   // MARK: Hints the server refuses

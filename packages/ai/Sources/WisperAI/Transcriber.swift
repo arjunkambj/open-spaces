@@ -6,6 +6,7 @@ import WisperDomain
 /// What is asked for depends on the model, because the models differ:
 ///
 ///   gpt-transcribe      words go in `keywords[]`, the language in `languages[]`; no timestamps
+///   gpt-live-transcribe takes no files: the file goes to `gpt-transcribe`, asked the same way
 ///   …whisper…           `verbose_json` with timed pieces; words go in `prompt`
 ///   …diarize…           `diarized_json`, which gives timed pieces; takes no word hints
 ///   anything else       words go in `prompt`, the language in `language`; no timestamps
@@ -17,8 +18,27 @@ import WisperDomain
 struct OpenAITranscriber: Transcriber {
   let client: Client
 
+  func prepare() async { await client.prepare() }
+
   /// OpenAI's limit on one audio file.
   static let largestUpload = 25 * 1_024 * 1_024
+
+  /// How long a file of `bytes` may take.
+  ///
+  /// - `wait`: how long the server may think, once it has the audio, before a try is given up.
+  ///   A dictation of a few seconds normally comes back from OpenAI in about a second (a
+  ///   megabyte is over four minutes of speech), so five seconds of silence means the
+  ///   connection or the server is stuck: better to send it again over a new connection than
+  ///   to keep the person waiting. Long recordings get more. A server of the person's own is
+  ///   often a model on their own machine, far slower, and busy with one request at a time:
+  ///   it gets four times as long before anything is sent twice.
+  /// - `budget`: the whole call. The first try, a second one with twice the wait, and time to
+  ///   send the audio twice on a slow connection (a megabyte in 20 seconds).
+  static func limits(bytes: Int, openAI: Bool) -> (wait: TimeInterval, budget: TimeInterval) {
+    let megabytes = Double(bytes) / 1_048_576
+    let wait = openAI ? min(300, 5 + 40 * megabytes) : min(300, 20 + 60 * megabytes)
+    return (wait, min(900, 3 * wait + 40 * megabytes + 10))
+  }
 
   func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
     let size = try Upload.size(of: request.audio)
@@ -32,23 +52,22 @@ struct OpenAITranscriber: Transcriber {
       )
     }
 
-    let style = Style(model: request.model)
+    // A model that only works live cannot take a file. Its sibling that can stands in.
+    let model = Realtime.fileModel(for: request.model)
+    let style = Style(model: model)
     let words = Hints.words(request.vocabulary)
     var language = request.language?.trimmingCharacters(in: .whitespaces).lowercased()
     if language?.isEmpty == true { language = nil }
     // The app lists Norwegian as "nb" (Bokmål). Whisper only knows it as "no".
     let spoken = language == "nb" ? "no" : language
-    let megabytes = Double(size) / 1_048_576
-    // A short dictation gives up after about half a minute. Each megabyte buys 45 seconds
-    // more, so a long recording on a slow connection still gets through.
-    let budget = min(900, 25 + 45 * megabytes)
+    let limits = OpenAITranscriber.limits(bytes: size, openAI: await client.usesOpenAI())
 
     let data = try await client.send(
-      scope: "\(request.model) \(spoken ?? "")",
+      scope: "\(model) \(spoken ?? "")",
       optional: style.optional,
-      budget: budget
+      budget: limits.budget
     ) { leftOut in
-      var fields = style.fields(model: request.model, language: spoken, words: words)
+      var fields = style.fields(model: model, language: spoken, words: words)
       fields.removeAll { leftOut.contains($0.setting) }
       // Timed pieces only come with the detailed reply format, so the two go together.
       if leftOut.contains("response_format") { fields.removeAll { $0.setting == "timestamp_granularities" } }
@@ -57,8 +76,7 @@ struct OpenAITranscriber: Transcriber {
         method: "POST",
         path: "audio/transcriptions",
         body: .file(upload.file, contentType: upload.contentType),
-        // Nothing comes back while the server listens, so allow a long silence on the line.
-        idle: max(20, budget * 0.6)
+        wait: limits.wait
       )
     }
 

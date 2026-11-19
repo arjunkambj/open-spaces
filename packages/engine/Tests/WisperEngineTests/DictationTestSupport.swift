@@ -310,6 +310,7 @@ final class Rig {
     capture: FakeAudioCapture = FakeAudioCapture(),
     captureGate: Gate? = nil,
     transcriber: FakeTranscriber? = nil,
+    live: FakeLiveTranscriber? = nil,
     model: FakeLanguageModel? = nil,
     target: any TextTarget = FakeTextTarget(),
     through wrap: (InMemoryLibrary) -> any Library = { $0 }
@@ -324,6 +325,7 @@ final class Rig {
       library: wrap(library),
       capture: slowCapture ?? capture,
       transcriber: self.transcriber,
+      liveTranscriber: live,
       languageModel: self.model,
       target: target
     )
@@ -382,6 +384,7 @@ final class Rig {
         _ = engine.phase
         _ = engine.level
         _ = engine.last
+        _ = engine.partialText
       } onChange: {
         alarm.ring()
       }

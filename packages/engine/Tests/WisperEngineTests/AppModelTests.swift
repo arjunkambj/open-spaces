@@ -12,6 +12,7 @@ private func makeModel(
   library: any Library,
   secrets: any SecretStore = InMemorySecretStore(),
   transcriber: FakeTranscriber = FakeTranscriber(text: "hello world"),
+  live: FakeLiveTranscriber? = nil,
   host: HostActions = HostActions(),
   checkAPIKey: @escaping @Sendable (String) async throws -> Void = { _ in }
 ) -> AppModel {
@@ -21,6 +22,7 @@ private func makeModel(
       secrets: secrets,
       capture: FakeAudioCapture(),
       transcriber: transcriber,
+      liveTranscriber: live,
       languageModel: echoingModel(),
       target: FakeTextTarget(),
       permissions: FakePermissions(),
@@ -302,6 +304,36 @@ struct AppModelServerAddressTests {
         == .failed(message: "The custom server address in Settings is not a valid web address.")
     )
     #expect(transcriber.requests.isEmpty)
+  }
+
+  @MainActor
+  @Test func aLiveTranscriberHandedToTheAppModelIsUsedForDictation() async throws {
+    let transcriber = FakeTranscriber(text: "from the file")
+    let live = FakeLiveTranscriber(text: "heard live")
+    let model = makeModel(library: InMemoryLibrary(), transcriber: transcriber, live: live)
+    await model.load()
+
+    model.dictation.start()
+    let done = try #require(await model.dictation.finish())
+
+    #expect(done.rawText == "heard live")
+    #expect(done.timing?.path == .live)
+    #expect(transcriber.requests.isEmpty)
+  }
+
+  @MainActor
+  @Test func theAppModelOpensNoLiveSessionWhileTheAddressCannotBeUsed() async throws {
+    let live = FakeLiveTranscriber(text: "must not be heard")
+    let model = makeModel(
+      library: InMemoryLibrary(settings: Settings(apiBaseURL: "127.0.0.1:63570/v1")),
+      live: live
+    )
+    await model.load()
+
+    model.dictation.start()
+    #expect(await model.dictation.finish() == nil)
+
+    #expect(live.requests.isEmpty)
   }
 }
 

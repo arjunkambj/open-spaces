@@ -22,9 +22,18 @@ import WisperDomain
 /// **Redirects.** A request follows a redirect only on the same host. Audio, text and the key
 /// are never passed on to a host the settings do not name.
 ///
-/// Every call throws `WisperError`, or `CancellationError` when its task is
-/// cancelled. Short network drops, rate limits and server hiccups are retried
-/// a couple of times before the call gives up.
+/// **Connections.** Requests travel on sessions the adapter keeps for itself: nothing is shared
+/// with the rest of the app, and no cookie, cache or credential is kept. A connection that may
+/// have died quietly (unused for a minute, the Mac slept, the network or a VPN changed, a
+/// request got no answer) is not used again: the next request opens a new one.
+/// `Transcriber.prepare()` opens or checks the connection ahead of time.
+///
+/// **Waiting.** A request that gets no answer is given up quickly (a few seconds for a short
+/// recording, longer for a long one) and sent once more over a new connection, with twice the
+/// time. When that also gets no answer, the call fails with `WisperError.network`. Short
+/// network drops, rate limits and server hiccups are retried a couple of times as well.
+///
+/// Every call throws `WisperError`, or `CancellationError` when its task is cancelled.
 public struct OpenAI: Sendable {
   private let client: Client
 
@@ -34,13 +43,20 @@ public struct OpenAI: Sendable {
   ///     address, or `nil` for OpenAI itself. Read on every request. Pass the text untouched,
   ///     so an address that cannot be used is reported instead of ignored. An error it throws
   ///     (the settings could not be read) fails the request: nothing is sent.
-  ///   - session: The session that carries the requests.
+  ///   - session: A session to carry the requests, for a caller that needs its own. Leave it
+  ///     out: the adapter then keeps sessions of its own, and replaces one whose connections
+  ///     cannot be trusted any more (see "Connections" above). A session passed in is used as
+  ///     it is and never replaced.
   public init(
     secrets: any SecretStore,
     address: @escaping @Sendable () async throws -> String?,
-    session: URLSession = .shared
+    session: URLSession? = nil
   ) {
-    self.init(secrets: secrets, address: address, session: session) { seconds in
+    self.init(
+      secrets: secrets,
+      address: address,
+      connections: session.map { Connections(fixed: $0) } ?? Connections()
+    ) { seconds in
       try await Task.sleep(for: .seconds(seconds))
     }
   }
@@ -51,7 +67,7 @@ public struct OpenAI: Sendable {
   public init(
     secrets: any SecretStore,
     baseURL: @escaping @Sendable () async -> URL? = { nil },
-    session: URLSession = .shared
+    session: URLSession? = nil
   ) {
     self.init(secrets: secrets, address: { await baseURL()?.absoluteString }, session: session)
   }
@@ -60,14 +76,29 @@ public struct OpenAI: Sendable {
   init(
     secrets: any SecretStore,
     address: @escaping @Sendable () async throws -> String?,
+    connections: Connections,
+    pause: @escaping @Sendable (TimeInterval) async throws -> Void
+  ) {
+    client = Client(secrets: secrets, address: address, connections: connections, pause: pause)
+  }
+
+  /// The same, on one session that is never replaced.
+  init(
+    secrets: any SecretStore,
+    address: @escaping @Sendable () async throws -> String?,
     session: URLSession,
     pause: @escaping @Sendable (TimeInterval) async throws -> Void
   ) {
-    client = Client(secrets: secrets, address: address, session: session, pause: pause)
+    self.init(secrets: secrets, address: address, connections: Connections(fixed: session), pause: pause)
   }
 
   /// Turns audio files into text with the model named in each request.
   public var transcriber: any Transcriber { OpenAITranscriber(client: client) }
+
+  /// Turns sound into text while it is being recorded, over the realtime API, for the model
+  /// that can do so (`gpt-live-transcribe`). For any other model, or a server without that
+  /// API, `open` throws and the recorded file is transcribed with `transcriber`.
+  public var liveTranscriber: any LiveTranscriber { OpenAILiveTranscriber(client: client) }
 
   /// Answers prompts with the model named in each request.
   public var languageModel: any LanguageModel { OpenAILanguageModel(client: client) }
@@ -82,7 +113,7 @@ public struct OpenAI: Sendable {
     let reply: Data
     do {
       reply = try await client.send(key: .given(key), budget: 20) { _ in
-        Client.Call(method: "GET", path: "models", idle: 15)
+        Client.Call(method: "GET", path: "models", wait: 6)
       }
     } catch WisperError.server(status: 403, let message)
       where message.localizedCaseInsensitiveContains("missing scopes")

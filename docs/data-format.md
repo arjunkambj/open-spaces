@@ -190,14 +190,22 @@ All four keys are required.
     "id" : "00000000-0000-4000-8000-000000000004",
     "mode" : "dictation",
     "rawText" : "um could we move the review to thursday at three",
-    "text" : "Could we move the review to Thursday at 3 pm?"
+    "text" : "Could we move the review to Thursday at 3 pm?",
+    "timing" : {
+      "captureMs" : 140,
+      "cleanUpMs" : 780,
+      "insertMs" : 9,
+      "path" : "file",
+      "totalMs" : 1920,
+      "transcribeMs" : 950
+    }
   },
   {
     "appName" : "Notes",
     "audioFile" : "00000000-0000-4000-8000-000000000005.m4a",
     "createdAt" : "2026-11-17T10:02:45Z",
     "duration" : 2.5,
-    "failure" : "Could not reach OpenAI. Check your internet connection. (The request timed out.)",
+    "failure" : "OpenAI did not answer in time, even on a second try. Try again in a moment.",
     "id" : "00000000-0000-4000-8000-000000000005",
     "mode" : "command",
     "rawText" : "",
@@ -223,6 +231,22 @@ All four keys are required.
 - `selection` is present only on a command that failed or was not finished. It is the text
   that was selected, kept so a retry changes the same text. An empty string means nothing
   was selected.
+- `timing` says how long each step took, in thousandths of a second, counted from the moment
+  you let go of the key. It holds numbers only, never anything that was said. It is there to
+  find out where the waiting goes.
+  - `path`: `file` when the finished recording was uploaded, `live` when the sound was sent
+    while you were still speaking.
+  - `captureMs`: from letting go of the key to a finished audio file. Left out on a retry.
+  - `transcribeMs`: sending the audio and waiting for the words. On a failed entry, how long
+    it took to fail.
+  - `cleanUpMs`: the language model's tidying (or its answer to a command). Left out when it
+    was not asked: smart formatting is off, or the text was only a word or two.
+  - `insertMs`: putting the text into the app. Left out when nothing was inserted.
+  - `totalMs`: from letting go of the key (or from starting a retry) until the text was typed.
+    A little more than the steps added up: reading settings and saving the entry sit between.
+
+  Every key in `timing` is optional, and so is `timing` itself: entries saved by older versions
+  have none. A value the app cannot read is ignored, and the entry is still loaded.
 - `id`, `createdAt`, `rawText`, `text` and `duration` are required. `mode` is `dictation`
   when left out. The other keys are optional.
 

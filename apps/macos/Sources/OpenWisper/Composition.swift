@@ -43,6 +43,8 @@ enum Composition {
         secrets: secrets,
         capture: SystemAudioCapture(),
         transcriber: openAI.transcriber,
+        // Used only when the transcription model in Settings is a live one; otherwise the file is uploaded.
+        liveTranscriber: openAI.liveTranscriber,
         languageModel: openAI.languageModel,
         target: target,
         permissions: MacPermissions(),

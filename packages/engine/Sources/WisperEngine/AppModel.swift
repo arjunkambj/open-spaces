@@ -48,6 +48,9 @@ public final class AppModel {
     public var secrets: any SecretStore
     public var capture: any AudioCapture
     public var transcriber: any Transcriber
+    /// Writes dictated words while the person is still speaking, when the chosen model can.
+    /// `nil` to always transcribe the finished recording.
+    public var liveTranscriber: (any LiveTranscriber)?
     public var languageModel: any LanguageModel
     public var target: any TextTarget
     public var permissions: any Permissions
@@ -60,6 +63,7 @@ public final class AppModel {
       secrets: any SecretStore,
       capture: any AudioCapture,
       transcriber: any Transcriber,
+      liveTranscriber: (any LiveTranscriber)? = nil,
       languageModel: any LanguageModel,
       target: any TextTarget,
       permissions: any Permissions,
@@ -70,6 +74,7 @@ public final class AppModel {
       self.secrets = secrets
       self.capture = capture
       self.transcriber = transcriber
+      self.liveTranscriber = liveTranscriber
       self.languageModel = languageModel
       self.target = target
       self.permissions = permissions
@@ -132,6 +137,8 @@ public final class AppModel {
       library: dependencies.library,
       capture: dependencies.capture,
       transcriber: checked,
+      // The engine itself opens no live session while the address cannot be used.
+      liveTranscriber: dependencies.liveTranscriber,
       languageModel: checked,
       target: dependencies.target
     )
@@ -323,6 +330,11 @@ struct AddressChecked: Transcriber, LanguageModel {
   func complete(_ request: CompletionRequest) async throws -> String {
     _ = try await library.settings().apiServer()
     return try await languageModel.complete(request)
+  }
+
+  func prepare() async {
+    guard (try? await library.settings().apiServer()) != nil else { return }
+    await transcriber.prepare()
   }
 }
 
