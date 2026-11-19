@@ -203,6 +203,8 @@ private struct MeetingActionItemRow: View {
   @Environment(\.wisperIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
   @State private var isHovered = false
+  /// Whether the keyboard is on one of the row's controls.
+  @FocusState private var isFocused: Bool
 
   var body: some View {
     HStack(alignment: .center, spacing: Wisper.Space.m) {
@@ -225,14 +227,17 @@ private struct MeetingActionItemRow: View {
       )
       if let owner = item.owner, !owner.isEmpty { Badge(owner) }
       IconButton("trash", label: "Delete this action item", size: .small, action: onDelete)
-        .opacity(idiom == .phone || isHovered || simulatedHover ? 1 : 0)
+        // Tab reaches the button even while it is unseen, so it shows for the keyboard too.
+        .opacity(idiom == .phone || isHovered || simulatedHover || isFocused ? 1 : 0)
     }
+    .focused($isFocused)
     .padding(.horizontal, Wisper.Space.l)
     .padding(.vertical, Wisper.Space.s)
     .frame(minHeight: MeetingsMetrics.checklistRow(idiom))
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
     .animation(Wisper.Motion.quick, value: isHovered)
+    .animation(Wisper.Motion.quick, value: isFocused)
   }
 }
 

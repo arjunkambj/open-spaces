@@ -17,6 +17,17 @@ enum HomeSnapshots {
       SnapshotCase("home-empty-phone", canvas: .phone, model: { ScreenSamples.model() }) { HomeScreen() },
       SnapshotCase("home-no-key", model: { .demo(hasAPIKey: false) }) { HomeScreen() },
       SnapshotCase("home-no-key-phone", canvas: .phone, model: { .demo(hasAPIKey: false) }) { HomeScreen() },
+      // A server of the person's own may not need a key: no warning.
+      SnapshotCase(
+        "home-server-no-key",
+        model: {
+          ScreenSamples.model(
+            settings: .init(userName: "Alex", onboardedAt: Date(), apiBaseURL: "http://localhost:11434/v1"),
+            dictations: states,
+            hasAPIKey: false
+          )
+        }
+      ) { HomeScreen().defaultAppStorage(ScreenSamples.tipDismissed) },
       SnapshotCase("home-search") { HomeScreen(preview: HomePreview(query: "review")) },
       SnapshotCase("home-search-phone", canvas: .phone) { HomeScreen(preview: HomePreview(query: "review")) },
       SnapshotCase("home-no-results") { HomeScreen(preview: HomePreview(query: "giraffe")) },
@@ -86,6 +97,16 @@ enum HomeSnapshots {
         duration: 4,
         appName: "Visual Studio Code",
         failure: WisperError.rateLimited.errorDescription
+      ),
+      // Left behind when the app quit in the middle of a dictation. The engine's own words.
+      Dictation(
+        createdAt: now.addingTimeInterval(-3_300),
+        rawText: "",
+        text: "",
+        duration: 9,
+        appName: "Messages",
+        audioFile: "five.m4a",
+        failure: "Open Wisper closed before this dictation was finished. Try it again."
       ),
       Dictation(
         createdAt: now.addingTimeInterval(-86_400 - 600),

@@ -19,7 +19,10 @@ struct MeetingDetail: View {
 
   @State private var tab: MeetingTab
   @State private var find: String
+  /// The text the matches are shown for: `find`, a moment after the typing stops.
+  @State private var sought: String
   @State private var findIndex = 0
+  @State private var index = MeetingTranscriptIndex()
   @State private var deleting: Meeting?
   @State private var deletingItem: ActionItem?
   @State private var isConfirmingRewrite = false
@@ -45,6 +48,7 @@ struct MeetingDetail: View {
     self.onClose = onClose
     _tab = State(initialValue: preset.tab)
     _find = State(initialValue: preset.find)
+    _sought = State(initialValue: preset.find)
   }
 
   var body: some View {
@@ -106,8 +110,8 @@ struct MeetingDetail: View {
       liveID: model.meetings.live?.meetingID,
       processing: model.meetings.processing
     )
-    let turns = MeetingsLogic.turns(meeting.segments)
-    let matches = tab == .transcript ? MeetingsLogic.matches(of: find, in: turns) : []
+    let turns = index.turns(of: meeting.segments)
+    let matches = tab == .transcript ? index.matches(of: sought, in: meeting.segments) : []
     let matchIndex = min(findIndex, max(matches.count - 1, 0))
     let thread = questions.thread(for: id)
     let canAsk = phase != .live && phase != .processing && hasSomethingToAskAbout(meeting)
@@ -120,8 +124,10 @@ struct MeetingDetail: View {
           header(meeting, phase: phase)
           if let problem = MeetingsLogic.problem(of: meeting, phase: phase) {
             Banner(problem.isSevere ? .error : .warning, title: problem.title, message: problem.message) {
-              Button(problem.actionTitle) { MeetingActions.fix(problem.remedy, id, in: model) }
-                .buttonStyle(.wisper(.tertiary, size: .small))
+              if let remedy = problem.remedy {
+                Button(problem.actionTitle) { MeetingActions.fix(remedy, id, in: model) }
+                  .buttonStyle(.wisper(.tertiary, size: .small))
+              }
             }
           }
           Tabs(selection: $tab, options: MeetingTab.allCases, style: phone ? .segmented : .underline) {
@@ -156,7 +162,9 @@ struct MeetingDetail: View {
           Task { await questions.ask(question, about: id, with: model.meetings) }
         }
       } else if tab == .transcript, !turns.isEmpty {
-        MeetingFindBar(text: $find, count: matches.count, index: matchIndex) { offset in
+        let isSearching = !sought.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        MeetingFindBar(text: $find, isSearching: isSearching, count: matches.count, index: matchIndex) {
+          offset in
           findIndex = MeetingsLogic.step(matchIndex, by: offset, count: matches.count)
         } onCopy: {
           copyTranscript(meeting)
@@ -189,24 +197,31 @@ struct MeetingDetail: View {
       MeetingActions.writeNotes(id, in: model)
     }
     .dialog(isPresented: $isRenaming, title: "Rename this meeting") {
-      WisperTextField(text: $newTitle, placeholder: "Meeting title")
+      WisperTextField(text: $newTitle, placeholder: "Meeting title", focusOnAppear: true)
         .onSubmit(rename)
     } footer: {
       Button("Cancel") { isRenaming = false }
         .buttonStyle(.wisper())
       Button("Save", action: rename)
         .buttonStyle(.wisper(.primary))
+        .keyboardShortcut(.defaultAction)
         .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
     .fileExporter(
       isPresented: $isExporting,
+      // Written only while the save panel is open.
       document: MeetingMarkdownFile(text: isExporting ? meeting.markdown() : ""),
       contentType: MeetingMarkdownFile.type,
       defaultFilename: MeetingsLogic.fileName(for: meeting)
     ) { result in
       if case .failure(let error) = result { model.errorMessage = error.localizedDescription }
     }
-    .onChange(of: find) { findIndex = 0 }
+    .task(id: find) {
+      // The first letter is looked for at once; after that, a pause in the typing is waited for.
+      if !sought.isEmpty, !find.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
+      if !Task.isCancelled { sought = find }
+    }
+    .onChange(of: sought) { findIndex = 0 }
     .onChange(of: matches.isEmpty ? nil : matches[matchIndex]) { _, match in
       guard let match else { return }
       withAnimation(Wisper.Motion.smooth) { proxy.scrollTo(match.turn, anchor: .center) }
@@ -244,7 +259,8 @@ struct MeetingDetail: View {
 
   private func rename() {
     let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !title.isEmpty else { return }
+    // Return in the field can reach this twice: from the field and from the default button.
+    guard isRenaming, !title.isEmpty else { return }
     isRenaming = false
     edit { $0.title = title }
   }
@@ -272,7 +288,7 @@ struct MeetingDetail: View {
         Label("Copy Markdown", systemImage: "doc.on.doc")
       }
       .buttonStyle(.wisper())
-      ShareLink(item: meeting.markdown()) {
+      ShareLink(item: MeetingShare(meeting: meeting), preview: SharePreview(meeting.title)) {
         Image(systemName: "square.and.arrow.up")
       }
       .buttonStyle(IconButtonStyle())
@@ -288,7 +304,7 @@ struct MeetingDetail: View {
         if phase != .live {
           Button("Copy Markdown") { copyMarkdown(meeting) }
           Button("Copy transcript") { copyTranscript(meeting) }
-          ShareLink("Share", item: meeting.markdown())
+          ShareLink("Share", item: MeetingShare(meeting: meeting), preview: SharePreview(meeting.title))
         }
       } else if phase != .live {
         Button("Save as…") { isExporting = true }

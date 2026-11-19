@@ -2,12 +2,6 @@ import SwiftUI
 import WisperDomain
 import WisperEngine
 
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-  import AppKit
-#elseif canImport(UIKit)
-  import UIKit
-#endif
-
 // Small pieces shared by the Meetings list and a meeting's page. Each one is built from the
 // kit's tokens, for something the kit has no component for.
 
@@ -64,13 +58,9 @@ enum MeetingTab: String, CaseIterable, Hashable {
 /// Things both the list and a meeting's page can do to a meeting.
 @MainActor
 enum MeetingActions {
+  /// Copies notes or a transcript: what was said in a meeting is private.
   static func copy(_ text: String) {
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(text, forType: .string)
-    #elseif canImport(UIKit)
-      UIPasteboard.general.string = text
-    #endif
+    ScreenClipboard.copy(text, as: .personal)
   }
 
   /// Deletes the meeting. When it is the one being recorded, the recording stops too.
@@ -290,13 +280,16 @@ extension View {
         .wisperText(.body, color: Wisper.Color.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     } footer: {
+      // Return presses the main button, but never one that deletes: then it presses Cancel.
       Button("Cancel") { isPresented.wrappedValue = false }
         .buttonStyle(.wisper())
+        .keyboardShortcut(isDestructive ? .defaultAction : nil)
       Button(confirm) {
         action()
         isPresented.wrappedValue = false
       }
       .buttonStyle(.wisper(isDestructive ? .destructive : .primary))
+      .keyboardShortcut(isDestructive ? nil : .defaultAction)
     }
   }
 

@@ -47,7 +47,9 @@ public struct DialogCard<Content: View, Footer: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         if let onClose {
+          // Escape closes the dialog wherever the cursor is.
           IconButton("xmark", label: "Close", action: onClose)
+            .keyboardShortcut(.cancelAction)
             .padding(.top, -6)
             .padding(.trailing, -6)
         }
@@ -136,7 +138,11 @@ private struct ModalModifier<ModalContent: View>: ViewModifier {
           .presentationDragIndicator(.visible)
       }
     #else
+      // What is under the dim layer is out of reach while it is there: for the pointer, for
+      // Tab and for VoiceOver. A phone layout drawn on a Mac only stands in for the native sheet.
       content
+        .disabled(isPresented && idiom == .mac)
+        .accessibilityHidden(isPresented)
         .overlay {
           if isPresented {
             if idiom == .phone {
@@ -181,6 +187,9 @@ extension View {
   /// covers this view, so attach it to the root of the window (or of the screen it belongs
   /// to); give the content `.modalSurface()`. On iPhone it is a native sheet.
   ///
+  /// While it shows, the view under it cannot be used: not with the pointer, not with Tab
+  /// and not with VoiceOver.
+  ///
   ///     .modal(isPresented: $showSettings) {
   ///       SettingsScreen(onClose: { showSettings = false })
   ///         .frame(width: 860, height: 600)
@@ -197,11 +206,15 @@ extension View {
   /// See `modal(isPresented:content:)` for where to attach it.
   ///
   ///     .dialog(isPresented: $isAdding, title: "Add a word") {
-  ///       WisperTextField(text: $word, placeholder: "Word or name")
+  ///       WisperTextField(text: $word, placeholder: "Word or name", focusOnAppear: true)
   ///     } footer: {
   ///       Button("Cancel") { isAdding = false }.buttonStyle(.wisper())
-  ///       Button("Add word") { save() }.buttonStyle(.wisper(.primary))
+  ///       Button("Add word") { save() }.buttonStyle(.wisper(.primary)).keyboardShortcut(.defaultAction)
   ///     }
+  ///
+  /// Escape presses the close button. Give the button Return should press
+  /// `.keyboardShortcut(.defaultAction)`: the primary one, but Cancel when the other button
+  /// deletes something. Do not give a footer button `.cancelAction`; the close button has it.
   public func dialog<DialogContent: View, Footer: View>(
     isPresented: Binding<Bool>,
     title: String,

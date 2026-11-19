@@ -3,11 +3,16 @@ import Observation
 import WisperDomain
 import WisperEngine
 
-/// The questions asked about meetings since the screen was opened, with their answers.
-/// Nothing here is saved: the thread is gone when the app quits.
+/// The questions asked about meetings, with their answers.
+/// Nothing here is saved: the threads are gone when the app quits.
 @MainActor
 @Observable
 final class MeetingQuestions {
+  /// The threads of this run of the app. They outlive the Meetings screen, which the hub builds
+  /// again each time its section is chosen, so a thread is still there on the way back, with
+  /// any answer that came in meanwhile.
+  static let session = MeetingQuestions()
+
   struct Entry: Identifiable, Equatable, Sendable {
     enum Reply: Equatable, Sendable {
       case waiting
@@ -22,9 +27,19 @@ final class MeetingQuestions {
   }
 
   private var threads: [Meeting.ID: [Entry]]
+  /// The meetings with a thread, the one asked about last at the end.
+  private var recent: [Meeting.ID]
 
-  init(threads: [Meeting.ID: [Entry]] = [:]) {
+  private let meetingLimit: Int
+  private let questionLimit: Int
+
+  /// - meetingLimit: how many meetings keep a thread. The ones asked about longest ago go first.
+  /// - questionLimit: how many questions a thread keeps. The oldest go first.
+  init(threads: [Meeting.ID: [Entry]] = [:], meetingLimit: Int = 20, questionLimit: Int = 50) {
     self.threads = threads
+    recent = Array(threads.keys)
+    self.meetingLimit = max(1, meetingLimit)
+    self.questionLimit = max(1, questionLimit)
   }
 
   /// The questions about one meeting, oldest first.
@@ -44,6 +59,7 @@ final class MeetingQuestions {
     guard !question.isEmpty, !isWaiting(for: meeting) else { return }
     let entry = Entry(question: question)
     threads[meeting, default: []].append(entry)
+    trim(keeping: meeting)
     await answer(entry.id, about: meeting, with: engine)
   }
 
@@ -55,6 +71,22 @@ final class MeetingQuestions {
     else { return }
     threads[meeting]?[index].reply = .waiting
     await answer(entry, about: meeting, with: engine)
+  }
+
+  /// Keeps what is held small: the newest questions of a thread, and the threads asked about last.
+  /// A thread that is waiting for an answer is never dropped.
+  private func trim(keeping meeting: Meeting.ID) {
+    if let count = threads[meeting]?.count, count > questionLimit {
+      threads[meeting]?.removeFirst(count - questionLimit)
+    }
+    recent.removeAll { $0 == meeting }
+    recent.append(meeting)
+    var extra = recent.count - meetingLimit
+    for old in recent where extra > 0 && old != meeting && !isWaiting(for: old) {
+      threads[old] = nil
+      extra -= 1
+    }
+    recent.removeAll { threads[$0] == nil }
   }
 
   private func answer(_ entry: Entry.ID, about meeting: Meeting.ID, with engine: MeetingEngine) async {

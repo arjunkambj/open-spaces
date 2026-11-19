@@ -6,7 +6,6 @@ import WisperEngine
 enum SettingsSnapshots {
   /// The size of the settings card inside the Mac settings window.
   private static let card = CGSize(width: 860, height: 600)
-  private static let canvas = SnapshotCase.Canvas.custom(width: card.width + 60, height: card.height + 60)
 
   @MainActor static var cases: [SnapshotCase] {
     var cases: [SnapshotCase] = []
@@ -29,6 +28,46 @@ enum SettingsSnapshots {
             $0.textModel = "llama-3.3-70b"
             $0.apiBaseURL = "http://localhost:11434/v1"
           })
+        }
+      ),
+      // The address was changed to another server: the key saved for OpenAI is not used there.
+      mac(
+        "settings-openai-other-server",
+        SettingsPreview(section: .openAI),
+        model: {
+          SetupSnapshotModels.make(
+            keyHost: APIServer.openAIHost,
+            settings: { $0.apiBaseURL = "https://proxy.example.com/v1" }
+          )
+        }
+      ),
+      // Tall, so the server part at the foot of the section shows.
+      mac(
+        "settings-openai-not-private",
+        SettingsPreview(section: .openAI),
+        height: 860,
+        model: { SetupSnapshotModels.make(settings: { $0.apiBaseURL = "http://models.example.com/v1" }) }
+      ),
+      phone(
+        "settings-openai-not-private-phone",
+        SettingsPreview(section: .openAI),
+        height: 1_180,
+        model: {
+          SetupSnapshotModels.make(
+            keyHost: APIServer.openAIHost,
+            onPhone: true,
+            settings: { $0.apiBaseURL = "http://192.168.1.20:8080/v1" }
+          )
+        }
+      ),
+      mac(
+        "settings-key-dialog-server",
+        SettingsPreview(section: .openAI, dialog: .apiKey),
+        model: {
+          SetupSnapshotModels.make(
+            keyHost: APIServer.openAIHost,
+            settings: { $0.apiBaseURL = "https://proxy.example.com/v1" }
+          )
         }
       ),
       mac(
@@ -57,6 +96,12 @@ enum SettingsSnapshots {
         SettingsPreview(section: .meetings),
         model: { SetupSnapshotModels.make(permissions: [.microphone: .granted, .accessibility: .granted]) }
       ),
+      // No iPhone has the wisper program. This one shows that the code wraps in a narrow box.
+      phone(
+        "settings-agents-narrow",
+        SettingsPreview(section: .agents),
+        model: { SetupSnapshotModels.make() }
+      ),
       phone(
         "settings-agents-iphone",
         SettingsPreview(section: .agents),
@@ -71,25 +116,39 @@ enum SettingsSnapshots {
     return cases
   }
 
+  /// - height: a taller card than the window's, to show a section down to its foot.
   @MainActor private static func mac(
     _ name: String,
     _ preview: SettingsPreview,
+    height: CGFloat = card.height,
     model: (@MainActor () -> AppModel)? = { SetupSnapshotModels.make() }
   ) -> SnapshotCase {
-    SnapshotCase(name, canvas: canvas, model: model) {
+    SnapshotCase(name, canvas: .custom(width: card.width + 60, height: height + 60), model: model) {
       SettingsScreen(shortcuts: AnyView(ShortcutsStandIn()), onClose: {}, preview: preview)
-        .frame(width: card.width, height: card.height)
+        .frame(width: card.width, height: height)
         .modalSurface()
     }
   }
 
+  /// - height: a taller screen than an iPhone's, to show a section down to its foot.
   @MainActor private static func phone(
     _ name: String,
     _ preview: SettingsPreview,
+    height: CGFloat? = nil,
     model: (@MainActor () -> AppModel)? = { SetupSnapshotModels.make(onPhone: true) }
   ) -> SnapshotCase {
-    SnapshotCase(name, canvas: .phone, model: model) {
-      SettingsScreen(onClose: {}, preview: preview)
+    let canvas = height.map {
+      SnapshotCase.Canvas.custom(width: SnapshotCase.Canvas.phone.size.width, height: $0)
+    }
+    return SnapshotCase(name, canvas: canvas ?? .phone, model: model) {
+      if canvas == nil {
+        SettingsScreen(onClose: {}, preview: preview)
+      } else {
+        // A custom canvas is drawn as a Mac's: say it is a phone, on the phone's background.
+        SettingsScreen(onClose: {}, preview: preview)
+          .environment(\.wisperIdiom, .phone)
+          .background(Wisper.Color.panel)
+      }
     }
   }
 }
@@ -111,9 +170,12 @@ private struct ShortcutsStandIn: View {
 /// App models for the snapshots of settings and onboarding: made-up data on in-memory fakes.
 @MainActor
 enum SetupSnapshotModels {
+  /// - keyHost: the server the saved key is for. `nil` means the server the settings name, so
+  ///   the key counts; name another host to show a key that is not used.
   static func make(
     onboarded: Bool = true,
     hasAPIKey: Bool = true,
+    keyHost: String? = nil,
     permissions: [Permission: PermissionStatus] = [
       .microphone: .granted, .accessibility: .granted, .systemAudio: .granted,
     ],
@@ -149,7 +211,10 @@ enum SetupSnapshotModels {
           dictations: SampleData.dictations(),
           meetings: SampleData.meetings()
         ),
-        secrets: InMemorySecretStore(apiKey: hasAPIKey ? "sk-demo" : nil),
+        secrets: InMemorySecretStore(
+          apiKey: hasAPIKey ? "sk-demo" : nil,
+          host: keyHost ?? (try? settings.apiServer())?.host ?? APIServer.openAIHost
+        ),
         capture: FakeAudioCapture(devices: devices),
         transcriber: FakeTranscriber(text: "This is a demo dictation."),
         languageModel: FakeLanguageModel(text: "This is a demo dictation."),

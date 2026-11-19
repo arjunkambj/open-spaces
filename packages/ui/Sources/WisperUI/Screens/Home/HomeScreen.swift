@@ -2,12 +2,6 @@ import SwiftUI
 import WisperDomain
 import WisperEngine
 
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-  import AppKit
-#elseif canImport(UIKit)
-  import UIKit
-#endif
-
 /// Home: greeting, stats and the dictation history. Reads `AppModel` from the environment.
 public struct HomeScreen: View {
   @Environment(AppModel.self) private var model
@@ -83,7 +77,8 @@ public struct HomeScreen: View {
         }
       }
     } footer: {
-      Button("Cancel") { isConfirmingDelete = false }.buttonStyle(.wisper())
+      // Return must never delete: it presses Cancel.
+      Button("Cancel") { isConfirmingDelete = false }.buttonStyle(.wisper()).keyboardShortcut(.defaultAction)
       Button("Delete") { confirmDelete() }.buttonStyle(.wisper(.destructive))
     }
     .onChange(of: query) { limit = HomeHistory.pageSize }
@@ -94,7 +89,7 @@ public struct HomeScreen: View {
 
   /// The key warning when there is no key, otherwise the how-to tip until it is dismissed.
   @ViewBuilder private var notice: some View {
-    if model.isLoaded && !model.hasAPIKey {
+    if model.isLoaded && KeyNeed.isMissing(hasKey: model.hasAPIKey, settings: model.settings) {
       Banner(
         .warning,
         title: "Add your OpenAI key to start dictating",
@@ -247,12 +242,7 @@ public struct HomeScreen: View {
   // MARK: - Actions
 
   private func copy(_ dictation: Dictation) {
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(dictation.text, forType: .string)
-    #elseif canImport(UIKit)
-      UIPasteboard.general.string = dictation.text
-    #endif
+    ScreenClipboard.copy(dictation.text, as: .personal)
     toast = Toast("Copied")
   }
 
@@ -282,12 +272,12 @@ public struct HomeScreen: View {
     guard retryingID == nil else { return }
     retryingID = dictation.id
     Task {
-      let result = await model.dictation.retry(dictation.id)
+      // Home is in front, so no other app is waiting for this text: it is saved and copied,
+      // never typed somewhere. When it fails again, the row goes on saying why.
+      let outcome = HomeRetry(await model.dictation.retry(dictation.id, insert: false))
       retryingID = nil
-      toast =
-        result == nil
-        ? Toast("That did not work. Try again in a moment.", tone: .error)
-        : Toast("Done. Your text is ready.")
+      if let text = outcome.textToCopy { ScreenClipboard.copy(text, as: .personal) }
+      toast = outcome.toast
     }
   }
 

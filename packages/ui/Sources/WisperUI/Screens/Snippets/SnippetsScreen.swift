@@ -69,6 +69,7 @@ public struct SnippetsScreen: View {
       Button("Cancel") { isEditing = false }.buttonStyle(.wisper())
       Button(editor.original == nil ? "Add snippet" : "Save") { save() }
         .buttonStyle(.wisper(.primary))
+        .keyboardShortcut(.defaultAction)
         .disabled(!editor.check(in: model.snippets).isValid)
     }
     .dialog(
@@ -82,7 +83,8 @@ public struct SnippetsScreen: View {
         }
       }
     } footer: {
-      Button("Cancel") { isConfirmingDelete = false }.buttonStyle(.wisper())
+      // Return must never delete: it presses Cancel.
+      Button("Cancel") { isConfirmingDelete = false }.buttonStyle(.wisper()).keyboardShortcut(.defaultAction)
       Button("Delete") { confirmDelete() }.buttonStyle(.wisper(.destructive))
     }
   }
@@ -198,6 +200,8 @@ public struct SnippetsScreen: View {
   }
 
   private func save() {
+    // Return in a field can reach this twice: from the field and from the default button.
+    guard isEditing else { return }
     guard editor.check(in: model.snippets).isValid else {
       editor.showsProblems = true
       return
@@ -264,7 +268,8 @@ private struct SnippetEditorFields: View {
       "When I say",
       text: $editor.trigger,
       placeholder: "For example, my calendar link",
-      error: triggerProblem?.message
+      error: triggerProblem?.message,
+      focusOnAppear: true
     )
     .onSubmit(onSubmit)
     WisperTextEditor(

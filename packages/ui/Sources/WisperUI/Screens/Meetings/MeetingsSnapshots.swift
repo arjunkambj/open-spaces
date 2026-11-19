@@ -23,6 +23,13 @@ enum MeetingsSnapshots {
       SnapshotCase("meetings-live", model: { recording() }) { screen() },
       SnapshotCase("meetings-live-phone", canvas: .phone, model: { recording() }) { screen() },
       SnapshotCase("meetings-live-quiet", model: { recording(heard: false) }) { screen() },
+      // The Mac could not record what it plays: the engine says so while the meeting goes on.
+      SnapshotCase("meetings-live-microphone-only", model: { recording(microphoneOnly: true) }) { screen() },
+      SnapshotCase(
+        "meetings-live-microphone-only-phone",
+        canvas: .phone,
+        model: { recording(microphoneOnly: true) }
+      ) { screen() },
       SnapshotCase("meetings-search", model: { model(MeetingSamples.many) }) {
         screen(preset: MeetingsPreset(query: "billing", showsExplainer: false))
       },
@@ -103,6 +110,13 @@ enum MeetingsSnapshots {
       SnapshotCase("meeting-part-missing", model: { model(MeetingSamples.many) }) {
         screen(MeetingSamples.partID, preset: MeetingsPreset(tab: .transcript))
       },
+      // What was lost is gone for good: the notice has no button.
+      SnapshotCase("meeting-part-lost", model: { model(MeetingSamples.many) }) {
+        screen(MeetingSamples.lostID)
+      },
+      SnapshotCase("meeting-part-lost-phone", canvas: .phone, model: { model(MeetingSamples.many) }) {
+        screen(MeetingSamples.lostID)
+      },
       SnapshotCase("meeting-no-notes", model: { model(MeetingSamples.many) }) {
         screen(MeetingSamples.noNotesID)
       },
@@ -152,7 +166,7 @@ enum MeetingsSnapshots {
 
   /// A model whose engine is recording, with a few lines already heard.
   @MainActor
-  private static func recording(heard: Bool = true) -> AppModel {
+  private static func recording(heard: Bool = true, microphoneOnly: Bool = false) -> AppModel {
     let capture = FakeAudioCapture()
     let lines = MeetingSamples.liveLines
     let transcriber = FakeTranscriber { request in
@@ -161,6 +175,12 @@ enum MeetingsSnapshots {
     let model = model(capture: capture, transcriber: transcriber)
     Task {
       _ = try? await model.meetings.start(title: "Pricing review")
+      if microphoneOnly {
+        // What the engine reports on a Mac whose system sound could not be recorded.
+        model.meetings.lastError =
+          "Only your microphone is being recorded. "
+          + WisperError.permissionDenied(.systemAudio).localizedDescription
+      }
       guard heard else { return }
       for _ in 0..<3 { capture.sessions.last?.emit(duration: 30) }
     }
@@ -191,6 +211,7 @@ private enum MeetingSamples {
   static let partID = id(5)
   static let noNotesID = id(6)
   static let checklistID = id(7)
+  static let lostID = id(8)
 
   /// A meeting whose notes are only a checklist, with a question that could not be answered.
   static var checklist: [Meeting] {
@@ -332,6 +353,7 @@ private enum MeetingSamples {
     let today = ago(hours: 0.4)
     let earlier = ago(hours: 2)
     let partStart = ago(hours: 30)
+    let lostStart = ago(hours: 3 * 24)
     let longStart = ago(hours: 5 * 24)
     let noNotesStart = ago(hours: 40 * 24)
     let old = ago(hours: 400 * 24)
@@ -391,6 +413,25 @@ private enum MeetingSamples {
       notes: MeetingNotes(summary: "Four candidates are in the last round for the design role."),
       tags: ["hiring"]
     )
+    let lost = Meeting(
+      id: lostID,
+      title: "Call with Dana",
+      startedAt: lostStart,
+      endedAt: lostStart.addingTimeInterval(1_140),
+      status: .ready,
+      failure: "The app closed while this meeting was being recorded. The last part could not be saved.",
+      segments: [
+        talk,
+        TranscriptSegment(
+          speaker: .others,
+          start: 15,
+          end: 28,
+          text: "The contract is ready. We only need the new start date."
+        ),
+      ],
+      notes: MeetingNotes(summary: "The contract is ready apart from the start date."),
+      tags: ["legal"]
+    )
     let long = Meeting(
       id: longID,
       title: "Quarterly planning with the platform, growth and support teams: goals, budget and hiring",
@@ -425,6 +466,6 @@ private enum MeetingSamples {
       failure: "The notes could not be written. OpenAI did not accept your API key. Check it in Settings.",
       segments: [talk]
     )
-    return [processing, failed, sync, part, long, noNotes, kickoff]
+    return [processing, failed, sync, part, lost, long, noNotes, kickoff]
   }
 }

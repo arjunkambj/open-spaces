@@ -16,6 +16,8 @@ struct MeetingsList: View {
   @State private var query: String
   /// The meetings the search found. `nil` while nothing is being searched for.
   @State private var found: Set<Meeting.ID>?
+  /// Goes up when the stored meetings change under a search, so the search runs again.
+  @State private var searchRound = 0
   @State private var deleting: Meeting?
   @State private var toast: Toast?
   @State private var isStarting = false
@@ -32,6 +34,7 @@ struct MeetingsList: View {
   var body: some View {
     let live = model.meetings.live
     let past = pastMeetings(liveID: live?.meetingID)
+    let searching = MeetingSearchTrigger(query: query, round: searchRound)
     Page(title: "Meetings") {
       if idiom == .mac, hasPastMeetings(liveID: live?.meetingID) {
         SearchField(text: $query, placeholder: "Search meetings")
@@ -69,7 +72,11 @@ struct MeetingsList: View {
     .meetingDeleteDialog($deleting) { meeting in
       MeetingActions.delete(meeting.id, in: model)
     }
-    .task(id: query) { await search() }
+    .task(id: searching) { await search(for: searching.text) }
+    .onChange(of: model.meetingList) {
+      // Added, changed or deleted, here or by an agent: what the search found may be out of date.
+      searchRound = searching.afterMeetingsChanged().round
+    }
     .onChange(of: live == nil) { _, ended in
       // A notice about the recording that just ended has nothing left to say.
       if ended { model.meetings.lastError = nil }
@@ -114,8 +121,7 @@ struct MeetingsList: View {
 
   /// Waits for a pause in typing, then asks the library, which also looks inside notes and
   /// transcripts. The first search is not held back, so results show as soon as typing starts.
-  private func search() async {
-    let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+  private func search(for text: String) async {
     guard !text.isEmpty else {
       found = nil
       return
@@ -165,12 +171,16 @@ struct MeetingsList: View {
   // MARK: Notices
 
   private var hasNotices: Bool {
-    model.meetings.lastError != nil || (model.isLoaded && !model.hasAPIKey)
+    model.meetings.lastError != nil || needsKey
+  }
+
+  private var needsKey: Bool {
+    model.isLoaded && KeyNeed.isMissing(hasKey: model.hasAPIKey, settings: model.settings)
   }
 
   @ViewBuilder
   private func notices(isLive: Bool) -> some View {
-    if model.isLoaded, !model.hasAPIKey {
+    if needsKey {
       Banner(
         .warning,
         title: "Add your OpenAI key first",
@@ -209,7 +219,8 @@ struct MeetingsList: View {
   private var explainer: some View {
     let sound =
       idiom == .phone
-      ? "Open Wisper records your microphone."
+      ? "Open Wisper records your microphone. An iPhone cannot record the sound of other apps, so put "
+        + "a call on speaker."
       : "Open Wisper records your microphone and the sound your Mac plays, so both sides of a call "
         + "are captured."
     return HeroCard(
@@ -261,6 +272,9 @@ private struct MeetingRow: View {
   @Environment(\.wisperIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
   @State private var isHovered = false
+  /// Whether the keyboard is on the row, or on one of its actions.
+  @FocusState private var isFocused: Bool
+  @FocusState private var actionIsFocused: Bool
 
   var body: some View {
     let phone = idiom == .phone
@@ -285,21 +299,23 @@ private struct MeetingRow: View {
         HStack(spacing: Wisper.Space.xs) { badges(problem) }
           .layoutPriority(1)
       }
-      if !phone, let problem, problem.isSevere || phase == .interrupted {
-        Button(problem.actionTitle) { onFix(problem.remedy) }
+      if !phone, let problem, let remedy = problem.remedy, problem.isSevere || phase == .interrupted {
+        Button(problem.actionTitle) { onFix(remedy) }
           .buttonStyle(.wisper(.tertiary, size: .small))
       }
       HStack(spacing: Wisper.Space.xxs) {
         if !phone { IconButton("doc.on.doc", label: "Copy as Markdown", action: onCopy) }
         OverflowMenu(label: "More for \(meeting.title)") {
           Button("Open", action: onOpen)
-          if let problem { Button(problem.actionTitle) { onFix(problem.remedy) } }
+          if let problem, let remedy = problem.remedy { Button(problem.actionTitle) { onFix(remedy) } }
           Button("Copy as Markdown", action: onCopy)
           Divider()
           Button("Delete", role: .destructive, action: onDelete)
         }
       }
-      .opacity(phone || hovered ? 1 : 0)
+      // Tab reaches the actions even while they are unseen, so they show for the keyboard too.
+      .focused($actionIsFocused)
+      .opacity(phone || hovered || isFocused || actionIsFocused ? 1 : 0)
     }
     .padding(.horizontal, Wisper.Space.l)
     .padding(.vertical, Wisper.Space.m)
@@ -307,8 +323,10 @@ private struct MeetingRow: View {
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
     .animation(Wisper.Motion.quick, value: isHovered)
+    .animation(Wisper.Motion.quick, value: isFocused || actionIsFocused)
     .onTapGesture(perform: onOpen)
     .focusable(true, interactions: .activate)
+    .focused($isFocused)
     .onKeyPress(.return) {
       onOpen()
       return .handled

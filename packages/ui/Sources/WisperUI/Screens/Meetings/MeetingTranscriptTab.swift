@@ -131,6 +131,8 @@ private struct MeetingTurnRow: View {
 /// to move between them. It stays put while the transcript scrolls.
 struct MeetingFindBar: View {
   @Binding var text: String
+  /// Whether the matches are those of some text. False while there is none, when no count shows.
+  let isSearching: Bool
   /// How many matches there are, and which one is current (from 0).
   let count: Int
   let index: Int
@@ -141,7 +143,6 @@ struct MeetingFindBar: View {
   @Environment(\.wisperIdiom) private var idiom
 
   var body: some View {
-    let isSearching = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     MeetingBottomBar {
       HStack(spacing: Wisper.Space.xs) {
         WisperTextField(text: $text, placeholder: "Find in transcript")

@@ -40,6 +40,15 @@ enum OnboardingSnapshots {
         onPhone: true
       ),
       flow(
+        "onboarding-key-server-not-private",
+        OnboardingPreview(step: .key, server: "http://models.example.com/v1")
+      ),
+      flow(
+        "onboarding-key-server-not-private-phone",
+        OnboardingPreview(step: .key, server: "http://192.168.1.20:8080/v1"),
+        onPhone: true
+      ),
+      flow(
         "onboarding-permissions-allowed",
         OnboardingPreview(step: .permissions),
         permissions: [.microphone: .granted, .accessibility: .granted, .systemAudio: .granted]

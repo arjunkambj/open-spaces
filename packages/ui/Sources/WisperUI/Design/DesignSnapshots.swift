@@ -564,7 +564,7 @@ private struct DialogGallery: View {
         .toggleStyle(.wisper)
       } footer: {
         Button("Cancel") {}.buttonStyle(.wisper())
-        Button("Add word") {}.buttonStyle(.wisper(.primary)).disabled(true)
+        Button("Add word") {}.buttonStyle(.wisper(.primary)).keyboardShortcut(.defaultAction).disabled(true)
       }
   }
 }

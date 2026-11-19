@@ -11,7 +11,8 @@ import WisperEngine
 public struct MeetingsScreen: View {
   @Binding private var selection: Meeting.ID?
   private let preset: MeetingsPreset
-  /// Lives here, above the open meeting, so answers are still there after going back to the list.
+  /// The threads of this run of the app, kept outside the screen: they are still there after
+  /// going back to the list, and after another section of the hub was shown.
   @State private var questions: MeetingQuestions
 
   public init(selection: Binding<Meeting.ID?>) {
@@ -22,7 +23,7 @@ public struct MeetingsScreen: View {
   init(selection: Binding<Meeting.ID?>, preset: MeetingsPreset) {
     _selection = selection
     self.preset = preset
-    _questions = State(initialValue: preset.questions ?? MeetingQuestions())
+    _questions = State(initialValue: preset.questions ?? .session)
   }
 
   public var body: some View {

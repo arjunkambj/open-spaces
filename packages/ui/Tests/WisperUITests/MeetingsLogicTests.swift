@@ -174,6 +174,40 @@ struct MeetingsLogicTests {
     #expect(problem?.isSevere == false)
   }
 
+  /// The engine's own words for audio that was never saved. Nothing can bring it back.
+  private static let partLost =
+    "The app closed while this meeting was being recorded. The last part could not be saved."
+
+  @Test func aLostPartIsSaidWithoutARetry() {
+    let meeting = Meeting(title: "a", status: .ready, failure: Self.partLost)
+    let problem = MeetingsLogic.problem(of: meeting, phase: .ready)
+    #expect(problem?.title == "The app closed while this meeting was being recorded.")
+    #expect(problem?.message == "The last part could not be saved.")
+    #expect(problem?.remedy == nil)
+    #expect(problem?.isSevere == false)
+  }
+
+  @Test func aFailedMeetingThatLostItsAudioDoesNotPromiseARetry() {
+    let meeting = Meeting(title: "a", status: .failed, failure: Self.partLost)
+    let problem = MeetingsLogic.problem(of: meeting, phase: .failed)
+    #expect(problem?.remedy == nil)
+    #expect(problem?.message == "The last part could not be saved.")
+    #expect(problem?.isSevere == true)
+  }
+
+  @Test func aMeetingThatCouldNotBeSavedOffersARetry() {
+    let meeting = Meeting(
+      title: "a",
+      status: .failed,
+      failure: "This meeting could not be saved. The disk is full."
+    )
+    let problem = MeetingsLogic.problem(of: meeting, phase: .failed)
+    #expect(problem?.title == "This meeting could not be saved.")
+    #expect(problem?.message == "The disk is full.")
+    #expect(problem?.remedy == .retry)
+    #expect(problem?.actionTitle == "Try again")
+  }
+
   @Test func notesThatCouldNotBeWrittenOfferWritingThemAgain() {
     let meeting = Meeting(
       title: "a",
@@ -191,6 +225,28 @@ struct MeetingsLogicTests {
     #expect(MeetingsLogic.problem(of: failed, phase: .processing) == nil)
     #expect(MeetingsLogic.problem(of: failed, phase: .live) == nil)
     #expect(MeetingsLogic.problem(of: Meeting(title: "c"), phase: .interrupted)?.remedy == .retry)
+  }
+
+  // MARK: Searching the list
+
+  @Test func theListSearchesAgainWhenTheMeetingsChangeUnderASearch() {
+    let typed = MeetingSearchTrigger(query: "  billing ")
+    #expect(typed.text == "billing")
+    // New text is a new search.
+    #expect(typed != MeetingSearchTrigger(query: "billing plan"))
+    // Blank space around the same text is not.
+    #expect(typed == MeetingSearchTrigger(query: "billing"))
+    // A meeting was added, changed or deleted: the same text is looked for again.
+    let after = typed.afterMeetingsChanged()
+    #expect(after != typed)
+    #expect(after.text == "billing")
+    #expect(after.afterMeetingsChanged() != after)
+  }
+
+  @Test func nothingIsSearchedAgainWhileNothingIsTyped() {
+    let idle = MeetingSearchTrigger(query: "   ")
+    #expect(idle.text.isEmpty)
+    #expect(idle.afterMeetingsChanged() == idle)
   }
 
   // MARK: Tags

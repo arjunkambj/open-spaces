@@ -65,6 +65,7 @@ public struct DictionaryScreen: View {
       Button("Cancel") { isEditing = false }.buttonStyle(.wisper())
       Button(editor.original == nil ? "Add word" : "Save") { save() }
         .buttonStyle(.wisper(.primary))
+        .keyboardShortcut(.defaultAction)
         .disabled(!editor.check(in: model.words).isValid)
     }
     .dialog(
@@ -75,7 +76,8 @@ public struct DictionaryScreen: View {
         : "Open Wisper will stop spelling it this way and stop replacing “\(deleting?.replaces ?? "")”."
     ) {
     } footer: {
-      Button("Cancel") { isConfirmingDelete = false }.buttonStyle(.wisper())
+      // Return must never delete: it presses Cancel.
+      Button("Cancel") { isConfirmingDelete = false }.buttonStyle(.wisper()).keyboardShortcut(.defaultAction)
       Button("Delete") { confirmDelete() }.buttonStyle(.wisper(.destructive))
     }
   }
@@ -174,6 +176,8 @@ public struct DictionaryScreen: View {
   }
 
   private func save() {
+    // Return in a field can reach this twice: from the field and from the default button.
+    guard isEditing else { return }
     guard editor.check(in: model.words).isValid else {
       editor.showsProblems = true
       return
@@ -244,7 +248,8 @@ private struct DictionaryEditorFields: View {
       "Word or name",
       text: $editor.text,
       placeholder: "For example, Kubernetes",
-      error: wordProblem?.message
+      error: wordProblem?.message,
+      focusOnAppear: true
     )
     .onSubmit(onSubmit)
     VStack(alignment: .leading, spacing: Wisper.Space.s) {

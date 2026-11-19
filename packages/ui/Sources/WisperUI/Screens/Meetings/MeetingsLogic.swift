@@ -1,5 +1,6 @@
 import Foundation
 import WisperDomain
+import WisperEngine
 
 /// Where a meeting is in its life, as the screens show it.
 enum MeetingPhase: Equatable, Sendable {
@@ -25,7 +26,9 @@ struct MeetingProblem: Equatable, Sendable {
 
   var title: String
   var message: String?
-  var remedy: Remedy
+  /// What can be done about it. `nil` when nothing can: what was lost is gone for good, so the
+  /// text is shown without a button.
+  var remedy: Remedy?
   /// The label of the button that runs the remedy.
   var actionTitle: String
   /// Nothing of the meeting could be used. Otherwise only a part is missing.
@@ -54,6 +57,26 @@ struct TranscriptMatch: Equatable {
   var turn: UUID
   var segment: UUID
   var range: Range<String.Index>
+}
+
+/// What the list's search runs for. A value that differs from the last one means "search again":
+/// for new text, and when the stored meetings changed while there is text to look for.
+struct MeetingSearchTrigger: Equatable, Sendable {
+  /// The text to look for, without the blank space around it. Empty means nothing is searched for.
+  let text: String
+  /// How many times the stored meetings changed under a search.
+  let round: Int
+
+  init(query: String, round: Int = 0) {
+    text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    self.round = round
+  }
+
+  /// The trigger once the stored meetings have changed: a new one while searching, so that the
+  /// results follow a meeting that was added, changed or deleted; the same one otherwise.
+  func afterMeetingsChanged() -> MeetingSearchTrigger {
+    text.isEmpty ? self : MeetingSearchTrigger(query: text, round: round &+ 1)
+  }
 }
 
 /// The logic of the Meetings screens that does not need a view: grouping, wording, searching.
@@ -89,10 +112,12 @@ enum MeetingsLogic {
       )
     case .failed:
       let text = notice(meeting.failure ?? "")
+      let canRetry = MeetingEngine.canRetry(meeting)
       return MeetingProblem(
         title: text.title.isEmpty ? "This meeting could not be finished." : text.title,
-        message: text.message ?? "The recording is kept on this device, so you can try again.",
-        remedy: .retry,
+        message: text.message
+          ?? (canRetry ? "The recording is kept on this device, so you can try again." : nil),
+        remedy: canRetry ? .retry : nil,
         actionTitle: "Try again",
         isSevere: true
       )
@@ -100,10 +125,14 @@ enum MeetingsLogic {
       guard let failure = meeting.failure, !failure.isEmpty else { return nil }
       let text = notice(failure)
       let notesOnly = failure.hasPrefix(notesFailure)
+      // The engine knows which failures a new try can put right. A part that was never saved
+      // is not one of them: the meeting says so, and there is nothing to press.
+      let remedy: MeetingProblem.Remedy? =
+        notesOnly ? .writeNotes : MeetingEngine.canRetry(meeting) ? .retry : nil
       return MeetingProblem(
         title: text.title,
         message: text.message,
-        remedy: notesOnly ? .writeNotes : .retry,
+        remedy: remedy,
         actionTitle: notesOnly ? "Write notes" : "Try again",
         isSevere: false
       )

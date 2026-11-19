@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import WisperDomain
+import WisperEngine
 
 @testable import WisperUI
 
@@ -162,4 +163,56 @@ private func dictation(_ text: String, at created: Date, app: String? = nil, raw
       #expect(!HomeText.keyLabels(combo).contains { $0.hasPrefix("Key ") })
     }
   }
+}
+
+// MARK: Retry from Home
+
+@Test func aRetryThatWorkedCopiesTheTextAndSaysSo() {
+  let done = Dictation(rawText: "hello there", text: "Hello there.", duration: 2)
+  let outcome = HomeRetry(done)
+  #expect(outcome.textToCopy == "Hello there.")
+  #expect(outcome.toast == Toast("Copied to the clipboard"))
+}
+
+@Test func aRetryThatFailedCopiesNothing() {
+  let outcome = HomeRetry(nil)
+  #expect(outcome.textToCopy == nil)
+  #expect(outcome.toast.tone == .error)
+  // An entry that is still a failure has no text to copy either.
+  let stillFailed = Dictation(rawText: "", text: "", duration: 2, audioFile: "a.m4a", failure: "No.")
+  #expect(HomeRetry(stillFailed).textToCopy == nil)
+}
+
+@Test @MainActor func aRetryFromHomeNeverTypesIntoAnotherApp() async throws {
+  // What a quit in the middle of a dictation leaves behind: a failed entry with its audio.
+  let unfinished = Dictation(
+    rawText: "",
+    text: "",
+    duration: 3,
+    audioFile: "kept-\(UUID().uuidString).m4a",
+    failure: "Open Wisper closed before this dictation was finished. Try it again."
+  )
+  let library = InMemoryLibrary(
+    settings: Settings(userName: "Alex", onboardedAt: Date()),
+    dictations: [unfinished]
+  )
+  let audio = try await library.dictationAudioDirectory().appendingPathComponent(unfinished.audioFile ?? "")
+  try Data([1, 2, 3]).write(to: audio)
+  defer { try? FileManager.default.removeItem(at: audio) }
+  let target = FakeTextTarget()
+  let engine = DictationEngine(
+    library: library,
+    capture: FakeAudioCapture(),
+    transcriber: FakeTranscriber(text: "See you at ten."),
+    languageModel: FakeLanguageModel(text: "See you at ten."),
+    target: target
+  )
+
+  let outcome = HomeRetry(await engine.retry(unfinished.id, insert: false))
+
+  #expect(outcome.textToCopy == "See you at ten.")
+  #expect(await target.inserted.isEmpty)
+  let stored = try await library.dictations().first { $0.id == unfinished.id }
+  #expect(stored?.failed == false)
+  #expect(stored?.text == "See you at ten.")
 }

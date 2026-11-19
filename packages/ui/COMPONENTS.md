@@ -132,7 +132,7 @@ PageSection("Today") {
 }
 ```
 
-`hoverActions` show while the pointer is over the row on a Mac and always on iPhone. Use `.filled` cards for a few rows that read as one block, `.outlined` for long lists.
+`hoverActions` show while the pointer is over the row on a Mac, and while the keyboard is on the row or on one of the actions; always on iPhone. A row you draw yourself must do the same: Tab reaches an action even while it is unseen, so show the actions when one of them has focus (`.focused` on the group of actions). Use `.filled` cards for a few rows that read as one block, `.outlined` for long lists.
 
 ### Buttons
 
@@ -192,7 +192,8 @@ Underline tabs go at the top of a page. Segmented tabs are for a choice inside a
 ### Fields
 
 ```swift
-WisperTextField(_ label: String? = nil, text:, placeholder: = "", error: String? = nil, isSecure: = false)
+WisperTextField(_ label: String? = nil, text:, placeholder: = "", error: String? = nil, isSecure: = false,
+                focusOnAppear: = false)
 WisperTextEditor(_ label: String? = nil, text:, placeholder: = "", error: String? = nil, height: = 96)
 SearchField(text:, placeholder: = "Search")
 ```
@@ -202,7 +203,7 @@ WisperTextField("OpenAI API key", text: $key, placeholder: "sk-...", error: keyE
   .onSubmit { save() }
 ```
 
-`error` shows red text under the field and a red border. `SearchField` is an icon that opens into a field on a Mac (Escape closes it) and a plain field on iPhone.
+`error` shows red text under the field and a red border. `focusOnAppear: true` puts the cursor in the field when it shows: give it to the first field of a dialog. `SearchField` is an icon that opens into a field on a Mac (Escape closes it) and a plain field on iPhone.
 
 ### Keys
 
@@ -254,12 +255,22 @@ DialogCard(title:, subtitle:, width:, onClose:, content:, footer:)   // only for
 
 ```swift
 .dialog(isPresented: $adding, title: "Add a word", subtitle: "It will be spelled this way from now on.") {
-  WisperTextField(text: $word, placeholder: "Word or name")
+  WisperTextField(text: $word, placeholder: "Word or name", focusOnAppear: true)
 } footer: {
   Button("Cancel") { adding = false }.buttonStyle(.wisper())
-  Button("Add word") { save() }.buttonStyle(.wisper(.primary)).disabled(word.isEmpty)
+  Button("Add word") { save() }.buttonStyle(.wisper(.primary)).keyboardShortcut(.defaultAction)
+    .disabled(word.isEmpty)
 }
 ```
+
+Keys in a dialog:
+
+- **Escape** presses the close button. `DialogCard` gives it `.cancelAction`; do not give a footer button that shortcut too.
+- **Return** presses the button you give `.keyboardShortcut(.defaultAction)`. That is the primary button. When the other button deletes or removes something, give it to **Cancel** instead: Return must never delete.
+- A field's `.onSubmit` and the default button can both fire for one Return. Make the action safe to run twice (`guard isAdding else { return }`).
+- The first text field takes `focusOnAppear: true`, so typing can start at once.
+
+While a dialog or modal is open on a Mac, the view under it is disabled and hidden from VoiceOver: Tab and the pointer stay inside the dialog.
 
 On a Mac the dialog is a centred card on a dimmed layer that covers **the view the modifier is attached to**. Attach it to the outermost view you own (the `Page`); the Mac app attaches window-wide ones, such as settings, to the hub root. Escape, the close button and a click on the dim area close it. On iPhone it is a native sheet. `.modal` is the same thing without the title and footer, for big custom content such as the settings window.
 

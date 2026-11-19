@@ -2,12 +2,6 @@ import SwiftUI
 import WisperDomain
 import WisperEngine
 
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-  import AppKit
-#elseif canImport(UIKit)
-  import UIKit
-#endif
-
 /// Sizes the settings and onboarding screens share with the kit's setting rows.
 enum SetupMetrics {
   /// The side inset of a `SettingRow`, so our own rows and dividers line up with it.
@@ -27,29 +21,6 @@ extension AppModel {
       get: { self.settings[keyPath: keyPath] },
       set: { value in self.update { $0[keyPath: keyPath] = value } }
     )
-  }
-}
-
-/// The system clipboard.
-@MainActor
-enum SetupClipboard {
-  static func copy(_ text: String) {
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(text, forType: .string)
-    #elseif canImport(UIKit)
-      UIPasteboard.general.string = text
-    #endif
-  }
-
-  static func text() -> String? {
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-      NSPasteboard.general.string(forType: .string)
-    #elseif canImport(UIKit)
-      UIPasteboard.general.string
-    #else
-      nil
-    #endif
   }
 }
 
@@ -195,6 +166,36 @@ struct SetupFact: View {
   }
 }
 
+/// What to know about a custom server address, shown under the field it is typed into: the key
+/// goes there, and a warning when the connection can be read by others. Nothing for OpenAI itself.
+///
+/// Both are short lines of text, so they stay in view under the field in a small window.
+struct ServerNotice: View {
+  let address: ServerAddress
+
+  var body: some View {
+    if address.address != nil {
+      VStack(alignment: .leading, spacing: Wisper.Space.s) {
+        Text(ServerAddress.keyNote)
+          .wisperText(.caption)
+          .fixedSize(horizontal: false, vertical: true)
+        if address.isNotPrivate {
+          HStack(alignment: .firstTextBaseline, spacing: Wisper.Space.s) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .wisperText(.caption, color: Wisper.Color.warning)
+              .accessibilityHidden(true)
+            Text("\(ServerAddress.notPrivateTitle). \(ServerAddress.notPrivateMessage)")
+              .wisperText(.caption, color: Wisper.Color.warning)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+          .accessibilityElement(children: .combine)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+}
+
 /// Text to copy, in fixed-width type, with a copy button.
 struct CopyBlock: View {
   private let label: String
@@ -211,20 +212,26 @@ struct CopyBlock: View {
   var body: some View {
     let shape = RoundedRectangle(cornerRadius: Wisper.Radius.control, style: .continuous)
     HStack(alignment: .top, spacing: Wisper.Space.s) {
-      Group {
-        if text.contains("\n") {
-          // Code of several lines keeps its line breaks and scrolls sideways when it is too wide.
-          ScrollView(.horizontal, showsIndicators: false) {
-            code.fixedSize()
+      // Every line is there to read: one that is too wide goes on below, under where it started.
+      VStack(alignment: .leading, spacing: 0) {
+        ForEach(Array(CodeLine.lines(of: text).enumerated()), id: \.offset) { _, line in
+          HStack(alignment: .top, spacing: 0) {
+            Text(line.indent).wisperText(.mono).accessibilityHidden(true)
+            Text(line.code)
+              .wisperText(.mono)
+              .textSelection(.enabled)
+              .fixedSize(horizontal: false, vertical: true)
           }
-        } else {
-          code.fixedSize(horizontal: false, vertical: true)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.vertical, Wisper.Space.s)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(label)
+      .accessibilityValue(text)
       IconButton(copied ? "checkmark" : "doc.on.doc", label: copied ? "Copied" : "Copy \(label)") {
-        SetupClipboard.copy(text)
+        // A command or a path, nothing private.
+        ScreenClipboard.copy(text, as: .plain)
         copied = true
       }
     }
@@ -239,39 +246,63 @@ struct CopyBlock: View {
       if !Task.isCancelled { copied = false }
     }
   }
+}
 
-  private var code: some View {
-    Text(text)
-      .wisperText(.mono)
-      .textSelection(.enabled)
-      .accessibilityLabel(label)
-      .accessibilityValue(text)
+/// One line of code to show: the blank space it starts with, and the rest. They are drawn side
+/// by side, so a line too wide for its box goes on under its own first letter and keeps its indent.
+struct CodeLine: Equatable {
+  var indent: String
+  var code: String
+
+  static func lines(of text: String) -> [CodeLine] {
+    text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map { line in
+      let code = line.drop { $0 == " " || $0 == "\t" }
+      return CodeLine(indent: String(line.dropLast(code.count)), code: String(code))
+    }
   }
 }
 
 /// The field an OpenAI key is pasted into: hidden by default, with show/hide and paste buttons.
 struct APIKeyField: View {
+  private let label: String
   @Binding private var text: String
   private let error: String?
+  private let focusOnAppear: Bool
 
   @State private var isRevealed = false
   @Environment(\.wisperIdiom) private var idiom
 
-  init(text: Binding<String>, error: String? = nil) {
+  /// - label: what the key is for. A key for a server of the person's own is not an OpenAI key.
+  /// - focusOnAppear: puts the cursor in the field when it shows. For a dialog.
+  init(
+    _ label: String = APIKeyField.openAILabel,
+    text: Binding<String>,
+    error: String? = nil,
+    focusOnAppear: Bool = false
+  ) {
+    self.label = label
     _text = text
     self.error = error
+    self.focusOnAppear = focusOnAppear
   }
 
   var body: some View {
     HStack(alignment: .top, spacing: Wisper.Space.xs) {
-      WisperTextField(Self.label, text: $text, placeholder: "sk-...", error: error, isSecure: !isRevealed)
-        #if os(iOS)
-          .textInputAutocapitalization(.never)
-        #endif
-        .autocorrectionDisabled()
+      WisperTextField(
+        label,
+        text: $text,
+        placeholder: "sk-...",
+        error: error,
+        isSecure: !isRevealed,
+        focusOnAppear: focusOnAppear
+      )
+      #if os(iOS)
+        .textInputAutocapitalization(.never)
+      #endif
+      .autocorrectionDisabled()
       VStack(spacing: Self.labelGap) {
         // Takes the room of the field's label, so the buttons line up with the box under it.
-        Text(Self.label)
+        Text(label)
           .wisperText(.captionStrong)
           .hidden()
           .accessibilityHidden(true)
@@ -280,7 +311,7 @@ struct APIKeyField: View {
             isRevealed.toggle()
           }
           IconButton("doc.on.clipboard", label: "Paste key") {
-            if let pasted = SetupClipboard.text() {
+            if let pasted = ScreenClipboard.text() {
               text = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
             }
           }
@@ -290,7 +321,8 @@ struct APIKeyField: View {
     }
   }
 
-  private static let label = "OpenAI API key"
+  static let openAILabel = "OpenAI API key"
+  static let serverLabel = "API key"
   /// The gap `WisperTextField` leaves between its label and its box.
   private static let labelGap: CGFloat = 6
   /// The height of a `WisperTextField`, so the buttons centre on the box and not on the error under it.

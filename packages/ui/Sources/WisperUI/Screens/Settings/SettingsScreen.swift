@@ -54,7 +54,8 @@ public struct SettingsScreen: View {
     ) {
       EmptyView()
     } footer: {
-      Button("Cancel") { dialog = nil }.buttonStyle(.wisper())
+      // Return must never remove or delete: it presses Cancel.
+      Button("Cancel") { dialog = nil }.buttonStyle(.wisper()).keyboardShortcut(.defaultAction)
       Button("Remove key") {
         dialog = nil
         Task { await model.removeAPIKey() }
@@ -68,7 +69,7 @@ public struct SettingsScreen: View {
     ) {
       EmptyView()
     } footer: {
-      Button("Cancel") { dialog = nil }.buttonStyle(.wisper())
+      Button("Cancel") { dialog = nil }.buttonStyle(.wisper()).keyboardShortcut(.defaultAction)
       Button("Delete history") {
         dialog = nil
         model.run { try await $0.library.deleteAllDictations() }
@@ -107,7 +108,10 @@ public struct SettingsScreen: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .overlay(alignment: .topTrailing) {
         if let onClose {
+          // Escape closes settings wherever the cursor is. While one of the dialogs above is
+          // open this button is out of reach, so Escape closes that dialog first.
           IconButton("xmark", label: "Close settings", action: onClose)
+            .keyboardShortcut(.cancelAction)
             .padding(Wisper.Space.xl)
         }
       }

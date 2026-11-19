@@ -198,8 +198,104 @@ func anythingElseIsNotAServerAddress(text: String) {
 }
 
 @Test func keyStatusNamesWhereTheKeyGoes() {
-  #expect(OpenAICopy.keyStatus(hasKey: true, customServer: false).contains("only to OpenAI"))
-  #expect(OpenAICopy.keyStatus(hasKey: true, customServer: true).contains("custom server"))
-  #expect(OpenAICopy.keyStatus(hasKey: false, customServer: true).contains("No key saved"))
+  #expect(OpenAICopy.keyStatus(hasKey: true, customHost: nil).contains("only to OpenAI"))
+  #expect(OpenAICopy.keyStatus(hasKey: true, customHost: "localhost").contains("sent to localhost"))
+  #expect(OpenAICopy.keyStatus(hasKey: false, customHost: "localhost").contains("No key is saved"))
+  #expect(OpenAICopy.keyStatus(hasKey: false, customHost: nil).contains("Add your key"))
   #expect(PrivacyCopy.destinationTitle(customServer: true).contains("custom server"))
+}
+
+// MARK: The key belongs to a server
+
+@Test(arguments: [
+  "http://models.example.com/v1", "http://192.168.1.20:8080", "HTTP://Example.com/api",
+])
+func plainHttpToAnotherMachineIsNotPrivate(text: String) {
+  #expect(ServerAddress(text).isNotPrivate)
+}
+
+@Test(arguments: [
+  "", "https://proxy.example.com/v1", "http://localhost:11434/v1", "http://127.0.0.1:1234",
+  "http://LOCALHOST:8080", "not an address",
+])
+func openAIHttpsAndThisDeviceArePrivate(text: String) {
+  #expect(!ServerAddress(text).isNotPrivate)
+}
+
+@Test func theAddressFieldFollowsTheSharedRule() {
+  // Whatever the field accepts, the app model and the network code accept too, and the reverse.
+  for text in [
+    "http://localhost:11434", "https://Proxy.Example.com/v1/", "localhost:11434", "ftp://x.y", "a b",
+  ] {
+    let shared = try? APIServer(address: text)
+    #expect((ServerAddress(text).address != nil) == (shared != nil))
+    #expect(ServerAddress(text).server?.host == shared?.host)
+  }
+  #expect(ServerAddress("").server == .openAI)
+  #expect(ServerAddress("").customHost == nil)
+  #expect(ServerAddress("https://Proxy.Example.com/v1").customHost == "proxy.example.com")
+  #expect(ServerAddress("nope").customHost == nil)
+}
+
+@Test func theKeyLineNamesTheServerTheKeyGoesTo() {
+  #expect(OpenAICopy.keyStatus(hasKey: true, customHost: nil).contains("only to OpenAI"))
+  #expect(
+    OpenAICopy.keyStatus(hasKey: true, customHost: "proxy.example.com")
+      .contains("sent to proxy.example.com, not to OpenAI")
+  )
+  // After the address changed to another server, the key that was saved is not used there.
+  let other = OpenAICopy.keyStatus(hasKey: false, customHost: "proxy.example.com")
+  #expect(other.contains("No key is saved for proxy.example.com"))
+  #expect(other.contains("never sent to this one"))
+  #expect(
+    OpenAICopy.keyDialogTitle(hasKey: false, customHost: "proxy.example.com")
+      == "Add the key for proxy.example.com"
+  )
+  #expect(OpenAICopy.keyDialogTitle(hasKey: true, customHost: nil) == "Change your OpenAI key")
+  #expect(OpenAICopy.keyDialogSubtitle(customHost: "proxy.example.com").contains("not to OpenAI"))
+  #expect(ServerAddress.keyNote == "Your key will be sent to this server instead of OpenAI.")
+}
+
+@Test func aMissingKeyIsOnlyAWarningForOpenAIItself() {
+  #expect(KeyNeed.isMissing(hasKey: false, settings: Settings()))
+  #expect(!KeyNeed.isMissing(hasKey: true, settings: Settings()))
+  // A server of the person's own may not need a key.
+  #expect(!KeyNeed.isMissing(hasKey: false, settings: Settings(apiBaseURL: "http://localhost:11434/v1")))
+  // An address that cannot be used is another problem, said elsewhere.
+  #expect(!KeyNeed.isMissing(hasKey: false, settings: Settings(apiBaseURL: "nope")))
+}
+
+@Test func aSavedKeyCountsOnlyForTheServerItWasSavedFor() {
+  let openAI = Settings()
+  let proxy = Settings(apiBaseURL: "https://proxy.example.com/v1")
+  #expect(KeyNeed.savedKeyApplies(hasKey: true, stored: openAI, typed: .openAI))
+  #expect(!KeyNeed.savedKeyApplies(hasKey: false, stored: openAI, typed: .openAI))
+  // Typing another server: the key saved for OpenAI is not one for it.
+  #expect(
+    !KeyNeed.savedKeyApplies(hasKey: true, stored: openAI, typed: ServerAddress("https://proxy.example.com"))
+  )
+  // Going back to OpenAI: the key saved for the proxy is not an OpenAI key.
+  #expect(!KeyNeed.savedKeyApplies(hasKey: true, stored: proxy, typed: .openAI))
+  // The same host, written another way, is the same server.
+  #expect(
+    KeyNeed.savedKeyApplies(
+      hasKey: true,
+      stored: proxy,
+      typed: ServerAddress("https://PROXY.example.com/api")
+    )
+  )
+  #expect(!KeyNeed.savedKeyApplies(hasKey: true, stored: proxy, typed: .invalid))
+}
+
+// MARK: Code blocks
+
+@Test func aCodeLineKeepsItsIndentApartFromItsText() {
+  let lines = CodeLine.lines(of: "{\n  \"a\": {\n    \"b\": 1\n  }\n}")
+  #expect(lines.map(\.indent) == ["", "  ", "    ", "  ", ""])
+  #expect(lines.map(\.code) == ["{", "\"a\": {", "\"b\": 1", "}", "}"])
+  // Nothing of the text is lost, blank lines included.
+  let text = AgentSetup.jsonConfig(toolPath: "/Applications/Open Wisper.app/Contents/MacOS/wisper")
+  #expect(CodeLine.lines(of: text).map { $0.indent + $0.code }.joined(separator: "\n") == text)
+  #expect(CodeLine.lines(of: "a\n\nb").count == 3)
+  #expect(CodeLine.lines(of: "one line") == [CodeLine(indent: "", code: "one line")])
 }

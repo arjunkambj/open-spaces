@@ -67,6 +67,9 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// What someone typed into the "custom server address" field.
+///
+/// What counts as a usable address is decided by `APIServer`, the one rule the app model and
+/// the network code follow too, so this field can never accept what they would refuse.
 enum ServerAddress: Equatable, Sendable {
   /// Nothing typed: use OpenAI itself.
   case openAI
@@ -84,18 +87,7 @@ enum ServerAddress: Equatable, Sendable {
       self = .openAI
       return
     }
-    guard
-      !trimmed.contains(where: \.isWhitespace),
-      let parts = URLComponents(string: trimmed),
-      let scheme = parts.scheme?.lowercased(),
-      scheme == "http" || scheme == "https",
-      let host = parts.host,
-      !host.isEmpty
-    else {
-      self = .invalid
-      return
-    }
-    self = .custom(trimmed)
+    self = (try? APIServer(address: trimmed)) == nil ? .invalid : .custom(trimmed)
   }
 
   /// False for text that must not be stored.
@@ -105,6 +97,58 @@ enum ServerAddress: Equatable, Sendable {
   var address: String? {
     if case .custom(let address) = self { return address }
     return nil
+  }
+
+  /// The server the text names: OpenAI when nothing is typed, `nil` for invalid text.
+  var server: APIServer? {
+    switch self {
+    case .openAI: .openAI
+    case .custom(let address): try? APIServer(address: address)
+    case .invalid: nil
+    }
+  }
+
+  /// The host of a custom server, e.g. `proxy.example.com`. `nil` for OpenAI and for invalid text.
+  var customHost: String? {
+    guard let server, !server.isOpenAI else { return nil }
+    return server.host
+  }
+
+  /// Said wherever a custom address is typed, so nobody sends a key somewhere without knowing.
+  static let keyNote = "Your key will be sent to this server instead of OpenAI."
+  static let notPrivateTitle = "This connection is not private"
+  static let notPrivateMessage =
+    "Others on the network can read your key and your voice. Use an address that starts with "
+    + "https:// if the server has one."
+
+  /// The hosts that are this device itself. Nothing sent to them leaves it.
+  private static let thisDevice: Set<String> = ["localhost", "127.0.0.1", "::1", "[::1]"]
+
+  /// True when what is sent to the address can be read on the way: it is plain `http://` and
+  /// goes to another machine. A server on this device (`localhost`, `127.0.0.1`) is fine.
+  var isNotPrivate: Bool {
+    guard let server, server.root.scheme == "http" else { return false }
+    return !Self.thisDevice.contains(server.host)
+  }
+}
+
+/// Whether the screens should ask for a key.
+enum KeyNeed {
+  /// True when requests go to OpenAI itself and no key is saved for it: nothing can work.
+  ///
+  /// A server the person set may not need a key at all, so the lack of one is no warning
+  /// there; when that server does ask for a key, the failed dictation or meeting says so by
+  /// name. An address that cannot be used is not a missing key either.
+  static func isMissing(hasKey: Bool, settings: Settings) -> Bool {
+    guard !hasKey, let server = try? settings.apiServer() else { return false }
+    return server.isOpenAI
+  }
+
+  /// Whether a saved key is one for the server being typed, when `hasKey` is about the server
+  /// the stored settings name. A key belongs to one host and is never sent to another.
+  static func savedKeyApplies(hasKey: Bool, stored: Settings, typed: ServerAddress) -> Bool {
+    guard hasKey, let typed = typed.server, let stored = try? stored.apiServer() else { return false }
+    return APIServer.sameHost(typed.host, stored.host)
   }
 }
 

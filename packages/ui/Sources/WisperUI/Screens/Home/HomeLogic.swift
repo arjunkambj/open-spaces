@@ -156,3 +156,25 @@ enum HomeText {
     111: "F12", 118: "F4", 120: "F2", 122: "F1", 123: "←", 124: "→", 125: "↓", 126: "↑",
   ]
 }
+
+/// What Home does when a retry of a failed dictation comes back.
+///
+/// A retry started from Home never types into another app: the text is saved to the history
+/// and copied, and a toast says so. When the retry fails again there is nothing to copy, and
+/// the row goes on showing why.
+struct HomeRetry: Equatable {
+  /// The text to put on the clipboard, when the retry made some.
+  var textToCopy: String?
+  var toast: Toast
+
+  /// - result: what `DictationEngine.retry(_:insert:)` returned.
+  init(_ result: Dictation?) {
+    if let result, !result.failed, !result.text.isEmpty {
+      textToCopy = result.text
+      toast = Toast("Copied to the clipboard")
+    } else {
+      textToCopy = nil
+      toast = Toast("That did not work. Try again in a moment.", tone: .error)
+    }
+  }
+}

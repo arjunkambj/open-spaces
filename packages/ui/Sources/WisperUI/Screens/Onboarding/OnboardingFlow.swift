@@ -163,7 +163,7 @@ public struct OnboardingFlow: View {
       message: OnboardingCopy.keyMessage(usesServer: usesServer)
     ) {
       VStack(alignment: .leading, spacing: Wisper.Space.l) {
-        if model.hasAPIKey {
+        if savedKeyApplies {
           Banner(
             .success,
             title: "A key is already saved",
@@ -213,12 +213,19 @@ public struct OnboardingFlow: View {
               .keyboardType(.URL)
             #endif
             .autocorrectionDisabled()
-            Text(
-              "For a proxy or a model server on your own machine that works like OpenAI. "
-                + "It may not need a key."
-            )
-            .wisperText(.caption)
-            .fixedSize(horizontal: false, vertical: true)
+            if ServerAddress(server).address == nil {
+              Text(
+                "For a proxy or a model server on your own machine that works like OpenAI. "
+                  + "It may not need a key."
+              )
+              .wisperText(.caption)
+              .fixedSize(horizontal: false, vertical: true)
+            } else {
+              // Once an address is typed, what matters is where the key goes and whether the
+              // way there is private. It takes the place of the hint, so it is not pushed
+              // out of sight in a small window.
+              ServerNotice(address: ServerAddress(server))
+            }
           }
           .transition(.opacity)
         }
@@ -274,10 +281,21 @@ public struct OnboardingFlow: View {
 
   // MARK: Moving
 
+  /// The server the key step is set to right now: the typed one, or OpenAI.
+  private var typedServer: ServerAddress {
+    usesServer ? ServerAddress(server) : .openAI
+  }
+
+  /// Whether the saved key is one for the server the step is set to. A key saved for another
+  /// server is not sent to this one, so it must not count as "already saved".
+  private var savedKeyApplies: Bool {
+    KeyNeed.savedKeyApplies(hasKey: model.hasAPIKey, stored: model.settings, typed: typedServer)
+  }
+
   private var keyAction: KeyStepAction {
     KeyStepAction(
       key: key,
-      hasSavedKey: model.hasAPIKey,
+      hasSavedKey: savedKeyApplies,
       usesServer: usesServer,
       server: ServerAddress(server)
     )

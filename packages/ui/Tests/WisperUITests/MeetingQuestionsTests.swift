@@ -92,6 +92,63 @@ struct MeetingQuestionsTests {
     #expect(questions.thread(for: id).map(\.reply) == [.answer("Answer 1")])
   }
 
+  // MARK: Kept for the session, and capped
+
+  @Test func theSessionKeepsAThreadWhileTheScreenIsGone() async {
+    let gate = Gate()
+    let (engine, id) = engine { _ in
+      await gate.wait()
+      return "On the 14th."
+    }
+    // The hub builds the Meetings screen again on every visit. Each one reads the same store.
+    let session = MeetingQuestions.session
+    let asking = Task { await session.ask("When do we ship?", about: id, with: engine) }
+    while !session.isWaiting(for: id) { await Task.yield() }
+    // The screen goes away here, and the answer arrives while it is not showing.
+    await gate.open()
+    await asking.value
+    // The screen that is built next finds the question and its answer.
+    #expect(MeetingQuestions.session.thread(for: id).map(\.question) == ["When do we ship?"])
+    #expect(MeetingQuestions.session.thread(for: id).map(\.reply) == [.answer("On the 14th.")])
+  }
+
+  @Test func keepsOnlyTheNewestQuestionsOfAThread() async {
+    let (engine, id) = engine { _ in "Yes." }
+    let questions = MeetingQuestions(questionLimit: 3)
+    for number in 1...5 { await questions.ask("Question \(number)?", about: id, with: engine) }
+    #expect(questions.thread(for: id).map(\.question) == ["Question 3?", "Question 4?", "Question 5?"])
+  }
+
+  @Test func keepsOnlyTheThreadsAskedAboutLast() async {
+    let (engine, first) = engine { _ in "Yes." }
+    let (second, third) = (UUID(), UUID())
+    let questions = MeetingQuestions(meetingLimit: 2)
+    await questions.ask("One?", about: first, with: engine)
+    await questions.ask("Two?", about: second, with: engine)
+    // Asking about the first again makes the second the one asked about longest ago.
+    await questions.ask("One more?", about: first, with: engine)
+    await questions.ask("Three?", about: third, with: engine)
+    #expect(questions.thread(for: first).count == 2)
+    #expect(questions.thread(for: second).isEmpty)
+    #expect(questions.thread(for: third).count == 1)
+  }
+
+  @Test func neverDropsAThreadThatIsWaitingForItsAnswer() async {
+    let gate = Gate()
+    let (engine, slow) = engine { request in
+      if request.user.contains("Slow?") { await gate.wait() }
+      return "Done."
+    }
+    let questions = MeetingQuestions(meetingLimit: 1)
+    let waiting = Task { await questions.ask("Slow?", about: slow, with: engine) }
+    while !questions.isWaiting(for: slow) { await Task.yield() }
+    await questions.ask("Quick?", about: UUID(), with: engine)
+    #expect(questions.thread(for: slow).map(\.reply) == [.waiting])
+    await gate.open()
+    await waiting.value
+    #expect(questions.thread(for: slow).map(\.reply) == [.answer("Done.")])
+  }
+
   @Test func takesOneQuestionAtATimePerMeeting() async {
     let gate = Gate()
     let (engine, id) = engine { _ in

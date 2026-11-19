@@ -99,19 +99,27 @@ struct APIKeyDialog: View {
   }
 
   var body: some View {
+    // A key belongs to one server, so the dialog names the one it is for.
+    let host = ServerAddress(model.settings.apiBaseURL ?? "").customHost
     DialogCard(
-      title: model.hasAPIKey ? "Change your OpenAI key" : "Add your OpenAI key",
-      subtitle: "The key is checked first, then kept in the Keychain on this device.",
+      title: OpenAICopy.keyDialogTitle(hasKey: model.hasAPIKey, customHost: host),
+      subtitle: OpenAICopy.keyDialogSubtitle(customHost: host),
       onClose: onClose
     ) {
-      APIKeyField(text: $key, error: error)
-        .onSubmit(save)
-        .disabled(isChecking)
-      SetupLink("Get a key from OpenAI", url: SetupLinks.openAIKeys)
+      APIKeyField(
+        host == nil ? APIKeyField.openAILabel : APIKeyField.serverLabel,
+        text: $key,
+        error: error,
+        focusOnAppear: true
+      )
+      .onSubmit(save)
+      .disabled(isChecking)
+      if host == nil { SetupLink("Get a key from OpenAI", url: SetupLinks.openAIKeys) }
     } footer: {
       Button("Cancel", action: onClose).buttonStyle(.wisper())
       Button(isChecking ? "Checking…" : "Save key", action: save)
         .buttonStyle(.wisper(.primary))
+        .keyboardShortcut(.defaultAction)
         .disabled(isChecking || APIKeyEntry.isEmpty(key))
     }
     .onChange(of: key) { _, _ in error = nil }

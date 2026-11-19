@@ -178,22 +178,24 @@ struct OpenAISettings: View {
   @State private var typingTextModel = false
 
   var body: some View {
+    // The stored address: the key state (`hasAPIKey`) is about the server it names.
+    let server = ServerAddress(model.settings.apiBaseURL ?? "")
     PageSection("Your key") {
       Card(padding: 0) {
         HStack(alignment: .center, spacing: Wisper.Space.l) {
           VStack(alignment: .leading, spacing: Wisper.Space.xs) {
             HStack(spacing: Wisper.Space.s) {
-              Text("OpenAI API key").wisperText(.bodyStrong)
+              Text(server.customHost == nil ? APIKeyField.openAILabel : APIKeyField.serverLabel)
+                .wisperText(.bodyStrong)
+              // A server of the person's own may need no key, so having none is not a fault there.
               Badge(
-                model.hasAPIKey ? "Connected" : "Not connected",
-                tone: model.hasAPIKey ? .success : .warning
+                OpenAICopy.keyBadge(hasKey: model.hasAPIKey, customHost: server.customHost),
+                tone: model.hasAPIKey ? .success : server.customHost == nil ? .warning : .neutral
               )
             }
-            Text(
-              OpenAICopy.keyStatus(hasKey: model.hasAPIKey, customServer: model.settings.apiBaseURL != nil)
-            )
-            .wisperText(.caption)
-            .fixedSize(horizontal: false, vertical: true)
+            Text(OpenAICopy.keyStatus(hasKey: model.hasAPIKey, customHost: server.customHost))
+              .wisperText(.caption)
+              .fixedSize(horizontal: false, vertical: true)
           }
           .frame(maxWidth: .infinity, alignment: .leading)
           .accessibilityElement(children: .combine)
@@ -208,17 +210,20 @@ struct OpenAISettings: View {
               .buttonStyle(.wisper(.ghost, size: .small))
           }
           Spacer(minLength: Wisper.Space.s)
-          if idiom == .mac { SetupLink("Get a key", url: SetupLinks.openAIKeys) }
+          if idiom == .mac, server.customHost == nil { SetupLink("Get a key", url: SetupLinks.openAIKeys) }
         }
         .padding(.horizontal, SetupMetrics.rowInset)
         .padding(.top, Wisper.Space.m)
         .padding(.bottom, Wisper.Space.l)
       }
-      SetupParagraph(
-        "You pay OpenAI directly for what you use. Open Wisper adds nothing on top.",
-        style: .caption
-      )
-      if idiom == .phone { SetupLink("Get a key", url: SetupLinks.openAIKeys) }
+      // Said only while it is true: with a server of the person's own, nothing goes to OpenAI.
+      if server.customHost == nil {
+        SetupParagraph(
+          "You pay OpenAI directly for what you use. Open Wisper adds nothing on top.",
+          style: .caption
+        )
+        if idiom == .phone { SetupLink("Get a key", url: SetupLinks.openAIKeys) }
+      }
     }
     PageSection("Models") {
       Card(padding: 0) {
@@ -263,18 +268,47 @@ struct OpenAISettings: View {
           }
         }
       }
+      ServerNotice(address: server)
     }
   }
 }
 
 enum OpenAICopy {
-  static func keyStatus(hasKey: Bool, customServer: Bool) -> String {
-    switch (hasKey, customServer) {
-    case (true, false): "Kept in the Keychain on this device. It is sent only to OpenAI."
-    case (true, true): "Kept in the Keychain on this device. It is sent only to your custom server."
-    case (false, false): "Add your key to start dictating. It is kept in the Keychain on this device."
-    case (false, true): "No key saved. That is fine if your custom server does not need one."
+  /// The line under "OpenAI API key": where the key is kept and where it goes.
+  /// - customHost: the host of the custom server, or `nil` when requests go to OpenAI.
+  static func keyStatus(hasKey: Bool, customHost: String?) -> String {
+    switch (hasKey, customHost) {
+    case (true, nil): "Kept in the Keychain on this device. It is sent only to OpenAI."
+    case (true, let host?): "Kept in the Keychain on this device. It is sent to \(host), not to OpenAI."
+    case (false, nil): "Add your key to start dictating. It is kept in the Keychain on this device."
+    case (false, let host?):
+      // Also what someone sees right after changing the address: the key they had is for
+      // the other server and stays out of this one.
+      "No key is saved for \(host). A key saved for another server is never sent to this one. "
+        + "Add a key here if this server needs one."
     }
+  }
+
+  static func keyBadge(hasKey: Bool, customHost: String?) -> String {
+    hasKey ? "Connected" : customHost == nil ? "Not connected" : "No key"
+  }
+
+  /// - customHost: the host of the custom server, or `nil` when requests go to OpenAI.
+  static func keyDialogTitle(hasKey: Bool, customHost: String?) -> String {
+    switch (hasKey, customHost) {
+    case (true, nil): "Change your OpenAI key"
+    case (false, nil): "Add your OpenAI key"
+    case (true, let host?): "Change the key for \(host)"
+    case (false, let host?): "Add the key for \(host)"
+    }
+  }
+
+  static func keyDialogSubtitle(customHost: String?) -> String {
+    guard let customHost else {
+      return "The key is checked first, then kept in the Keychain on this device."
+    }
+    return "The key is checked with \(customHost) first, then kept in the Keychain on this device. "
+      + "It is sent to that server, not to OpenAI."
   }
 }
 

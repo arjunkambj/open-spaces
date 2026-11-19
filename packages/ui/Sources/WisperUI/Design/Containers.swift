@@ -132,7 +132,8 @@ public struct CardList<Data: RandomAccessCollection, Row: View>: View where Data
 }
 
 /// One row of a list: something leading, a title, a subtitle, something trailing, and
-/// actions that show while the pointer is over the row (always, on iPhone).
+/// actions that show while the pointer is over the row or the keyboard is on it or on one
+/// of them (always, on iPhone).
 ///
 ///     ListRow(dictation.text) {
 ///       Text(time).wisperText(.caption, color: Wisper.Color.textTertiary)
@@ -153,7 +154,11 @@ public struct ListRow<Leading: View, Trailing: View, HoverActions: View>: View {
 
   @Environment(\.wisperIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
+  /// Whether the keyboard is on the row itself, when the caller made the row focusable.
+  @Environment(\.isFocused) private var rowIsFocused
   @State private var isHovered = false
+  /// Whether the keyboard is on one of the actions.
+  @FocusState private var actionIsFocused: Bool
 
   public init(
     _ title: String,
@@ -189,8 +194,10 @@ public struct ListRow<Leading: View, Trailing: View, HoverActions: View>: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       trailing
       if HoverActions.self != EmptyView.self {
+        // Tab reaches the actions even while they are unseen, so they show for the keyboard too.
         HStack(spacing: Wisper.Space.xxs) { hoverActions }
-          .opacity(idiom == .phone || hovered ? 1 : 0)
+          .focused($actionIsFocused)
+          .opacity(idiom == .phone || hovered || rowIsFocused || actionIsFocused ? 1 : 0)
       }
     }
     .padding(.horizontal, Wisper.Space.l)
@@ -200,6 +207,7 @@ public struct ListRow<Leading: View, Trailing: View, HoverActions: View>: View {
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
     .animation(Wisper.Motion.quick, value: isHovered)
+    .animation(Wisper.Motion.quick, value: rowIsFocused || actionIsFocused)
     .modifier(RowAction(action: action))
   }
 }

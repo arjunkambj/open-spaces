@@ -11,24 +11,28 @@ public struct WisperTextField: View {
   private let placeholder: String
   private let error: String?
   private let isSecure: Bool
+  private let focusOnAppear: Bool
 
   @Environment(\.wisperIdiom) private var idiom
   @FocusState private var isFocused: Bool
 
   /// - error: shown in red under the field; also turns the border red.
   /// - isSecure: hides what is typed, for secrets such as an API key.
+  /// - focusOnAppear: puts the cursor in the field when it shows. For the first field of a dialog.
   public init(
     _ label: String? = nil,
     text: Binding<String>,
     placeholder: String = "",
     error: String? = nil,
-    isSecure: Bool = false
+    isSecure: Bool = false,
+    focusOnAppear: Bool = false
   ) {
     self.label = label
     _text = text
     self.placeholder = placeholder
     self.error = error
     self.isSecure = isSecure
+    self.focusOnAppear = focusOnAppear
   }
 
   public var body: some View {
@@ -48,6 +52,14 @@ public struct WisperTextField: View {
       .frame(minHeight: idiom == .phone ? 48 : 38)
       .fieldBox(isFocused: isFocused, hasError: error != nil)
       .accessibilityLabel(label ?? placeholder)
+      .onAppear {
+        if focusOnAppear { isFocused = true }
+      }
+      .task {
+        // Asked again a moment later: a field that has only just been put in a window can
+        // miss the first request.
+        if focusOnAppear, !isFocused { isFocused = true }
+      }
     }
   }
 
