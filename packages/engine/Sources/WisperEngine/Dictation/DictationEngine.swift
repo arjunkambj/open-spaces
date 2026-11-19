@@ -83,6 +83,15 @@ public final class DictationEngine {
     )
   }
 
+  /// Changes what the recording in progress is, without interrupting it:
+  /// the microphone stays open and nothing said so far is lost. Used when a
+  /// held key grows into another shortcut (push to talk into hands-free or
+  /// command mode). Does nothing unless `phase` is `.recording`.
+  public func change(mode: DictationMode, handsFree: Bool) {
+    guard case .recording(_, let since, _) = phase else { return }
+    phase = .recording(mode: mode, since: since, handsFree: handsFree)
+  }
+
   /// Starts recording. Does nothing unless `phase` is `.idle` or `.failed`.
   ///
   /// `phase` is `.recording` when this returns. The microphone opens just
@@ -187,8 +196,12 @@ public final class DictationEngine {
   ///
   /// On success the text is inserted and the history entry (same `id`)
   /// becomes a normal one. Does nothing while recording or processing.
+  ///
+  /// Pass `insert: false` to only save the text to history and return it:
+  /// for a retry started from the app's own window, where there is no text
+  /// field of another app waiting for it.
   @discardableResult
-  public func retry(_ id: Dictation.ID) async -> Dictation? {
+  public func retry(_ id: Dictation.ID, insert: Bool = true) async -> Dictation? {
     switch phase {
     case .idle, .failed: break
     case .recording, .processing: return nil
@@ -197,7 +210,7 @@ public final class DictationEngine {
     phase = .processing(mode: .dictation)
     epoch += 1
     let epoch = epoch
-    let job = Task { await self.reprocess(id, epoch: epoch) }
+    let job = Task { await self.reprocess(id, insert: insert, epoch: epoch) }
     work = job
     return await job.value
   }
@@ -306,7 +319,7 @@ public final class DictationEngine {
     return await process(entry, epoch: epoch)
   }
 
-  private func reprocess(_ id: Dictation.ID, epoch: Int) async -> Dictation? {
+  private func reprocess(_ id: Dictation.ID, insert: Bool, epoch: Int) async -> Dictation? {
     do {
       guard let original = try await library.dictations().first(where: { $0.id == id }) else {
         throw WisperError.notFound("That dictation")
@@ -331,14 +344,14 @@ public final class DictationEngine {
         audio: audio,
         original: original
       )
-      return await process(entry, epoch: epoch)
+      return await process(entry, insert: insert, epoch: epoch)
     } catch {
       settle(.failed(message: DictationText.message(for: error)), epoch: epoch)
       return nil
     }
   }
 
-  private func process(_ entry: Entry, epoch: Int) async -> Dictation? {
+  private func process(_ entry: Entry, insert: Bool = true, epoch: Int) async -> Dictation? {
     let outcome = await pipeline.run(audio: entry.audio, mode: entry.mode)
     guard epoch == self.epoch else {
       // Cancelled while the text was being made. A retry keeps its audio: the failed entry still needs it.
@@ -348,18 +361,25 @@ public final class DictationEngine {
     switch outcome {
     case .silence: return await heardNothing(entry, epoch: epoch)
     case .failed(let draft, let error): return await keepForRetry(entry, draft, error, epoch: epoch)
-    case .written(let draft): return await deliver(entry, draft, epoch: epoch)
+    case .written(let draft): return await deliver(entry, draft, insert: insert, epoch: epoch)
     }
   }
 
   /// Inserts the text and saves the dictation.
-  private func deliver(_ entry: Entry, _ draft: DictationPipeline.Draft, epoch: Int) async -> Dictation? {
+  private func deliver(
+    _ entry: Entry,
+    _ draft: DictationPipeline.Draft,
+    insert: Bool = true,
+    epoch: Int
+  ) async -> Dictation? {
     var dictation = entry.dictation(from: draft)
     var insertProblem: String?
-    do {
-      try await target.insert(draft.text)
-    } catch {
-      insertProblem = DictationText.message(for: error)
+    if insert {
+      do {
+        try await target.insert(draft.text)
+      } catch {
+        insertProblem = DictationText.message(for: error)
+      }
     }
     if insertProblem != nil, epoch != self.epoch {
       // Cancelled before the text went in: throw the dictation away, as asked.

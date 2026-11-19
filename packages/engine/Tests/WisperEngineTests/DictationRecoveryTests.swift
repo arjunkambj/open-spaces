@@ -120,6 +120,25 @@ struct DictationRecoveryTests {
     #expect(rig.transcriber.requests.map(\.audio.lastPathComponent) == [audio, audio, audio])
   }
 
+  @Test func aRetryCanSaveTheTextWithoutTypingIt() async throws {
+    let offline = Shared(true)
+    let target = FakeTextTarget()
+    let rig = try await Rig(
+      transcriber: transcriber(offline: offline, hears: "The build is green again."),
+      target: target
+    )
+    #expect(await rig.dictate() == nil)
+    let failed = try #require(await rig.history().first)
+
+    offline.value = false
+    let fixed = try #require(await rig.engine.retry(failed.id, insert: false))
+    #expect(fixed.text == "The build is green again.")
+    #expect(rig.engine.phase == .idle)
+    #expect(await rig.history() == [fixed])
+    // Saved, not typed anywhere.
+    #expect(await target.inserted.isEmpty)
+  }
+
   @Test func aCommandWhoseModelCallFailsCanBeRetried() async throws {
     let down = Shared(true)
     let target = FakeTextTarget(selection: "teh cat")

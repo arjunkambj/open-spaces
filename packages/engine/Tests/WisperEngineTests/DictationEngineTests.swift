@@ -104,6 +104,27 @@ struct DictationEngineTests {
     #expect(rig.engine.phase == .idle)
   }
 
+  @Test func changingTheModeKeepsTheSameRecording() async throws {
+    let rig = try await Rig()
+    rig.engine.start()
+    await rig.microphoneOpen()
+    guard case .recording(.dictation, let since, false) = rig.engine.phase else {
+      Issue.record("expected a push-to-talk recording, got \(rig.engine.phase)")
+      return
+    }
+    rig.engine.change(mode: .dictation, handsFree: true)
+    // Same recording: same start time, same microphone, nothing thrown away.
+    #expect(rig.engine.phase == .recording(mode: .dictation, since: since, handsFree: true))
+    #expect(rig.capture.requests.count == 1)
+    let dictation = await rig.engine.finish()
+    #expect(dictation != nil)
+    #expect(rig.capture.requests.count == 1)
+
+    // Nothing to change when nothing is recording.
+    rig.engine.change(mode: .command, handsFree: true)
+    #expect(rig.engine.phase == .idle)
+  }
+
   // MARK: - One run at a time
 
   @Test func aSecondStartWhileRecordingIsIgnored() async throws {
