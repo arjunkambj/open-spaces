@@ -1,7 +1,8 @@
 name: CI
 
 # Runs on every pull request into main, on every push to main, and on the
-# throwaway branches that scripts/ci-try makes.
+# throwaway branches that scripts/ci-try makes. It can also be started by hand
+# (Actions > CI > Run workflow), which adds pictures of the iOS app.
 on:
   pull_request:
     branches: [main]
@@ -9,6 +10,7 @@ on:
     branches:
       - main
       - "ci/try-**"
+  workflow_dispatch:
 
 # A newer push to the same branch or pull request replaces the older run.
 concurrency:
@@ -74,6 +76,7 @@ jobs:
           path: |
             packages/*/.build
             apps/macos/.build
+            apps/ios/Phone/.build
           key: swift-check-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-${{ github.sha }}
           restore-keys: |
             swift-check-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-
@@ -95,6 +98,7 @@ jobs:
           path: |
             packages/*/.build
             apps/macos/.build
+            apps/ios/Phone/.build
           key: ${{ steps.swift-cache.outputs.cache-primary-key }}
 
   macos-app:
@@ -149,6 +153,22 @@ jobs:
         run: scripts/ios build
       - name: Run the tests
         run: scripts/ios test
+      - name: Take pictures of the app in the simulator
+        # Something to look at, not a check: a failure here never fails the job.
+        # It takes about eight minutes, so only on request: a run started by hand,
+        # or `scripts/ci-try ios`.
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'ci/try-ios')
+        continue-on-error: true
+        timeout-minutes: 15
+        run: apps/ios/scripts/screenshots ios-screenshots
+      - name: Upload the pictures
+        if: (!cancelled()) && (github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'ci/try-ios'))
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-screenshots
+          path: ios-screenshots
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Upload the raw Xcode logs
         if: (!cancelled())
         uses: actions/upload-artifact@v7

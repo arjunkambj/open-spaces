@@ -179,6 +179,27 @@ importers:
         specifier: 2.11.11
         version: 2.11.11
 
+  apps/ios:
+    dependencies:
+      '@open-wisper/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@open-wisper/audio':
+        specifier: workspace:*
+        version: link:../../packages/audio
+      '@open-wisper/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@open-wisper/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@open-wisper/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+      '@open-wisper/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+
   apps/macos:
     dependencies:
       '@open-wisper/agent':
@@ -231,6 +252,9 @@ importers:
       '@open-wisper/domain':
         specifier: workspace:*
         version: link:../domain
+      '@open-wisper/store':
+        specifier: workspace:*
+        version: link:../store
 
   packages/store:
     dependencies:
