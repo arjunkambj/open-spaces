@@ -33,8 +33,8 @@ public final class MeetingEngine {
   public private(set) var processing: Set<Meeting.ID> = []
   /// Something the user should know about the most recent `toggle` or `start`: why `toggle`
   /// could not start a recording, or that only the microphone is being recorded because system
-  /// audio is not allowed. Plain English, ready to show. Cleared by the next start; set it to
-  /// `nil` to dismiss it.
+  /// audio is not allowed or could not be started. Plain English, ready to show. Cleared by the
+  /// next start; set it to `nil` to dismiss it.
   public var lastError: String?
 
   /// The numbers the engine works with. Tests make them small.
@@ -54,6 +54,24 @@ public final class MeetingEngine {
     /// About 15,000 tokens: an hour of talk fits in one or two requests, and a small local
     /// model can still take it.
     var notesCharacterLimit = 60_000
+    /// Whether this kind of device can record what other apps play. Where it cannot, the
+    /// engine does not ask for it, and has nothing to tell the user about it.
+    var recordsSystemAudio = MeetingEngine.deviceRecordsSystemAudio
+  }
+
+  /// A Mac can record the sound of other apps. An iPhone or iPad cannot.
+  private nonisolated static var deviceRecordsSystemAudio: Bool {
+    #if os(macOS)
+      true
+    #else
+      false
+    #endif
+  }
+
+  /// A meeting the engine is working on, as it last saw it, and where its audio is.
+  private struct Held {
+    var meeting: Meeting
+    var directory: URL
   }
 
   /// A recording in progress and the tasks that feed on it.
@@ -77,6 +95,8 @@ public final class MeetingEngine {
   @ObservationIgnored private var isStarting = false
   /// The meeting `start` is setting up, before `live` is set.
   @ObservationIgnored private var startingID: Meeting.ID?
+  /// The meetings being recorded or processed. See `update`.
+  @ObservationIgnored private var held: [Meeting.ID: Held] = [:]
 
   public convenience init(
     library: any Library,
@@ -148,7 +168,12 @@ public final class MeetingEngine {
       throw error
     }
 
-    let transcription = await makeTranscription(in: directory, settings: settings)
+    held[id] = Held(meeting: meeting, directory: directory)
+    let transcription = MeetingTranscription(
+      directory: directory,
+      transcriber: transcriber,
+      options: await transcriptionOptions(settings)
+    )
     live = Live(meetingID: id, title: meeting.title, startedAt: startedAt)
 
     let chunks = Task {
@@ -233,7 +258,7 @@ public final class MeetingEngine {
       Task {
         await recording.transcription.abandon()
         await MeetingEngine.remove(recording.directory)
-        self.processing.remove(id)
+        self.release(id)
       }
       return
     }
@@ -272,7 +297,9 @@ public final class MeetingEngine {
       MeetingEngine.apply(draft, to: &meeting)
       if meeting.failure?.hasPrefix(MeetingEngine.notesFailed) == true { meeting.failure = nil }
     }
-    if saved == nil { throw WisperError.notFound("The meeting") }
+    guard let saved else { throw WisperError.notFound("The meeting") }
+    // The notes were the last thing missing, so the audio may have done its job now.
+    if saved.status == .ready, saved.failure == nil { await settleAudio(of: id, settings: settings) }
   }
 
   /// Processes a `.failed` meeting again from its kept audio. Also finishes a meeting that
@@ -287,10 +314,13 @@ public final class MeetingEngine {
     do {
       let settings = try await library.settings()
       directory = try await library.audioDirectory(forMeeting: id)
-      transcription = await makeTranscription(in: directory, settings: settings)
+      held[id] = Held(meeting: meeting, directory: directory)
+      transcription = await resumeTranscription(in: directory, settings: settings)
       let state = await transcription.progress()
-      if meeting.status == .ready, meeting.failure == nil, state.unfinished == 0 {
-        processing.remove(id)
+      // Nothing is missing, or what is missing is gone for good and the meeting says so.
+      let isSettled = meeting.failure == nil || meeting.failure == MeetingEngine.partLost
+      if meeting.status == .ready, isSettled, state.unfinished == 0 {
+        release(id)
         return
       }
       if state.chunkCount == 0, meeting.status == .failed, meeting.segments.isEmpty {
@@ -298,11 +328,12 @@ public final class MeetingEngine {
       }
       _ = try await update(id) { meeting in
         meeting.status = .processing
-        meeting.failure = nil
+        // A part that is gone for good stays gone, whatever this try brings.
+        if meeting.failure != MeetingEngine.partLost { meeting.failure = nil }
         if meeting.endedAt == nil { meeting.endedAt = MeetingEngine.end(of: meeting, audio: state.end) }
       }
     } catch {
-      processing.remove(id)
+      release(id)
       throw error
     }
     if let problem = await finish(id, transcription, directory: directory) { throw problem }
@@ -334,7 +365,8 @@ public final class MeetingEngine {
         processing.remove(id)
         continue
       }
-      let transcription = await makeTranscription(in: directory, settings: settings)
+      held[id] = Held(meeting: meeting, directory: directory)
+      let transcription = await resumeTranscription(in: directory, settings: settings)
       let audioEnd = await transcription.progress().end
       _ = try? await update(id) { meeting in
         meeting.status = .processing
@@ -351,8 +383,14 @@ public final class MeetingEngine {
     live?.meetingID == id || recording?.meetingID == id || startingID == id || processing.contains(id)
   }
 
+  /// Takes the meeting off the list of those being worked on.
+  private func release(_ id: Meeting.ID) {
+    processing.remove(id)
+    held[id] = nil
+  }
+
   /// Starts capture with system audio when the user wants it, and without it when that fails:
-  /// a meeting with only the user's side is better than no meeting.
+  /// a meeting with only the user's side is better than no meeting, as long as the user knows.
   private func startCapture(settings: Settings, directory: URL) async throws -> any CaptureSession {
     func request(_ tracks: Set<AudioTrack>) -> CaptureRequest {
       CaptureRequest(
@@ -362,41 +400,49 @@ public final class MeetingEngine {
         chunkSeconds: tuning.chunkSeconds
       )
     }
-    guard settings.meetings.captureSystemAudio else { return try await capture.start(request([.microphone])) }
+    // Where system audio cannot be recorded at all there is nothing to try, and nothing to tell.
+    guard settings.meetings.captureSystemAudio, tuning.recordsSystemAudio else {
+      return try await capture.start(request([.microphone]))
+    }
     do {
       return try await capture.start(request([.microphone, .system]))
     } catch let error as WisperError {
+      let reason: String
       switch error {
-      case .permissionDenied(.systemAudio), .captureFailed:
-        let session = try await capture.start(request([.microphone]))
-        // Where system audio cannot be recorded at all (iOS) there is nothing for the user to fix.
-        if case .permissionDenied = error {
-          lastError = "Only your microphone is being recorded. \(error.localizedDescription)"
-        }
-        return session
-      default:
-        throw error
+      case .permissionDenied(.systemAudio): reason = error.localizedDescription
+      case .captureFailed(let detail): reason = detail
+      default: throw error
       }
+      // When it was the microphone that failed, this throws and the meeting does not start.
+      let session = try await capture.start(request([.microphone]))
+      lastError = "Only your microphone is being recorded. \(reason)"
+      return session
     }
   }
 
-  private func makeTranscription(in directory: URL, settings: Settings) async -> MeetingTranscription {
+  /// The transcript of a meeting an earlier run or an earlier try left unfinished, picked up
+  /// from the audio in its folder.
+  private func resumeTranscription(in directory: URL, settings: Settings) async -> MeetingTranscription {
+    await MeetingTranscription.resuming(
+      in: directory,
+      transcriber: transcriber,
+      options: await transcriptionOptions(settings)
+    )
+  }
+
+  private func transcriptionOptions(_ settings: Settings) async -> MeetingTranscription.Options {
     let words = ((try? await library.words()) ?? []).map(\.text)
     var seen: Set<String> = []
     let vocabulary = (words + [settings.userName])
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-    return MeetingTranscription(
-      directory: directory,
-      transcriber: transcriber,
-      options: MeetingTranscription.Options(
-        model: settings.transcriptionModel,
-        language: settings.language,
-        vocabulary: vocabulary,
-        concurrency: tuning.concurrency,
-        attempts: tuning.attempts,
-        retryDelay: tuning.retryDelay
-      )
+    return MeetingTranscription.Options(
+      model: settings.transcriptionModel,
+      language: settings.language,
+      vocabulary: vocabulary,
+      concurrency: tuning.concurrency,
+      attempts: tuning.attempts,
+      retryDelay: tuning.retryDelay
     )
   }
 
@@ -417,7 +463,7 @@ public final class MeetingEngine {
     _ transcription: MeetingTranscription,
     directory: URL
   ) async -> WisperError? {
-    defer { processing.remove(id) }
+    defer { release(id) }
     // Chunks that failed while recording get one more round: the connection may be back.
     await transcription.retryUnfinished()
     await transcription.waitUntilIdle()
@@ -459,7 +505,10 @@ public final class MeetingEngine {
         }
       }
 
-      let (finalFailure, finalDraft) = (failure, draft)
+      // What can still be put right is said first. What is gone for good is said after that,
+      // and stays: nothing will bring that part back.
+      let lost = result.lostAudio || transcribed.failure == MeetingEngine.partLost
+      let (finalFailure, finalDraft) = (failure ?? (lost ? MeetingEngine.partLost : nil), draft)
       let finished = try await update(id) { meeting in
         // Set again: someone who saved an older copy of the meeting meanwhile must not undo it.
         if result.chunkCount > 0 { meeting.segments = result.segments }
@@ -468,24 +517,66 @@ public final class MeetingEngine {
         meeting.failure = finalFailure
         if let finalDraft { MeetingEngine.apply(finalDraft, to: &meeting) }
       }
-      // The audio goes only when nothing is left that could need it.
-      if finished == nil || (failure == nil && !settings.meetings.keepAudio) {
+      // The audio goes when the meeting is deleted, or when all of it was transcribed, nothing
+      // is left that could need it and the user does not keep audio. Never otherwise.
+      if finished == nil || (failure == nil && result.unfinished == 0 && !settings.meetings.keepAudio) {
         await MeetingEngine.remove(directory)
       }
     } catch {
-      return MeetingEngine.wisperError(error)
+      let error = MeetingEngine.wisperError(error)
+      // The outcome could not be saved. One more try, at saying so: left as it is, the meeting
+      // would look busy until the app is opened the next time. The audio stays for a retry.
+      _ = try? await update(id) { meeting in
+        meeting.status = .failed
+        meeting.failure = MeetingEngine.notSaved + " " + error.localizedDescription
+      }
+      return error
     }
     return problem
   }
 
+  /// For a meeting that has just become complete outside `finish`: removes its audio when the
+  /// user does not keep audio and every part of it was transcribed, and passes on what the audio
+  /// folder knows about a part that was lost.
+  private func settleAudio(of id: Meeting.ID, settings: Settings) async {
+    guard let directory = try? await library.audioDirectory(forMeeting: id) else { return }
+    let audio = await Task.detached { MeetingManifest.load(from: directory) }.value
+    if audio.lostAudio == true {
+      _ = try? await library.updateMeeting(id) { meeting in
+        if meeting.failure == nil { meeting.failure = MeetingEngine.partLost }
+      }
+    }
+    guard !settings.meetings.keepAudio, audio.chunks.allSatisfy({ $0.state == .done }) else {
+      // Asking for the folder made it, if the audio had gone before. An empty one is not left.
+      rmdir(directory.path)
+      return
+    }
+    await MeetingEngine.remove(directory)
+  }
+
   /// Applies `change` to the stored meeting and saves it. Working on the stored copy keeps what
-  /// the user or an agent changed in the meantime. Returns `nil` when the meeting is gone.
+  /// the user or an agent changed in the meantime. Returns `nil` when the meeting was deleted.
+  ///
+  /// "The library has no such meeting" is not proof of a delete: a `meeting.json` that cannot
+  /// be read is moved aside by the library and reads as missing too. Only a meeting whose
+  /// folder is gone, or holds no `meeting.json` of any kind, was deleted. Any other meeting
+  /// the engine is working on is written back from what the engine last saw of it, so its
+  /// audio is never taken for the audio of a deleted meeting.
   @discardableResult
   private func update(
     _ id: Meeting.ID,
     _ change: @Sendable (inout Meeting) -> Void
   ) async throws -> Meeting? {
-    try await library.updateMeeting(id, change)
+    if let saved = try await library.updateMeeting(id, change) {
+      held[id]?.meeting = saved
+      return saved
+    }
+    guard let kept = held[id], await !MeetingEngine.wasDeleted(audio: kept.directory) else { return nil }
+    var meeting = kept.meeting
+    change(&meeting)
+    try await library.save(meeting)
+    held[id]?.meeting = meeting
+    return meeting
   }
 
   /// Puts freshly written notes into a meeting. The title is taken only while the meeting
@@ -500,6 +591,10 @@ public final class MeetingEngine {
   private static let transcriptFailed = "This meeting could not be transcribed."
   private static let partFailed = "Part of this meeting could not be transcribed."
   private nonisolated static let notesFailed = "The notes could not be written."
+  private nonisolated static let notSaved = "This meeting could not be saved."
+  /// What a meeting says when part of its audio is gone for good.
+  nonisolated static let partLost =
+    "The app closed while this meeting was being recorded. The last part could not be saved."
 
   /// The title a meeting gets until the notes give it a better one, e.g. "Meeting, 19 Nov, 2:30 PM".
   nonisolated static func placeholderTitle(for date: Date) -> String {
@@ -519,5 +614,16 @@ public final class MeetingEngine {
 
   private static func remove(_ directory: URL) async {
     await Task.detached { _ = try? FileManager.default.removeItem(at: directory) }.value
+  }
+
+  /// Whether the meeting whose audio folder is `directory` was deleted: the folder the audio
+  /// folder sits in is gone, or has no `meeting.json` in it, not even one that was moved aside
+  /// as unreadable (`meeting.json.corrupt-…`). See `docs/data-format.md` for the layout.
+  private static func wasDeleted(audio directory: URL) async -> Bool {
+    await Task.detached {
+      let folder = directory.deletingLastPathComponent()
+      guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return true }
+      return !names.contains { $0.hasPrefix("meeting.json") }
+    }.value
   }
 }

@@ -2,6 +2,7 @@
   import CoreAudio
   import Foundation
   import WisperDomain
+  import os
 
   /// Small, typed reads of Core Audio's property system.
   enum AudioHardware {
@@ -141,13 +142,45 @@
 
   /// Calls back when one property of the audio system changes, until dropped.
   ///
-  /// `@unchecked Sendable`: immutable after `init`; the stored block is only
-  /// handed back to Core Audio to remove it.
+  /// `@unchecked Sendable`: immutable after `init`.
   final class HardwareWatch: @unchecked Sendable {
+    private struct Listener: Sendable {
+      var queue: DispatchQueue
+      var changed: @Sendable () -> Void
+    }
+
+    private struct Registry: Sendable {
+      var lastToken: UInt = 0
+      var listeners: [UInt: Listener] = [:]
+      var calls = 0
+    }
+
+    /// Every live watch, by the number Core Audio hands back with each change.
+    ///
+    /// Core Audio removes a listener by matching what it was added with. A Swift closure
+    /// passed to the block-based calls is wrapped in a new block each time, so a remove
+    /// never matched and listeners piled up. A plain function and a number always match,
+    /// and a number, unlike a pointer, cannot outlive what it stands for: a change that
+    /// arrives late finds nothing under it.
+    private static let registry = OSAllocatedUnfairLock(initialState: Registry())
+
+    private static let listener: AudioObjectPropertyListenerProc = { _, _, _, context in
+      let token = UInt(bitPattern: context)
+      let found = HardwareWatch.registry.withLock { registry in
+        registry.calls += 1
+        return registry.listeners[token]
+      }
+      if let found { found.queue.async(execute: found.changed) }
+      return noErr
+    }
+
+    /// How often Core Audio has called this process about a watched property, for a live
+    /// watch or not. A watch that was dropped but never taken away would keep adding to it.
+    static var callsFromTheSystem: Int { registry.withLock { $0.calls } }
+
     private let object: AudioObjectID
     private var address: AudioObjectPropertyAddress
-    private let queue: DispatchQueue
-    private let block: AudioObjectPropertyListenerBlock
+    private let token: UInt
 
     /// - Parameter queue: Where `changed` runs.
     init?(
@@ -157,14 +190,25 @@
       changed: @escaping @Sendable () -> Void
     ) {
       self.object = object
-      self.queue = queue
       address = AudioHardware.address(selector)
-      block = { _, _ in changed() }
-      guard AudioObjectAddPropertyListenerBlock(object, &address, queue, block) == noErr else { return nil }
+      let token = HardwareWatch.registry.withLock { registry in
+        registry.lastToken += 1
+        registry.listeners[registry.lastToken] = Listener(queue: queue, changed: changed)
+        return registry.lastToken
+      }
+      self.token = token
+      let context = UnsafeMutableRawPointer(bitPattern: token)
+      guard AudioObjectAddPropertyListener(object, &address, HardwareWatch.listener, context) == noErr else {
+        HardwareWatch.registry.withLock { _ = $0.listeners.removeValue(forKey: token) }
+        return nil
+      }
     }
 
     deinit {
-      AudioObjectRemovePropertyListenerBlock(object, &address, queue, block)
+      // Forgotten first, so a change already on its way is not passed on.
+      HardwareWatch.registry.withLock { _ = $0.listeners.removeValue(forKey: token) }
+      let context = UnsafeMutableRawPointer(bitPattern: token)
+      AudioObjectRemovePropertyListener(object, &address, HardwareWatch.listener, context)
     }
   }
 #endif

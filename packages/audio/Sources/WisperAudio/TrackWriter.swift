@@ -232,7 +232,13 @@ final class TrackWriter {
     // When cutting, the length is known to within the slack. Otherwise guess
     // a minute, which covers most dictations.
     let expected = target.map { Double($0 + slack) / Encoding.sampleRate + 1 } ?? 60
-    open = EncodedFile(url: directory.appendingPathComponent(name), expectedSeconds: expected)
+    // A file that is one of many is closed long before the capture ends, and until then the
+    // app can be killed with it open, so its sound is kept in a plain copy as well.
+    open = EncodedFile(
+      url: directory.appendingPathComponent(name),
+      expectedSeconds: expected,
+      keepsCopy: target != nil
+    )
     openStart = position
   }
 
@@ -268,7 +274,8 @@ final class TrackWriter {
     let prefix = "\(track.rawValue)-"
     let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
     let used = names.compactMap { name -> Int? in
-      guard name.hasPrefix(prefix), name.hasSuffix(".m4a") else { return nil }
+      // A `.wav` is the copy of a file that was never closed, found by a later run.
+      guard name.hasPrefix(prefix), name.hasSuffix(".m4a") || name.hasSuffix(".wav") else { return nil }
       return Int(name.dropFirst(prefix.count).dropLast(4))
     }
     return (used.max() ?? -1) + 1

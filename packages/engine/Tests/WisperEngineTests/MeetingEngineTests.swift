@@ -186,8 +186,13 @@ struct MeetingEngineTests {
 
   // MARK: Capture problems
 
-  @Test(arguments: [WisperError.permissionDenied(.systemAudio), .captureFailed("not available here")])
-  func fallsBackToTheMicrophoneWhenSystemAudioCannotBeRecorded(refusal: WisperError) async throws {
+  @Test(
+    arguments: [
+      WisperError.permissionDenied(.systemAudio),
+      .captureFailed("System audio could not be recorded (start, code -1)."),
+    ]
+  )
+  func fallsBackToTheMicrophoneAndSaysSoWhenSystemAudioCannotBeRecorded(refusal: WisperError) async throws {
     let fake = FakeAudioCapture()
     let rig = MeetingRig(
       capture: fake,
@@ -196,13 +201,47 @@ struct MeetingEngineTests {
     )
     let id = try await rig.engine.start()
     #expect(rig.capture.requests.map(\.tracks) == [[.microphone]])
-    // The user is told when it is something they can fix.
-    #expect((rig.engine.lastError != nil) == (refusal == .permissionDenied(.systemAudio)))
+    // The user is told, with the reason: an hour of only their own side is not what they wanted.
+    let reason =
+      refusal == .permissionDenied(.systemAudio)
+      ? "System audio recording access is needed. Turn it on in System Settings."
+      : "System audio could not be recorded (start, code -1)."
+    #expect(rig.engine.lastError == "Only your microphone is being recorded. " + reason)
 
     await rig.engine.stop()
     let meeting = try await rig.finished(id)
     #expect(meeting.status == .ready)
     #expect(meeting.segments.map(\.speaker) == [.me])
+  }
+
+  @Test func staysQuietWhereSystemAudioCannotBeRecordedAtAll() async throws {
+    // An iPhone: there is nothing to ask for, and nothing the user could do about it.
+    let fake = FakeAudioCapture()
+    let asked = MeetingSwitch(false)
+    let rig = MeetingRig(
+      capture: fake,
+      startingCapture: MeetingPickyCapture(inner: fake) { request in
+        guard request.tracks.contains(.system) else { return nil }
+        asked.set(true)
+        return .captureFailed("iPhone and iPad cannot record the sound of other apps.")
+      },
+      tuning: MeetingRig.tuning(recordsSystemAudio: false)
+    )
+    let id = try await rig.engine.start()
+    #expect(!asked.isOn)
+    #expect(rig.capture.requests.map(\.tracks) == [[.microphone]])
+    #expect(rig.engine.lastError == nil)
+    await rig.engine.stop()
+    _ = try await rig.finished(id)
+  }
+
+  @Test func aMicrophoneThatFailsIsNotMistakenForMissingSystemAudio() async throws {
+    let rig = MeetingRig(capture: FakeAudioCapture(failure: .captureFailed("No microphone was found.")))
+    await #expect(throws: WisperError.captureFailed("No microphone was found.")) {
+      try await rig.engine.start()
+    }
+    #expect(rig.engine.lastError == nil)
+    #expect(try await rig.library.meetings().isEmpty)
   }
 
   @Test func recordsOnlyTheMicrophoneWhenSystemAudioIsTurnedOff() async throws {
@@ -392,6 +431,75 @@ struct MeetingEngineTests {
     #expect(meeting.segments.map(\.text) == ["Testing, one two three."])
     #expect(meeting.notes != nil)
     #expect(try await rig.audioFiles(id).isEmpty)
+  }
+
+  @Test func anAnswerThatIsFinalStopsTheQueueUntilTheSettingIsFixed() async throws {
+    // A typo in the model name: the server says no, and would say no to every chunk.
+    let typo = MeetingSwitch(true)
+    let refusal = WisperError.server(status: 404, message: "The model `gpt-transcrib` does not exist")
+    let transcriber = FakeTranscriber { request in
+      if typo.isOn { throw refusal }
+      return Transcript(text: "Said in \(MeetingRig.name(of: request)).")
+    }
+    let rig = MeetingRig(
+      settings: Settings(meetings: MeetingSettings(keepAudio: false)),
+      transcriber: transcriber
+    )
+    let id = try await rig.engine.start()
+    // Eleven chunks on each of two tracks by the time the meeting is stopped.
+    for _ in 0..<10 { try rig.session.emit(duration: 30) }
+    await rig.engine.stop()
+
+    let failed = try await rig.finished(id)
+    #expect(failed.status == .failed)
+    // A plain failure that names the cause.
+    #expect(failed.failure == "This meeting could not be transcribed. " + refusal.localizedDescription)
+    // Two answers while recording were enough, and one handful when the meeting was finished:
+    // not two rounds of tries for each of the 22 chunks.
+    #expect(rig.transcriber.requests.count <= 8)
+    let asked = Dictionary(grouping: rig.transcriber.requests.map(MeetingRig.name(of:)), by: { $0 })
+    #expect(asked.values.allSatisfy { $0.count <= 2 })
+    // Nothing was transcribed, so the audio stays although the user does not keep audio.
+    #expect(try await rig.audioFiles(id).filter { $0.hasSuffix(".m4a") }.count == 22)
+
+    // The same answer again does not start a storm either.
+    await #expect(throws: refusal) { try await rig.engine.retry(id) }
+    #expect(rig.transcriber.requests.count <= 12)
+
+    // The setting is fixed: everything goes through.
+    typo.set(false)
+    try await rig.engine.retry(id)
+    let meeting = try await rig.meeting(id)
+    #expect(meeting.status == .ready)
+    #expect(meeting.failure == nil)
+    #expect(meeting.segments.count == 22)
+    #expect(try await rig.audioFiles(id).isEmpty)
+  }
+
+  @Test func oneFileTheServerWillNotTakeDoesNotStopTheOthers() async throws {
+    let refusal = WisperError.server(status: 400, message: "The audio file could not be decoded")
+    let rig = MeetingRig(
+      settings: Settings(meetings: MeetingSettings(captureSystemAudio: false)),
+      transcriber: FakeTranscriber { request in
+        if MeetingRig.name(of: request) == "microphone-0" { throw refusal }
+        return Transcript(text: "Said in \(MeetingRig.name(of: request)).")
+      }
+    )
+    let id = try await rig.engine.start()
+    try rig.session.emit(duration: 30)
+    try rig.session.emit(duration: 30)
+    // The transcript keeps moving while the meeting goes on.
+    await rig.until { rig.engine.live?.segments.count == 1 }
+    try rig.session.emit(duration: 30)
+    await rig.until { rig.engine.live?.segments.count == 2 }
+    await rig.engine.stop()
+
+    let meeting = try await rig.finished(id)
+    #expect(meeting.status == .ready)
+    #expect(meeting.segments.count == 3)
+    #expect(meeting.failure == "Part of this meeting could not be transcribed. " + refusal.localizedDescription)
+    // A final answer is not asked for again and again: once while recording, once at the end.
+    #expect(rig.transcriber.requests.filter { MeetingRig.name(of: $0) == "microphone-0" }.count == 2)
   }
 
   @Test func aMeetingWithNoSpeechIsReadyAndEmpty() async throws {

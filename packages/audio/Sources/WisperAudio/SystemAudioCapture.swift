@@ -15,6 +15,11 @@ import WisperDomain
 ///   produces no files, and a file's `offset` says where its sound starts.
 /// - With `chunkSeconds == nil` there is exactly one file per track after
 ///   `stop()`, even when it holds only silence.
+/// - An `.m4a` cannot be read until it is closed. So with `chunkSeconds` set, the file being
+///   written has a plain copy beside it, `<track>-<number>.wav` (16-bit, 16 kHz, mono), that
+///   can be read at any moment. It is deleted when its `.m4a` is closed. If the app is killed
+///   first, the `.wav` holds the sound up to that moment and the `.m4a` beside it is of no use.
+/// - Every file is created readable by the user's own account only.
 /// - `start` never shows a permission prompt. It throws
 ///   `WisperError.permissionDenied(.microphone)` unless microphone access was
 ///   already granted.

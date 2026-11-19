@@ -369,6 +369,184 @@ struct RecordingTests {
     #expect(scratch.files == ["microphone-0000.m4a", "microphone-0001.m4a"])
   }
 
+  @Test func recordingsCanBeReadOnlyByTheUser() async throws {
+    let scratch = try Scratch()
+    let (recording, sources) = try record([.microphone, .system], chunkSeconds: 2, in: scratch)
+    sources[.microphone]?.play(Sound.tone(3), at: 0)
+    sources[.system]?.play(Sound.tone(1), at: 0)
+    func permissions() throws -> Set<Int> {
+      Set(
+        try scratch.files.map { name in
+          let path = scratch.url.appendingPathComponent(name).path
+          return try #require(try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int)
+        }
+      )
+    }
+
+    // While recording: one finished file, and on each track a file still being written, with
+    // its copy.
+    var stream = recording.chunks.makeAsyncIterator()
+    _ = try #require(await stream.next())
+    #expect(
+      await RecordingTests.files(
+        in: scratch,
+        become: [
+          "microphone-0000.m4a", "microphone-0001.m4a", "microphone-0001.wav",
+          "system-0000.m4a", "system-0000.wav",
+        ]
+      )
+    )
+    #expect(try permissions() == [0o600])
+
+    await recording.stop()
+    #expect(scratch.files.count == 3)
+    #expect(try permissions() == [0o600])
+  }
+
+  // MARK: The file being written when the app is killed
+
+  /// Waits until the copy of the file being written holds `seconds` of sound, give or take the
+  /// last few milliseconds that are still on their way through the resampler.
+  private static func copyHolds(_ seconds: Double, at url: URL) async -> Bool {
+    let wanted = Int((seconds - 0.05) * 32_000)
+    let deadline = Date().addingTimeInterval(10)
+    while Date() < deadline {
+      let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+      if size >= wanted { return true }
+      try? await Task.sleep(for: .milliseconds(10))
+    }
+    return false
+  }
+
+  /// Waits for the writer, which works on its own queue, to have made exactly these files.
+  private static func files(in scratch: Scratch, become expected: [String]) async -> Bool {
+    let deadline = Date().addingTimeInterval(10)
+    while scratch.files != expected, Date() < deadline { try? await Task.sleep(for: .milliseconds(10)) }
+    return scratch.files == expected
+  }
+
+  @Test func theFileBeingWrittenHasACopyThatCanBeReadAtAnyMoment() async throws {
+    let scratch = try Scratch()
+    let (recording, sources) = try record(chunkSeconds: 30, in: scratch)
+    sources[.microphone]?.play(Sound.tone(3), at: 0)
+    let copy = scratch.url.appendingPathComponent("microphone-0000.wav")
+    #expect(await RecordingTests.copyHolds(3, at: copy))
+    #expect(scratch.files == ["microphone-0000.m4a", "microphone-0000.wav"])
+
+    // What a kill would leave behind right now: the bytes that are in the files.
+    let killed = try Scratch()
+    for name in scratch.files {
+      try FileManager.default.copyItem(
+        at: scratch.url.appendingPathComponent(name),
+        to: killed.url.appendingPathComponent(name)
+      )
+    }
+    // The compressed file is of no use without the index it gets when it is closed.
+    #expect(throws: (any Error).self) {
+      try Decoded(killed.url.appendingPathComponent("microphone-0000.m4a"))
+    }
+    // The copy has all of it.
+    let decoded = try Decoded(killed.url.appendingPathComponent("microphone-0000.wav"))
+    #expect(decoded.sampleRate == 16_000)
+    #expect(decoded.channels == 1)
+    #expect(abs(decoded.seconds - 3) < 0.06)
+    #expect(abs(decoded.loudness(from: 0.5, to: 2.5) - 0.0707) < 0.005)
+
+    // More sound, and the copy still reads: its header never runs ahead of or behind it.
+    sources[.microphone]?.play(Sound.tone(2), at: 3)
+    #expect(await RecordingTests.copyHolds(5, at: copy))
+    #expect(abs(try Decoded(copy).seconds - 5) < 0.06)
+
+    // Once the real file is closed, the copy has done its job.
+    await recording.stop()
+    #expect(scratch.files == ["microphone-0000.m4a"])
+    #expect(abs(try Decoded(scratch.url.appendingPathComponent("microphone-0000.m4a")).seconds - 5) < 0.15)
+  }
+
+  @Test func theCopyLeavesWithEveryFileThatIsFinishedOrThrownAway() async throws {
+    let scratch = try Scratch()
+    let (recording, sources) = try record([.microphone, .system], chunkSeconds: 2, in: scratch)
+    sources[.microphone]?.play(Sound.tone(5), at: 0)
+    sources[.system]?.play(Sound.tone(1), at: 0)
+    var stream = recording.chunks.makeAsyncIterator()
+    _ = try #require(await stream.next())
+    _ = try #require(await stream.next())
+    // Two files are finished and have no copy. The two still being written have one each.
+    #expect(
+      await RecordingTests.files(
+        in: scratch,
+        become: [
+          "microphone-0000.m4a", "microphone-0001.m4a", "microphone-0002.m4a", "microphone-0002.wav",
+          "system-0000.m4a", "system-0000.wav",
+        ]
+      )
+    )
+    await recording.cancel()
+    #expect(scratch.files == ["microphone-0000.m4a", "microphone-0001.m4a"])
+  }
+
+  @Test func aCaptureIntoOneFileKeepsNoCopy() async throws {
+    // A dictation is one short file; a second copy of it would only be something to clean up.
+    let scratch = try Scratch()
+    let (recording, sources) = try record(in: scratch)
+    sources[.microphone]?.play(Sound.tone(2), at: 0)
+    let levels = await recording.levels.prefix(20).reduce(into: 0) { count, _ in count += 1 }
+    #expect(levels == 20)
+    #expect(scratch.files == ["microphone-0000.m4a"])
+    // Private while it is being written, and after.
+    let path = scratch.url.appendingPathComponent("microphone-0000.m4a").path
+    #expect(try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int == 0o600)
+    await recording.stop()
+    #expect(scratch.files == ["microphone-0000.m4a"])
+    #expect(try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int == 0o600)
+  }
+
+  @Test func aNewCaptureNeverReusesTheNumberOfALeftOverCopy() async throws {
+    let scratch = try Scratch()
+    // Left by a run that was killed, and not picked up yet.
+    try Data("left over".utf8).write(to: scratch.url.appendingPathComponent("microphone-0003.wav"))
+    let (recording, sources) = try record(chunkSeconds: 30, in: scratch)
+    sources[.microphone]?.play(Sound.tone(1), at: 0)
+    await recording.stop()
+    #expect(scratch.files == ["microphone-0003.wav", "microphone-0004.m4a"])
+    let leftOver = try Data(contentsOf: scratch.url.appendingPathComponent("microphone-0003.wav"))
+    #expect(leftOver == Data("left over".utf8))
+  }
+
+  #if os(macOS)
+    /// The real thing: a second process records, and is killed in the middle of a file.
+    @Test func aKilledProcessLeavesACopyThatCanBeRead() async throws {
+      let scratch = try Scratch()
+      setenv(RecordingTests.folderVariable, scratch.url.path, 1)
+      defer { unsetenv(RecordingTests.folderVariable) }
+      await #expect(processExitsWith: .signal(SIGKILL)) {
+        let folder = URL(fileURLWithPath: String(cString: getenv(RecordingTests.folderVariable)))
+        let source = ScriptedSource()
+        let request = CaptureRequest(tracks: [.microphone], directory: folder, chunkSeconds: 4)
+        let recording = try Recording.start(request, sources: [.microphone: source], origin: 0)
+        // A steady tone is cut at 4.8 seconds: one whole file, and 3.2 seconds of the next.
+        source.play(Sound.tone(8), at: 0)
+        _ = await RecordingTests.copyHolds(3.2, at: folder.appendingPathComponent("microphone-0001.wav"))
+        kill(getpid(), SIGKILL)
+        await recording.stop()
+      }
+
+      #expect(scratch.files == ["microphone-0000.m4a", "microphone-0001.m4a", "microphone-0001.wav"])
+      // The file that was closed in time is whole.
+      let whole = try Decoded(scratch.url.appendingPathComponent("microphone-0000.m4a"))
+      #expect(abs(whole.seconds - 4.8) < 0.15)
+      // The one that was open cannot be read. Its copy can, up to the moment of the kill.
+      #expect(throws: (any Error).self) {
+        try Decoded(scratch.url.appendingPathComponent("microphone-0001.m4a"))
+      }
+      let copy = try Decoded(scratch.url.appendingPathComponent("microphone-0001.wav"))
+      #expect(abs(copy.seconds - 3.2) < 0.06)
+      #expect(abs(copy.loudness(from: 0.5, to: 3) - 0.0707) < 0.005)
+    }
+
+    private static let folderVariable = "OPEN_WISPER_TEST_KILL_FOLDER"
+  #endif
+
   @Test func levelsArriveAboutTwentyTimesASecondAndFollowLoudness() async throws {
     let scratch = try Scratch()
     let (recording, sources) = try record([.microphone, .system], in: scratch)
