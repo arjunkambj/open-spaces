@@ -596,6 +596,14 @@ public final class MeetingEngine {
   nonisolated static let partLost =
     "The app closed while this meeting was being recorded. The last part could not be saved."
 
+  /// Whether `retry` could improve this meeting. False when it has no problem,
+  /// and when what it lost is gone for good: screens should then show the
+  /// message without a "Try again" button.
+  public nonisolated static func canRetry(_ meeting: Meeting) -> Bool {
+    guard let failure = meeting.failure else { return meeting.status == .failed }
+    return failure != partLost
+  }
+
   /// The title a meeting gets until the notes give it a better one, e.g. "Meeting, 19 Nov, 2:30 PM".
   nonisolated static func placeholderTitle(for date: Date) -> String {
     let day = date.formatted(.dateTime.day().month(.abbreviated))

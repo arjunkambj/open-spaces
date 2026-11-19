@@ -497,7 +497,9 @@ struct MeetingEngineTests {
     let meeting = try await rig.finished(id)
     #expect(meeting.status == .ready)
     #expect(meeting.segments.count == 3)
-    #expect(meeting.failure == "Part of this meeting could not be transcribed. " + refusal.localizedDescription)
+    #expect(
+      meeting.failure == "Part of this meeting could not be transcribed. " + refusal.localizedDescription
+    )
     // A final answer is not asked for again and again: once while recording, once at the end.
     #expect(rig.transcriber.requests.filter { MeetingRig.name(of: $0) == "microphone-0" }.count == 2)
   }
@@ -633,5 +635,17 @@ struct MeetingEngineTests {
     #expect(try await rig.meeting(id).status == .recording)
     await rig.engine.stop()
     #expect(try await rig.finished(id).status == .ready)
+  }
+
+  @Test func aMeetingThatLostAudioForGoodCannotBeRetried() {
+    var meeting = Meeting(title: "Sync", status: .ready)
+    #expect(!MeetingEngine.canRetry(meeting))
+    meeting.failure = "Part of this meeting could not be transcribed."
+    #expect(MeetingEngine.canRetry(meeting))
+    meeting.failure = MeetingEngine.partLost
+    #expect(!MeetingEngine.canRetry(meeting))
+    meeting.failure = nil
+    meeting.status = .failed
+    #expect(MeetingEngine.canRetry(meeting))
   }
 }
