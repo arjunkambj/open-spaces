@@ -366,13 +366,15 @@ struct MeetingToolTests {
 
   @Test func exportSavesAFileAndNeverOverwrites() async throws {
     let folder = try harness.makeFolder()
-    defer { try? FileManager.default.removeItem(at: folder) }
+    defer { harness.cleanUp() }
     let meeting = await harness.meetings()[0]
+    // Where a file was saved is reported with every link followed, so compare real paths.
+    let real = Harness.real(folder)
 
     let target = folder.appendingPathComponent("sync.md")
     let saved = try await harness.call("meetings_export", #"{"meeting":"latest","path":"\#(target.path)"}"#)
     #expect(!saved.isError)
-    #expect(saved.data["path"].string == target.path)
+    #expect(saved.data["path"].string == real + "/sync.md")
     #expect(!saved.data["markdown"].exists)
     #expect(try String(contentsOf: target, encoding: .utf8) == meeting.markdown(timeZone: Harness.zone))
 
@@ -381,15 +383,13 @@ struct MeetingToolTests {
 
     // A relative path is taken from the folder the tool was started in; a folder gets a file named for the meeting.
     let relative = try await harness.call("meetings_export", #"{"meeting":"latest","path":"notes.md"}"#)
-    #expect(relative.data["path"].string == folder.appendingPathComponent("notes.md").path)
+    #expect(relative.data["path"].string == real + "/notes.md")
     let slashed = await harness.meetings()[2]
     let intoFolder = try await harness.call(
       "meetings_export",
       #"{"meeting":"\#(slashed.id.uuidString)","path":"\#(folder.path)"}"#
     )
-    #expect(
-      intoFolder.data["path"].string == folder.appendingPathComponent("2026-11-13 1-1 with Jordan.md").path
-    )
+    #expect(intoFolder.data["path"].string == real + "/2026-11-13 1-1 with Jordan.md")
     #expect(
       FileManager.default.fileExists(
         atPath: folder.appendingPathComponent("2026-11-13 1-1 with Jordan.md").path
@@ -542,8 +542,11 @@ struct ActionToolTests {
 }
 
 @Suite("Recording tools")
-struct RecordingToolTests {
+final class RecordingToolTests {
   let harness = Harness()
+
+  // Asking the app leaves a ticket in the data folder.
+  deinit { harness.cleanUp() }
 
   /// Makes the fake app behave like the real one: a start link creates a
   /// recording meeting, a stop link moves it on to "processing".

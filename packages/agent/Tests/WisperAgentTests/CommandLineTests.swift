@@ -307,6 +307,7 @@ struct CommandLineTests {
   }
 
   @Test func thingsThatCannotBeDoneExitWith1() async throws {
+    defer { harness.cleanUp() }
     let cases: [([String], String)] = [
       (["meetings", "get", "ffffffff"], "No meeting has the ID"),
       (["actions", "done", "ffffffff"], "No action item has the ID"),
@@ -344,19 +345,19 @@ struct CommandLineTests {
     #expect(text.code == 0)
     for part in [
       "Meetings:     3", "Action items: 2 open", "Dictations:   6", "Dictionary:   4 words",
-      "Snippets:     2", "App:          running", harness.folder.path, "not there yet", "cannot read it",
+      "Snippets:     2", "App:          running", harness.dataFolder.path, "not there yet", "cannot read it",
     ] {
       #expect(text.out.contains(part), "doctor does not say: \(part)")
     }
-    _ = try harness.makeFolder()
-    defer { try? FileManager.default.removeItem(at: harness.folder) }
+    _ = try harness.makeDataFolder()
+    defer { harness.cleanUp() }
     harness.app.set(running: false)
     await harness.library.save(Meeting(title: "Live", startedAt: Harness.now, status: .recording))
     let json = await harness.cli("doctor", "--json").json
     #expect(json["meetings"].int == 4 && json["open_action_items"].int == 2 && json["dictations"].int == 6)
     #expect(json["dictionary_words"].int == 4 && json["snippets"].int == 2)
     #expect(json["recording"].bool == true && json["app_running"].bool == false)
-    #expect(json["data_folder"].string == harness.folder.path && json["data_folder_exists"].bool == true)
+    #expect(json["data_folder"].string == harness.dataFolder.path && json["data_folder_exists"].bool == true)
     #expect(json["tool"].string == Harness.toolPath && json["version"].string == WisperAgent.version)
     #expect(json["mcp_protocol_versions"].strings.first == "2026-07-28")
   }

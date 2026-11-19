@@ -30,7 +30,17 @@ struct Toolbox: Sendable {
 
   /// ISO 8601 with the user's own offset, e.g. `2026-11-18T10:00:00+05:30`.
   func iso(_ date: Date) -> String {
-    Date.ISO8601FormatStyle(timeZoneSeparator: .colon, timeZone: environment.timeZone).format(date)
+    Date.ISO8601FormatStyle(timeZoneSeparator: .colon, timeZone: environment.timeZone)
+      .format(Toolbox.sane(date))
+  }
+
+  /// A date no formatter can choke on: between the years 1 and 9999 in every time zone,
+  /// whatever a file holds.
+  static func sane(_ date: Date) -> Date {
+    let seconds = date.timeIntervalSince1970
+    guard seconds.isFinite else { return Date(timeIntervalSince1970: 0) }
+    // Two days inside the first and the last year, so no zone's offset can carry it out.
+    return Date(timeIntervalSince1970: min(max(seconds, -62_135_424_000), 253_402_128_000))
   }
 
   /// A short local date and time for people, e.g. `2026-11-18 10:00`.
@@ -39,7 +49,7 @@ struct Toolbox: Sendable {
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.timeZone = environment.timeZone
     formatter.dateFormat = "yyyy-MM-dd HH:mm"
-    return formatter.string(from: date)
+    return formatter.string(from: Toolbox.sane(date))
   }
 
   static let dateHelp =
@@ -58,7 +68,8 @@ struct Toolbox: Sendable {
     case "yesterday": return calendar.date(byAdding: .day, value: -1, to: today) ?? today
     default: break
     }
-    if let unit = value.last, let amount = Int(value.dropLast()), amount >= 0 {
+    // An age of more than a few centuries is a mistake, and must not overflow the sum below.
+    if let unit = value.last, let amount = Int(value.dropLast()), (0...100_000).contains(amount) {
       let hours: Int? =
         switch unit {
         case "h", "H": 1
@@ -86,7 +97,8 @@ struct Toolbox: Sendable {
       if let date = local.date(from: value) { return date }
     }
     throw AgentError.usage(
-      "\"\(argument)\" could not be read as a date: \"\(text)\". Use a form like 2026-11-18, "
+      "\"\(argument)\" could not be read as a date: \"\(Limits.echo(text))\". Use a form like "
+        + "2026-11-18, "
         + "2026-11-18T09:30:00+05:30, today, yesterday or 7d."
     )
   }
@@ -98,23 +110,35 @@ struct Toolbox: Sendable {
       omittingEmptySubsequences: false
     )
     let numbers = parts.compactMap { Double($0) }
-    guard (1...3).contains(parts.count), numbers.count == parts.count, numbers.allSatisfy({ $0 >= 0 })
+    // "inf" and "nan" read as numbers too, and are not times.
+    guard (1...3).contains(parts.count), numbers.count == parts.count,
+      numbers.allSatisfy({ $0.isFinite && $0 >= 0 && $0 < 1e9 })
     else {
       throw AgentError.usage(
-        "\"\(argument)\" could not be read as a time: \"\(text)\". Use seconds (90) or mm:ss (1:30)."
+        "\"\(argument)\" could not be read as a time: \"\(Limits.echo(text))\". Use seconds (90) or "
+          + "mm:ss (1:30)."
       )
     }
     return numbers.reduce(0) { $0 * 60 + $1 }
   }
 
   /// A position in a recording as `mm:ss`, the same way the Markdown export writes it.
+  ///
+  /// Times come straight from a file, so they may be negative, huge or not a number at all.
   static func stamp(_ seconds: TimeInterval) -> String {
-    let total = Int(seconds)
+    let total = Meeting.wholeSeconds(seconds)
     return String(format: "%02d:%02d", total / 60, total % 60)
   }
 
+  /// The length of a meeting in whole minutes, rounded, and at least 1 when it has any length.
   static func minutes(_ meeting: Meeting) -> Int {
-    meeting.duration > 0 ? max(1, Int((meeting.duration / 60).rounded())) : 0
+    let duration = meeting.duration
+    return duration > 0 ? max(1, Meeting.wholeSeconds(duration + 30) / 60) : 0
+  }
+
+  /// A length of time as whole seconds, never negative, safe for any number a file may hold.
+  static func whole(_ interval: TimeInterval) -> Int {
+    interval.isFinite ? Int(min(max(interval, 0), 4_000_000_000)) : 0
   }
 
   // MARK: IDs
@@ -125,6 +149,9 @@ struct Toolbox: Sendable {
   /// The items whose ID is `reference` or starts with it. Hyphens and case do not matter.
   /// Returns `nil` when `reference` does not look like an ID at all.
   static func matching<Item>(_ reference: String, in items: [Item], id: (Item) -> UUID) -> [Item]? {
+    // Only the characters an ID is made of: anything else (a NUL, say) is not quietly dropped.
+    guard reference.unicodeScalars.allSatisfy({ $0.isASCII && ($0 == "-" || $0.properties.isASCIIHexDigit) })
+    else { return nil }
     if let exact = UUID(uuidString: reference) { return items.filter { id($0) == exact } }
     let wanted = reference.uppercased().replacingOccurrences(of: "-", with: "")
     guard wanted.count >= 4, wanted.count <= 32, wanted.allSatisfy(\.isHexDigit) else { return nil }
@@ -133,6 +160,11 @@ struct Toolbox: Sendable {
 
   /// Finds one meeting from a full ID, a unique prefix of one, or "latest".
   func meeting(_ reference: String, allowLatest: Bool = true) async throws -> Meeting {
+    try Toolbox.meeting(reference, in: try await library.meetings(), allowLatest: allowLatest)
+  }
+
+  /// Finds one meeting among `all`, which is every meeting, newest first.
+  static func meeting(_ reference: String, in all: [Meeting], allowLatest: Bool = true) throws -> Meeting {
     var wanted = reference.trimmingCharacters(in: .whitespacesAndNewlines)
     let link = "\(WisperLink.scheme)://meetings/"
     if wanted.lowercased().hasPrefix(link) { wanted = String(wanted.dropFirst(link.count)) }
@@ -140,25 +172,28 @@ struct Toolbox: Sendable {
       guard allowLatest else {
         throw AgentError.usage("Give the meeting's ID here. \"latest\" is not accepted for this.")
       }
-      guard let newest = try await library.meetings().first else {
+      guard let newest = all.first else {
         throw AgentError.failed("There are no meetings yet.")
       }
       return newest
     }
-    let all = try await library.meetings()
     guard let found = Toolbox.matching(wanted, in: all, id: \.id) else {
       throw AgentError.usage(
-        "\"\(reference)\" is not a meeting ID. Use a full ID, the first 4 or more characters of one, or "
+        "\"\(Limits.echo(reference))\" is not a meeting ID. Use a full ID, the first 4 or more characters of one, or "
           + "\"latest\". List the meetings to see their IDs."
       )
     }
     switch found.count {
     case 1: return found[0]
     case 0:
-      throw AgentError.failed("No meeting has the ID \"\(reference)\". List the meetings to see their IDs.")
+      throw AgentError.failed(
+        "No meeting has the ID \"\(Limits.echo(reference))\". List the meetings to see their IDs."
+      )
     default:
-      let choices = found.prefix(5).map { "\($0.id.uuidString) (\($0.title))" }.joined(separator: ", ")
-      throw AgentError.failed("More than one meeting has an ID starting with \"\(reference)\": \(choices).")
+      let choices = found.prefix(5).map { "\($0.id.uuidString) (\($0.name))" }.joined(separator: ", ")
+      throw AgentError.failed(
+        "More than one meeting has an ID starting with \"\(Limits.echo(reference))\": \(choices)."
+      )
     }
   }
 
@@ -168,11 +203,11 @@ struct Toolbox: Sendable {
     switch meeting.status {
     case .recording:
       throw AgentError.failed(
-        "\"\(meeting.title)\" is still being recorded. Stop the recording first, then try again."
+        "\"\(meeting.name)\" is still being recorded. Stop the recording first, then try again."
       )
     case .processing:
       throw AgentError.failed(
-        "Open Wisper is still writing the notes for \"\(meeting.title)\". Try again in a moment."
+        "Open Wisper is still writing the notes for \"\(meeting.name)\". Try again in a moment."
       )
     case .ready, .failed:
       break
@@ -206,9 +241,11 @@ struct Toolbox: Sendable {
       friendly(meeting.startedAt),
       "\(Toolbox.minutes(meeting)) min".padding(toLength: 7, withPad: " ", startingAt: 0),
       meeting.status.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0),
-      meeting.title,
+      meeting.name,
     ]
-    if !meeting.tags.isEmpty { parts.append(meeting.tags.map { "#\($0)" }.joined(separator: " ")) }
+    if !meeting.tags.isEmpty {
+      parts.append(meeting.tags.map { "#\(Toolbox.oneLine($0))" }.joined(separator: " "))
+    }
     let open = meeting.notes?.actionItems.filter { !$0.done }.count ?? 0
     if open > 0 { parts.append("(\(open) open)") }
     return parts.joined(separator: "  ")
@@ -224,14 +261,18 @@ struct Toolbox: Sendable {
   }
 
   static func line(for item: ActionItem) -> String {
-    "[\(item.done ? "x" : " ")] \(short(item.id))  \(item.text)" + (item.owner.map { "  (\($0))" } ?? "")
+    "[\(item.done ? "x" : " ")] \(short(item.id))  \(oneLine(item.text))"
+      + (item.owner.map { "  (\(oneLine($0)))" } ?? "")
   }
 
   // MARK: Text
 
   /// Seconds as a JSON number: whole when it can be, two decimals otherwise.
+  /// Never negative, and safe for any number a file may hold.
   static func number(_ seconds: TimeInterval) -> JSONValue {
-    seconds.rounded() == seconds ? .int(Int(seconds)) : .double((seconds * 100).rounded() / 100)
+    guard seconds.isFinite else { return .int(0) }
+    let safe = min(max(seconds, 0), 4_000_000_000)
+    return safe.rounded() == safe ? .int(Int(safe)) : .double((safe * 100).rounded() / 100)
   }
 
   static func clipped(_ text: String, to length: Int) -> String {
@@ -243,12 +284,10 @@ struct Toolbox: Sendable {
     "\(number) \(number == 1 ? singular : plural ?? singular + "s")"
   }
 
-  /// Trims each value, drops empty ones and repeats (ignoring case), keeps the order.
+  /// Makes each value one clean line, drops empty ones and repeats (ignoring case), keeps the order.
   static func tidy(_ values: [String]) -> [String] {
     var seen = Set<String>()
-    return values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter {
-      !$0.isEmpty && seen.insert($0.lowercased()).inserted
-    }
+    return values.map(oneLine).filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
   }
 
   static func same(_ a: String, _ b: String) -> Bool {

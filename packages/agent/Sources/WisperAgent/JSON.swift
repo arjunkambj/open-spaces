@@ -103,46 +103,72 @@ extension JSONValue: ExpressibleByDictionaryLiteral {
 
 // MARK: - Reading
 
-extension JSONValue: Decodable {
-  private struct Field: CodingKey {
-    var stringValue: String
-    var intValue: Int? { nil }
-    init(stringValue: String) { self.stringValue = stringValue }
-    init?(intValue: Int) { nil }
-  }
+extension JSONValue {
+  /// Thrown for JSON that is valid but shaped to cost a lot: nested very deep, or holding
+  /// a very large number of values.
+  struct TooComplex: Error {}
 
-  init(from decoder: any Decoder) throws {
-    if let keyed = try? decoder.container(keyedBy: Field.self) {
-      var object = JSONObject()
-      for key in keyed.allKeys.sorted(by: { $0.stringValue < $1.stringValue }) {
-        object[key.stringValue] = try keyed.decode(JSONValue.self, forKey: key)
-      }
-      self = .object(object)
-      return
-    }
-    if var list = try? decoder.unkeyedContainer() {
-      var items: [JSONValue] = []
-      while !list.isAtEnd { items.append(try list.decode(JSONValue.self)) }
-      self = .array(items)
-      return
-    }
-    let single = try decoder.singleValueContainer()
-    if single.decodeNil() {
-      self = .null
-    } else if let value = try? single.decode(Bool.self) {
-      self = .bool(value)
-    } else if let value = try? single.decode(Int.self) {
-      self = .int(value)
-    } else if let value = try? single.decode(Double.self) {
-      self = .double(value)
-    } else {
-      self = .string(try single.decode(String.self))
-    }
-  }
-
-  /// Reads one JSON document. Throws when `text` is not valid JSON.
+  /// Reads one JSON document. Throws `TooComplex` when it is nested deeper than
+  /// `Limits.depth` or holds more than `Limits.values` values, and another error when
+  /// `text` is not valid JSON. Object keys come out in alphabetical order.
+  ///
+  /// The shape is checked in one pass over the bytes before anything is built, so input
+  /// made to be expensive is turned away for the price of reading it once.
   static func parse(_ text: String) throws -> JSONValue {
-    try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    let data = Data(text.utf8)
+    var depth = 0
+    var commas = 0
+    var inText = false
+    var escaped = false
+    for byte in data {
+      if inText {
+        if escaped {
+          escaped = false
+        } else if byte == 0x5C {
+          escaped = true
+        } else if byte == 0x22 {
+          inText = false
+        }
+        continue
+      }
+      switch byte {
+      case 0x22: inText = true
+      case 0x5B, 0x7B:
+        depth += 1
+        guard depth <= Limits.depth else { throw TooComplex() }
+      case 0x5D, 0x7D: depth -= 1
+      case 0x2C:
+        commas += 1
+        guard commas <= Limits.values else { throw TooComplex() }
+      default: break
+      }
+    }
+    return JSONValue(foundation: try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]))
+  }
+
+  /// A value as `JSONSerialization` hands it over.
+  private init(foundation value: Any) {
+    switch value {
+    case let text as String:
+      self = .string(text)
+    case let number as NSNumber:
+      if CFGetTypeID(number) == CFBooleanGetTypeID() {
+        self = .bool(number.boolValue)
+      } else if let whole = Int(exactly: number) {
+        // Also a whole number written with a fraction or an exponent, such as 5.0 or 1e2.
+        self = .int(whole)
+      } else {
+        self = .double(number.doubleValue)
+      }
+    case let items as [Any]:
+      self = .array(items.map(JSONValue.init(foundation:)))
+    case let fields as [String: Any]:
+      var object = JSONObject()
+      for key in fields.keys.sorted() { object[key] = fields[key].map(JSONValue.init(foundation:)) }
+      self = .object(object)
+    default:
+      self = .null
+    }
   }
 }
 
@@ -210,9 +236,11 @@ extension JSONValue {
       case "\r": out += "\\r"
       case "\t": out += "\\t"
       default:
-        // Control characters, and the Unicode line separators some readers split lines on.
+        // Control characters, the Unicode line separators some readers split lines on, and
+        // the characters that turn the reading direction around: all written as escapes, so
+        // JSON printed on a terminal shows what is really there.
         if scalar.value < 0x20 || (0x7F...0x9F).contains(scalar.value) || scalar.value == 0x2028
-          || scalar.value == 0x2029
+          || scalar.value == 0x2029 || scalar.reordersText
         {
           let hex = String(scalar.value, radix: 16, uppercase: false)
           out += "\\u" + String(repeating: "0", count: 4 - hex.count) + hex

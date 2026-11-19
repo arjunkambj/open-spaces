@@ -120,6 +120,9 @@ enum Help {
       note += " From \(range.lowerBound) to \(range.upperBound)."
     }
     if case .strings = param.kind { note += " Separate several with commas, or repeat the option." }
+    if param.kind == .string, param.limit > Limits.path {
+      note += " At most \(Limits.plain(param.limit)) characters."
+    }
     switch param.fallback {
     case .string(let value)?: note += " Default: \(value)."
     case .int(let value)?: note += " Default: \(value)."
@@ -132,7 +135,7 @@ enum Help {
   static func command(_ command: CommandLineFrontEnd.Command) -> String {
     let tool = command.tool
     let shown = tool.params.filter { !command.hidden.contains($0.name) }
-    var parts = [tool.usage(path: command.path, hiding: command.hidden), wrap(tool.description)]
+    var parts = [tool.usage(path: command.path, hiding: command.hidden), wrap(tool.guidance)]
     var rows: [(String, String)] = shown.map { param in
       param.positional ? ("<\(param.name)>", note(for: param)) : (param.usage, note(for: param))
     }
@@ -221,6 +224,7 @@ enum Help {
 
   private static func effect(_ hints: Hints) -> String {
     if hints.readOnly { return "Reads" }
+    if hints.openWorld { return "Reads, or saves a new file" }
     if hints.destructive { return "Overwrites or deletes" }
     return hints.idempotent ? "Adds or changes" : "Adds"
   }

@@ -46,11 +46,23 @@ extension Catalogue {
       description:
         "Adds a word or phrase to the user's dictionary so future dictations and meetings spell it that "
         + "way, for example a person's name or a product name. replaces is optional: the wrong form the "
-        + "transcriber tends to write, which will then be swapped for the right one. If the word is "
-        + "already there it is kept, and its replaces is updated when one is given.",
+        + "transcriber tends to write. From then on the app swaps that form for the right one in "
+        + "everything the user dictates, and types the result into whatever app they are using, so "
+        + "only add what the user asked for. If the word is already there it is kept, and its replaces "
+        + "is updated when one is given. Both are one line of at most \(Limits.word) characters.",
       params: [
-        .text("text", "The correct spelling, for example Kubernetes.", required: true, positional: true),
-        .text("replaces", "The misheard form to replace, for example \"cooper netties\"."),
+        .text(
+          "text",
+          "The correct spelling, for example Kubernetes.",
+          required: true,
+          positional: true,
+          limit: Limits.word
+        ),
+        .text(
+          "replaces",
+          "The misheard form to replace, for example \"cooper netties\".",
+          limit: Limits.word
+        ),
       ],
       hints: .sets,
       example: "wisper dictionary add \"Kubernetes\" --replaces \"cooper netties\"",
@@ -93,17 +105,28 @@ extension Catalogue {
       title: "Add a snippet",
       summary: "Add a voice snippet.",
       description:
-        "Adds a voice shortcut: when the user says the trigger while dictating, the expansion is typed "
-        + "instead. Good for links, addresses and text the user repeats often. It fails if a snippet with "
-        + "the same trigger exists; remove that one first.",
+        "Adds a voice shortcut: from then on, whenever the user says the trigger while dictating, the app "
+        + "types the expansion instead, into whatever app they are using at that moment (a chat, an "
+        + "email, a terminal). So only add a snippet the user asked for, with exactly the text they "
+        + "asked for. Good for links, addresses and text the user repeats often. The trigger is one "
+        + "line of two or more words, or one word of at least \(Toolbox.shortestTrigger) letters. It "
+        + "fails if a snippet with the same trigger exists; remove that one first.",
       params: [
         .text(
           "trigger",
-          "What the user will say, for example \"my calendar link\".",
+          "What the user will say, for example \"my calendar link\". At most \(Limits.trigger) characters.",
           required: true,
-          positional: true
+          positional: true,
+          limit: Limits.trigger
         ),
-        .text("expansion", "What gets typed, for example a web address.", required: true, positional: true),
+        .text(
+          "expansion",
+          "What gets typed, for example a web address. At most \(Limits.plain(Limits.expansion)) "
+            + "characters.",
+          required: true,
+          positional: true,
+          limit: Limits.expansion
+        ),
       ],
       hints: .adds,
       example: "wisper snippets add \"my calendar link\" \"https://cal.example.com/alex\"",
@@ -138,6 +161,7 @@ extension Catalogue {
         + "the transcription and text models, and how meetings and history are handled. It cannot return "
         + "the API key: this tool has no access to it. Settings can only be changed in the app.",
       hints: .reads,
+      returnsContent: false,
       example: "wisper settings get",
       run: { box, _ in try await box.readSettings() }
     )
@@ -198,7 +222,8 @@ extension Toolbox {
   }
 
   private static func line(for word: DictionaryWord) -> String {
-    "\(short(word.id))  \(word.text)" + (word.replaces.map { "  (replaces \"\($0)\")" } ?? "")
+    "\(short(word.id))  \(oneLine(word.text))"
+      + (word.replaces.map { "  (replaces \"\(oneLine($0))\")" } ?? "")
   }
 
   /// Picks one entry by its exact name or by its ID (or the start of it).
@@ -214,8 +239,14 @@ extension Toolbox {
     let found = named.isEmpty ? (matching(wanted, in: items, id: id) ?? []) : named
     switch found.count {
     case 1: return found[0]
-    case 0: throw AgentError.failed("There is no \(kind) \"\(reference)\". List them to see what is there.")
-    default: throw AgentError.failed("More than one \(kind) matches \"\(reference)\". Use its ID instead.")
+    case 0:
+      throw AgentError.failed(
+        "There is no \(kind) \"\(Limits.echo(reference))\". List them to see what is there."
+      )
+    default:
+      throw AgentError.failed(
+        "More than one \(kind) matches \"\(Limits.echo(reference))\". Use its ID instead."
+      )
     }
   }
 
@@ -228,12 +259,24 @@ extension Toolbox {
     )
   }
 
+  // What an agent saves here, the app later types for the user. So a word and the form it
+  // replaces are one short line each, checked before anything is stored.
   fileprivate func addWord(_ arguments: Arguments) async throws -> ToolOutput {
-    let text = arguments.text("text").trimmingCharacters(in: .whitespacesAndNewlines)
-    let replaces = arguments.string("replaces")?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let existing = try await library.words().first { Toolbox.same($0.text, text) }
+    let text = try Toolbox.phrase(arguments.text("text"), argument: "text", limit: Limits.word)
+    var replaces: String?
+    if let given = arguments.string("replaces"), !given.trimmingCharacters(in: .whitespaces).isEmpty {
+      replaces = try Toolbox.phrase(given, argument: "replaces", limit: Limits.word)
+    }
+    let words = try await library.words()
+    let existing = words.first { Toolbox.same($0.text, text) }
+    guard existing != nil || words.count < Limits.words else {
+      throw AgentError.failed(
+        "The dictionary already holds \(Limits.plain(Limits.words)) words, the most it can. Remove some "
+          + "first."
+      )
+    }
     var word = existing ?? DictionaryWord(text: text, createdAt: now)
-    if let replaces, !replaces.isEmpty { word.replaces = replaces }
+    if let replaces { word.replaces = replaces }
     if existing == nil || existing != word { try await library.save(word) }
     var data = Toolbox.json(word)
     data["added"] = .bool(existing == nil)
@@ -266,7 +309,7 @@ extension Toolbox {
   }
 
   private static func line(for snippet: Snippet) -> String {
-    "\(short(snippet.id))  \"\(snippet.trigger)\"  ->  \(clipped(snippet.expansion, to: 70))"
+    "\(short(snippet.id))  \"\(oneLine(snippet.trigger))\"  ->  \(clipped(snippet.expansion, to: 70))"
   }
 
   fileprivate func listSnippets() async throws -> ToolOutput {
@@ -278,15 +321,51 @@ extension Toolbox {
     )
   }
 
+  /// A one-word trigger needs at least this many letters. The app's own screen has the same rule.
+  static let shortestTrigger = 4
+
+  // A snippet is text the app will type for the user later, into whatever app they are in.
+  // An agent that was tricked must not be able to plant one that goes off by accident (a
+  // trigger as common as "okay") or one that hides something (control characters).
   fileprivate func addSnippet(_ arguments: Arguments) async throws -> ToolOutput {
-    let trigger = arguments.text("trigger").trimmingCharacters(in: .whitespacesAndNewlines)
-    if let existing = try await library.snippets().first(where: { Toolbox.same($0.trigger, trigger) }) {
+    let trigger = try Toolbox.phrase(arguments.text("trigger"), argument: "trigger", limit: Limits.trigger)
+    let spoken = Toolbox.spokenWords(trigger)
+    let letters = spoken.joined().filter { $0.isLetter || $0.isNumber }.count
+    guard letters > 0, spoken.count >= 2 || letters >= Toolbox.shortestTrigger else {
+      throw AgentError.usage(
+        "\"trigger\" is too short. Use two or more words, or one word of at least "
+          + "\(Toolbox.shortestTrigger) letters: a very short phrase would go off by accident."
+      )
+    }
+    // Line endings from other systems are plain line breaks. The ends are trimmed, as in the app.
+    let expansion = arguments.text("expansion").replacingOccurrences(of: "\r\n", with: "\n")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !expansion.isEmpty else { throw AgentError.usage("\"expansion\" must not be empty.") }
+    let unwanted = expansion.unicodeScalars.contains {
+      ($0.isControl && $0 != "\n" && $0 != "\t") || $0.reordersText
+    }
+    guard !unwanted else {
+      throw AgentError.usage(
+        "\"expansion\" must be plain text. Line breaks and tabs are fine; other control characters are not."
+      )
+    }
+    let snippets = try await library.snippets()
+    let key = spoken.joined(separator: " ")
+    let twin = snippets.first {
+      Toolbox.same($0.trigger, trigger) || Toolbox.spokenWords($0.trigger).joined(separator: " ") == key
+    }
+    if let existing = twin {
       throw AgentError.failed(
         "There is already a snippet for \"\(existing.trigger)\" (\(existing.id.uuidString)). "
           + "Remove it first, or use another trigger."
       )
     }
-    let snippet = Snippet(trigger: trigger, expansion: arguments.text("expansion"), createdAt: now)
+    guard snippets.count < Limits.snippets else {
+      throw AgentError.failed(
+        "There are already \(Limits.snippets) snippets, the most there can be. Remove some first."
+      )
+    }
+    let snippet = Snippet(trigger: trigger, expansion: expansion, createdAt: now)
     try await library.save(snippet)
     return ToolOutput(data: Toolbox.json(snippet), text: "Added:\n  " + Toolbox.line(for: snippet))
   }

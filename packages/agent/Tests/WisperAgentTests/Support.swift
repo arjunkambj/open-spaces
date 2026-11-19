@@ -92,6 +92,8 @@ final class FakeApp: @unchecked Sendable {
   private var answer: (@Sendable (WisperLink) async -> Void)?
 
   var links: [WisperLink] { lock.withLock { opened.compactMap(WisperLink.init) } }
+  /// The addresses exactly as they were opened, with anything the tool attached to them.
+  var urls: [URL] { lock.withLock { opened } }
 
   func set(running: Bool?) { lock.withLock { self.running = running } }
   func onLink(_ answer: @escaping @Sendable (WisperLink) async -> Void) {
@@ -122,22 +124,28 @@ struct Harness: Sendable {
 
   let library: InMemoryLibrary
   let app = FakeApp()
+  /// A scratch folder: the one the tool was "started in". Not created until a test asks.
   let folder: URL
+  /// Where the tool believes the library's files are. Inside `folder`, and not created
+  /// until something needs it.
+  let dataFolder: URL
   let agent: WisperAgent
 
-  init(library: InMemoryLibrary? = nil, homeOverride: String? = nil) {
+  init(library: InMemoryLibrary? = nil, homeOverride: String? = nil, dataFolder: URL? = nil) {
     let library = library ?? SampleData.library(now: Harness.now)
     self.library = library
     let app = app
     let folder = FileManager.default.temporaryDirectory
       .appendingPathComponent("wisper-agent-tests-\(UUID().uuidString)", isDirectory: true)
     self.folder = folder
+    let dataFolder = dataFolder ?? folder.appendingPathComponent("Open Wisper", isDirectory: true)
+    self.dataFolder = dataFolder
     agent = WisperAgent(
       library: library,
       environment: WisperAgent.Environment(
         now: { Harness.now },
         timeZone: Harness.zone,
-        dataFolder: folder,
+        dataFolder: dataFolder,
         homeOverride: homeOverride,
         executablePath: Harness.toolPath,
         workingDirectory: folder,
@@ -152,6 +160,22 @@ struct Harness: Sendable {
   func makeFolder() throws -> URL {
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     return folder
+  }
+
+  /// Creates the data folder (and the scratch folder around it) and returns it.
+  func makeDataFolder() throws -> URL {
+    try FileManager.default.createDirectory(at: dataFolder, withIntermediateDirectories: true)
+    return dataFolder
+  }
+
+  /// Removes everything a test left on disk.
+  func cleanUp() { try? FileManager.default.removeItem(at: folder) }
+
+  /// The path with every symbolic link followed, the way the tool reports where it saved a file.
+  static func real(_ url: URL) -> String {
+    guard let resolved = realpath(url.path, nil) else { return url.path }
+    defer { free(resolved) }
+    return String(cString: resolved)
   }
 
   // MARK: Command line

@@ -71,10 +71,21 @@ private final class LineWriter: @unchecked Sendable {
 
 /// Reads lines from a file descriptor. Only a line feed ends a line, so
 /// unusual characters inside a JSON message never split it.
+///
+/// A line longer than `Limits.line` is never held in memory whole. Its start
+/// is kept, a little longer than the limit so the reader of the line can see
+/// that it is too long, the rest is thrown away as it arrives, and the last
+/// `Limits.lineEnd` bytes are handed over after the start.
 private final class LineReader: @unchecked Sendable {
   private let queue = DispatchQueue(label: "open-wisper.agent.input")
   private let descriptor: Int32
   private var buffer: [UInt8] = []
+  /// How much of `buffer` is known to hold no line feed, so no byte is looked at twice.
+  private var searched = 0
+  /// The start of a line that is too long, while the rest of it is being read and dropped.
+  private var start: [UInt8]?
+  /// The last bytes read of that line so far.
+  private var tail: [UInt8] = []
   private var ended = false
 
   init(descriptor: Int32) { self.descriptor = descriptor }
@@ -85,20 +96,48 @@ private final class LineReader: @unchecked Sendable {
     }
   }
 
+  /// A line that was too long: its start, then its end.
+  private func tooLong(_ start: [UInt8], last: [UInt8]) -> String {
+    var end = Array((tail + last).suffix(Limits.lineEnd))
+    tail = []
+    if end.last == 0x0D { end.removeLast() }
+    return String(decoding: start + end, as: UTF8.self)
+  }
+
   private func readLine() -> String? {
+    var chunk = [UInt8](repeating: 0, count: 65_536)
     while true {
-      if let newline = buffer.firstIndex(of: 0x0A) {
+      if let newline = buffer[searched...].firstIndex(of: 0x0A) {
         var line = Array(buffer[..<newline])
         buffer.removeSubrange(...newline)
+        searched = 0
+        if let start {
+          self.start = nil
+          return tooLong(start, last: line)
+        }
         if line.last == 0x0D { line.removeLast() }
         return String(decoding: line, as: UTF8.self)
       }
+      searched = buffer.count
+      if start != nil {
+        tail = Array((tail + buffer.suffix(Limits.lineEnd)).suffix(Limits.lineEnd))
+        buffer.removeAll(keepingCapacity: true)
+        searched = 0
+      } else if buffer.count > Limits.line {
+        start = buffer
+        buffer.removeAll()
+        searched = 0
+      }
       if ended {
+        if let start {
+          self.start = nil
+          return tooLong(start, last: [])
+        }
         guard !buffer.isEmpty else { return nil }
         defer { buffer = [] }
+        searched = 0
         return String(decoding: buffer, as: UTF8.self)
       }
-      var chunk = [UInt8](repeating: 0, count: 65_536)
       let count = chunk.withUnsafeMutableBytes { read(descriptor, $0.baseAddress, $0.count) }
       if count > 0 {
         buffer.append(contentsOf: chunk[..<count])

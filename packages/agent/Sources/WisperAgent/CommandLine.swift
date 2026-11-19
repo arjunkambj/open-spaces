@@ -97,7 +97,7 @@ struct CommandLineFrontEnd {
     guard !inGroup.isEmpty else {
       let known = Catalogue.groups.map(\.key) + Self.extras.map(\.name)
       return wrong(
-        "There is no command \"\(first)\"." + Self.suggestion(for: first, among: known),
+        "There is no command \"\(Limits.echo(first))\"." + Self.suggestion(for: first, among: known),
         hint: "wisper --help"
       )
     }
@@ -107,7 +107,7 @@ struct CommandLineFrontEnd {
     }
     guard let command = inGroup.first(where: { $0.path[1] == words[1] }) else {
       return wrong(
-        "There is no command \"\(first) \(words[1])\"."
+        "There is no command \"\(first) \(Limits.echo(words[1]))\"."
           + Self.suggestion(for: words[1], among: inGroup.map { $0.path[1] }),
         hint: "wisper \(first) --help"
       )
@@ -122,24 +122,29 @@ struct CommandLineFrontEnd {
     do {
       let raw = try Self.parse(Array(words.dropFirst(2)), for: command)
       let output = try await command.tool.call(raw, in: box)
-      io.output(json ? JSONValue.object(output.data).serialized(pretty: true) : output.text)
+      // Titles, notes and transcripts are printed as they are stored, except for control
+      // characters: text from a meeting must not be able to send commands to the terminal.
+      // JSON output needs no such care, because JSON writes those characters as escapes.
+      io.output(
+        json ? JSONValue.object(output.data).serialized(pretty: true) : Toolbox.printable(output.text)
+      )
       return Self.success
     } catch let error as AgentError {
       switch error.kind {
       case .usage:
         return wrong(error.message, usage: usageLine, hint: hint)
       case .failed:
-        io.error("wisper: \(error.message)")
+        io.error("wisper: \(Toolbox.printable(error.message))")
         return Self.failed
       }
     } catch {
-      io.error("wisper: \(error.localizedDescription)")
+      io.error("wisper: \(Toolbox.printable(error.localizedDescription))")
       return Self.failed
     }
   }
 
   private func wrong(_ message: String, usage: String? = nil, hint: String) -> Int32 {
-    io.error("wisper: \(message)")
+    io.error("wisper: \(Toolbox.printable(message))")
     if let usage { io.error("Usage: \(usage)") }
     io.error("Run \"\(hint)\" to see how it works.")
     return Self.usage
@@ -161,6 +166,8 @@ struct CommandLineFrontEnd {
       }
       return row[b.count]
     }
+    // A word far longer than any command is not a slip of the finger.
+    guard !Limits.isLonger(word, than: 40) else { return "" }
     let lowered = word.lowercased()
     let close = known.map { ($0, distance(lowered, $0)) }.filter { $0.1 <= max(2, lowered.count / 3) }
     guard let best = close.min(by: { $0.1 < $1.1 }) else { return "" }
@@ -215,7 +222,7 @@ struct CommandLineFrontEnd {
       guard let param else {
         let flags = open.filter { !$0.positional }.map(\.flag)
         throw AgentError.usage(
-          "\"\(String(split[0]).isEmpty ? word : "--" + split[0])\" is not an option of this command."
+          "\"\(Limits.echo(String(split[0]).isEmpty ? word : "--" + split[0]))\" is not an option of this command."
             + (flags.isEmpty ? "" : " Options: \(flags.joined(separator: ", ")).")
         )
       }
@@ -245,7 +252,9 @@ struct CommandLineFrontEnd {
     if loose.count > places.count {
       // Unquoted text: `wisper actions add latest Send the deck` means one text of three words.
       guard let last = places.last, last.kind == .string else {
-        throw AgentError.usage("Too many arguments: \"\(loose[places.count])\" was not expected.")
+        throw AgentError.usage(
+          "Too many arguments: \"\(Limits.echo(loose[places.count]))\" was not expected."
+        )
       }
       raw[last.name] = .string(loose[(places.count - 1)...].joined(separator: " "))
     }
@@ -304,7 +313,7 @@ struct CommandLineFrontEnd {
       data["snippets"] = .int(snippets.count)
       data["recording"] = .bool(recording != nil)
       lines += [
-        "Meetings:     \(meetings.count)" + (recording.map { "  (recording \"\($0.title)\" now)" } ?? ""),
+        "Meetings:     \(meetings.count)" + (recording.map { "  (recording \"\($0.name)\" now)" } ?? ""),
         "Action items: \(open) open",
         "Dictations:   \(dictations.count)",
         "Dictionary:   \(Toolbox.count(words.count, "word"))",
@@ -326,7 +335,10 @@ struct CommandLineFrontEnd {
       "MCP:          speaks \((MCPServer.modernVersions + MCPServer.handshakeVersions).joined(separator: ", "))"
     )
     lines.append("API key:      kept in the Keychain. This tool cannot read it.")
-    io.output(json ? JSONValue.object(data).serialized(pretty: true) : lines.joined(separator: "\n"))
+    io.output(
+      json
+        ? JSONValue.object(data).serialized(pretty: true) : Toolbox.printable(lines.joined(separator: "\n"))
+    )
     return code
   }
 }

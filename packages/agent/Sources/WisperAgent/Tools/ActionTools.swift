@@ -35,8 +35,14 @@ extension Catalogue {
         + "asks to note a to-do against a meeting.",
       params: [
         .text("meeting", Catalogue.meetingHelp, required: true, positional: true),
-        .text("text", "What needs to be done.", required: true, positional: true),
-        .text("owner", "Who should do it."),
+        .text(
+          "text",
+          "What needs to be done, on one line.",
+          required: true,
+          positional: true,
+          limit: Limits.action
+        ),
+        .text("owner", "Who should do it.", limit: Limits.owner),
       ],
       hints: .adds,
       example: "wisper actions add latest \"Send the proposal\" --owner Alex",
@@ -74,8 +80,8 @@ extension Catalogue {
         + "removes the owner. To tick an item off, use actions_set_done instead.",
       params: [
         .text("action", actionHelp, required: true, positional: true),
-        .text("text", "The new text."),
-        .text("owner", "The new owner. An empty text removes the owner."),
+        .text("text", "The new text, on one line.", limit: Limits.action),
+        .text("owner", "The new owner. An empty text removes the owner.", limit: Limits.owner),
       ],
       hints: .destroys,
       aliases: [Alias(path: ["actions", "edit"], summary: "The same as \"actions update\".")],
@@ -116,7 +122,7 @@ extension Toolbox {
     let found = Toolbox.matching(wanted, in: places) { $0.meeting.notes?.actionItems[$0.index].id ?? UUID() }
     guard let found else {
       throw AgentError.usage(
-        "\"\(reference)\" is not an action item ID. Use a full ID or the first 4 or more characters of one. "
+        "\"\(Limits.echo(reference))\" is not an action item ID. Use a full ID or the first 4 or more characters of one. "
           + "List the action items to see their IDs."
       )
     }
@@ -124,11 +130,12 @@ extension Toolbox {
     case 1: return found[0]
     case 0:
       throw AgentError.failed(
-        "No action item has the ID \"\(reference)\". List the action items to see their IDs."
+        "No action item has the ID \"\(Limits.echo(reference))\". List the action items to see their IDs."
       )
     default:
       throw AgentError.failed(
-        "More than one action item has an ID starting with \"\(reference)\". Give more of the ID."
+        "More than one action item has an ID starting with \"\(Limits.echo(reference))\". Give more of "
+          + "the ID."
       )
     }
   }
@@ -189,7 +196,7 @@ extension Toolbox {
     for (item, meeting) in shown {
       if meeting.id != lastMeeting {
         if lastMeeting != nil { lines.append("") }
-        lines.append("\(meeting.title)  (\(friendly(meeting.startedAt)), \(Toolbox.short(meeting.id)))")
+        lines.append("\(meeting.name)  (\(friendly(meeting.startedAt)), \(Toolbox.short(meeting.id)))")
         lastMeeting = meeting.id
       }
       lines.append("  " + Toolbox.line(for: item))
@@ -214,11 +221,16 @@ extension Toolbox {
   fileprivate func addAction(_ arguments: Arguments) async throws -> ToolOutput {
     var meeting = try await meeting(arguments.text("meeting"))
     try ensureEditable(meeting)
-    let owner = arguments.string("owner")?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let item = ActionItem(
-      text: arguments.text("text").trimmingCharacters(in: .whitespacesAndNewlines),
-      owner: (owner?.isEmpty ?? true) ? nil : owner
-    )
+    let owner = arguments.string("owner").map(Toolbox.oneLine)
+    let text = Toolbox.oneLine(arguments.text("text"))
+    guard !text.isEmpty else { throw AgentError.usage("\"text\" must not be empty.") }
+    guard (meeting.notes?.actionItems.count ?? 0) < Limits.actions else {
+      throw AgentError.failed(
+        "\"\(meeting.name)\" already has \(Limits.actions) action items, the most a meeting can hold. "
+          + "Remove some first."
+      )
+    }
+    let item = ActionItem(text: text, owner: (owner?.isEmpty ?? true) ? nil : owner)
     meeting = try await stored(
       library.updateMeeting(meeting.id) { stored in
         var notes = stored.notes ?? MeetingNotes()
@@ -228,7 +240,7 @@ extension Toolbox {
     )
     return ToolOutput(
       data: entry(item, in: meeting),
-      text: "Added to \"\(meeting.title)\":\n  " + Toolbox.line(for: item)
+      text: "Added to \"\(meeting.name)\":\n  " + Toolbox.line(for: item)
     )
   }
 
@@ -245,8 +257,8 @@ extension Toolbox {
   }
 
   fileprivate func updateAction(_ arguments: Arguments) async throws -> ToolOutput {
-    let text = arguments.string("text")?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let owner = arguments.string("owner")?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let text = arguments.string("text").map(Toolbox.oneLine)
+    let owner = arguments.string("owner").map(Toolbox.oneLine)
     guard text != nil || owner != nil else {
       throw AgentError.usage("Nothing to change. Give at least one of: text, owner.")
     }
@@ -263,6 +275,6 @@ extension Toolbox {
     let (item, meeting) = try await change(arguments.text("action")) { _ in false }
     var data = entry(item, in: meeting)
     data["removed"] = true
-    return ToolOutput(data: data, text: "Removed from \"\(meeting.title)\":\n  " + Toolbox.line(for: item))
+    return ToolOutput(data: data, text: "Removed from \"\(meeting.name)\":\n  " + Toolbox.line(for: item))
   }
 }

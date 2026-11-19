@@ -125,7 +125,9 @@ struct MCPProtocolTests {
     for reply in replies {
       #expect(reply["jsonrpc"].string == "2.0")
       #expect(reply["error"]["code"].int == -32700)
+      // No ID could be read, so the reply carries a null one.
       #expect(!reply["id"].exists)
+      #expect(reply.canonical.contains(#""id":null"#))
     }
   }
 
@@ -213,7 +215,8 @@ struct MCPProtocolTests {
       let readOnly = hints["readOnlyHint"].bool ?? false
       let destructive = hints["destructiveHint"].bool ?? true
       #expect(hints["idempotentHint"].bool != nil)
-      #expect(hints["openWorldHint"].bool == false)
+      // Only the export reaches outside the library: it can write a file anywhere the user can.
+      #expect(hints["openWorldHint"].bool == (name == "meetings_export"), "\(name)")
       #expect(!(readOnly && destructive))
       // Names say what a tool does, so the hints must agree with them.
       if name.hasSuffix("_list") || name.hasSuffix("_get") || name.hasSuffix("_search")
@@ -414,19 +417,25 @@ struct MCPProtocolTests {
     try #require(messages.count == 2)
     #expect(messages[0]["role"].string == "user")
     #expect(messages[0]["content"]["type"].string == "text")
-    #expect(messages[0]["content"]["text"].string?.contains("Weekly product sync") == true)
+    // The request names the meeting by its date. Its title is in the attached document only.
+    #expect(messages[0]["content"]["text"].string?.contains("2026-11-18 15:30") == true)
     #expect(messages[1]["content"]["type"].string == "resource")
     #expect(
       messages[1]["content"]["resource"]["uri"].string == "openwisper://meetings/\(meeting.id.uuidString)"
     )
     #expect(messages[1]["content"]["resource"]["text"].string?.contains("billing migration") == true)
+    #expect(messages[1]["content"]["resource"]["text"].string?.hasPrefix("# Weekly product sync") == true)
 
     let other = await harness.meetings()[1]
     let chosen = try await harness.request(
       "prompts/get",
       #""name":"follow_up_email","arguments":{"meeting":"\#(other.id.uuidString.prefix(8))"}"#
     )["result"]
-    #expect(chosen["messages"][0]["content"]["text"].string?.contains("Customer call with Northwind") == true)
+    #expect(chosen["messages"][0]["content"]["text"].string?.contains("2026-11-16") == true)
+    #expect(
+      chosen["messages"][1]["content"]["resource"]["text"].string?.hasPrefix("# Customer call with Northwind")
+        == true
+    )
   }
 
   @Test func actionItemsPromptPointsAtTheTool() async throws {
