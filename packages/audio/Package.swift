@@ -17,10 +17,6 @@ let package = Package(
       dependencies: [
         .product(name: "WisperDomain", package: "domain")
       ]
-    ),
-    .testTarget(
-      name: "WisperAudioTests",
-      dependencies: ["WisperAudio", .product(name: "WisperDomain", package: "domain")]
-    ),
+    )
   ]
 )

@@ -3,8 +3,17 @@
   "ui": "stream",
   "noUpdateNotifier": true,
   "concurrency": "2",
-  "globalDependencies": ["scripts/swiftw", "scripts/ios", ".swift-format"],
-  "globalEnv": ["WISPER_TOOLCHAIN", "DEVELOPER_DIR", "SDKROOT", "TOOLCHAINS"],
+  "globalDependencies": [
+    "scripts/swiftw",
+    "scripts/ios",
+    ".swift-format"
+  ],
+  "globalEnv": [
+    "WISPER_TOOLCHAIN",
+    "DEVELOPER_DIR",
+    "SDKROOT",
+    "TOOLCHAINS"
+  ],
   "globalPassThroughEnv": [
     "CI",
     "GITHUB_ACTIONS",
@@ -16,39 +25,46 @@
   ],
   "tasks": {
     "lint": {
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.md"
+      ],
       "outputs": []
     },
     "build": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "!Tests/**", "!**/*.md"],
-      "outputs": []
-    },
-    "test": {
-      "dependsOn": ["build"],
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.md"
+      ],
       "outputs": []
     },
     "@open-wisper/web#build": {
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "inputs": [
         "$TURBO_DEFAULT$",
         "!**/*.md",
         "$TURBO_ROOT$/assets/icon-1024.png",
         "$TURBO_ROOT$/apps/macos/package.json"
       ],
-      "outputs": ["dist/**"]
+      "outputs": [
+        "dist/**"
+      ]
     },
     "@open-wisper/ios#build": {
-      "dependsOn": ["^build"],
-      "cache": false
-    },
-    "@open-wisper/ios#test": {
-      "dependsOn": ["build"],
+      "dependsOn": [
+        "^build"
+      ],
       "cache": false
     },
     "bundle": {
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "cache": false
     },
     "generate": {

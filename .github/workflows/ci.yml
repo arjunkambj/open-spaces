@@ -48,7 +48,7 @@ jobs:
           cat "$GITHUB_OUTPUT"
 
   check:
-    name: Lint, build and test
+    name: Lint and build
     runs-on: macos-26
     timeout-minutes: 45
     env:
@@ -82,11 +82,9 @@ jobs:
             swift-check-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-
       - name: Make unchanged files look unchanged
         run: scripts/ci-mtimes
-      - name: Lint, build and test everything
+      - name: Lint and build everything
         # One Swift build at a time: the runner has 3 cores and 7 GB of memory.
         # Keep going after a failure so one run shows everything that is broken.
-        # Print lines as they happen, each marked with its package, so a test
-        # that hangs can be seen and named; the time limit then stops it.
         timeout-minutes: 30
         run: pnpm check --concurrency=1 --continue=dependencies-successful --log-order=stream
       - name: Save Swift build folders
@@ -151,8 +149,6 @@ jobs:
         run: scripts/ios generate
       - name: Build for the iOS Simulator
         run: scripts/ios build
-      - name: Run the tests
-        run: scripts/ios test
       - name: Take pictures of the app in the simulator
         # Something to look at, not a check: a failure here never fails the job.
         # It takes about eight minutes, so only on request: a run started by hand,

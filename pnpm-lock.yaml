@@ -265,9 +265,6 @@ importers:
       '@open-wisper/domain':
         specifier: workspace:*
         version: link:../domain
-      '@open-wisper/store':
-        specifier: workspace:*
-        version: link:../store
 
   packages/audio:
     dependencies:
@@ -282,9 +279,6 @@ importers:
       '@open-wisper/domain':
         specifier: workspace:*
         version: link:../domain
-      '@open-wisper/store':
-        specifier: workspace:*
-        version: link:../store
 
   packages/store:
     dependencies:

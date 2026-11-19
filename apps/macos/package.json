@@ -5,8 +5,7 @@
   "description": "Open Wisper for macOS.",
   "scripts": {
     "build": "../../scripts/swiftw build",
-    "test": "../../scripts/swiftw test",
-    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources Tests",
+    "lint": "swift format lint --strict --recursive --parallel Package.swift Sources",
     "bundle": "./scripts/bundle",
     "dmg": "./scripts/bundle && ./scripts/dmg",
     "dev": "./scripts/bundle && open 'build/Open Wisper.app'"

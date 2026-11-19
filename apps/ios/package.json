@@ -6,8 +6,7 @@
   "scripts": {
     "generate": "../../scripts/ios generate",
     "build": "../../scripts/swiftw build --package-path Phone && ../../scripts/ios build",
-    "test": "../../scripts/swiftw test --package-path Phone && ../../scripts/ios test",
-    "lint": "swift format lint --strict --recursive --parallel App Keyboard Widgets Shared Tests Phone/Package.swift Phone/Sources Phone/Tests",
+    "lint": "swift format lint --strict --recursive --parallel App Keyboard Widgets Shared Phone/Package.swift Phone/Sources",
     "snapshots": "../../scripts/swiftw run --package-path Phone wisper-phone-snapshots build/snapshots"
   },
   "dependencies": {

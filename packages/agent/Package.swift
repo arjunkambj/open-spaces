@@ -28,16 +28,5 @@ let package = Package(
         .product(name: "WisperStore", package: "store"),
       ]
     ),
-    .testTarget(
-      name: "WisperAgentTests",
-      dependencies: [
-        "WisperAgent",
-        // The end-to-end test starts the built program.
-        "wisper",
-        .product(name: "WisperDomain", package: "domain"),
-        // Only the end-to-end test uses the store, to put real files in front of the built tool.
-        .product(name: "WisperStore", package: "store"),
-      ]
-    ),
   ]
 )

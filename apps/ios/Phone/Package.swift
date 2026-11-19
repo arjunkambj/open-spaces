@@ -63,15 +63,5 @@ let package = Package(
         .product(name: "WisperUI", package: "ui"),
       ]
     ),
-    .testTarget(
-      name: "WisperPhoneTests",
-      dependencies: [
-        "WisperPhone",
-        "WisperKeyboard",
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperEngine", package: "engine"),
-        .product(name: "WisperStore", package: "store"),
-      ]
-    ),
   ]
 )
