@@ -60,7 +60,7 @@ Product > Scheme > Edit Scheme > Arguments.
 Signing is not set up in the project, because it is yours to choose.
 
 1. In Xcode, select the **Spaces** project, then each of the targets **Spaces**,
-   **SpacesKeyboard** and **SpacesWidgets**. Under Signing & Capabilities, pick
+   **SpacesKeyboardExtension** and **SpacesWidgets**. Under Signing & Capabilities, pick
    your team.
 2. Change the bundle IDs. `dev.openspaces.ios` belongs to this project, so Apple will not
    let another team use it. In `project.yml`, change the `PRODUCT_BUNDLE_IDENTIFIER` lines
@@ -70,7 +70,7 @@ Signing is not set up in the project, because it is yours to choose.
    The two extensions' IDs must start with the app's ID.
 3. Change the App Group, in three places that must match:
    - `App/Spaces.entitlements`
-   - `Keyboard/SpacesKeyboard.entitlements`
+   - `Keyboard/SpacesKeyboardExtension.entitlements`
    - `groupID` in `Phone/Sources/SpacesKeyboard/SharedFolder.swift`
 
    Use a name of your own that starts with `group.`, such as `group.com.yourname.spaces`.

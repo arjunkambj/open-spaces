@@ -62,7 +62,7 @@ targets:
         product: SpacesPhone
       - package: phone
         product: SpacesLive
-      - target: SpacesKeyboard
+      - target: SpacesKeyboardExtension
         embed: true
       - target: SpacesWidgets
         embed: true
@@ -105,7 +105,8 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
 
-  SpacesKeyboard:
+  # Not named SpacesKeyboard: that is the name of the Swift module it is built from.
+  SpacesKeyboardExtension:
     type: app-extension
     platform: iOS
     sources:
@@ -118,11 +119,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.openspaces.ios.keyboard
-        PRODUCT_NAME: SpacesKeyboard
-        CODE_SIGN_ENTITLEMENTS: Keyboard/SpacesKeyboard.entitlements
+        PRODUCT_NAME: SpacesKeyboardExtension
+        CODE_SIGN_ENTITLEMENTS: Keyboard/SpacesKeyboardExtension.entitlements
         SKIP_INSTALL: true
     info:
-      path: Generated/SpacesKeyboard-Info.plist
+      path: Generated/SpacesKeyboardExtension-Info.plist
       properties:
         CFBundleDisplayName: Spaces
         CFBundleShortVersionString: $(MARKETING_VERSION)
