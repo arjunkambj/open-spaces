@@ -66,8 +66,10 @@ struct OpenAITranscriber: Transcriber {
     let model = request.voices == nil ? Realtime.fileModel(for: request.model) : OpenAITranscriber.voicesModel
     let style = Style(model: model)
     let words = request.voices == nil ? Hints.words(request.vocabulary) : []
-    let known = try (request.voices?.known.prefix(Voices.mostKnown) ?? []).map { sample in
-      (name: sample.name, reference: try VoiceSample.dataURL(sample))
+    // A sample that cannot be cut as a whole voice sample is not sent: the server would refuse
+    // every chunk that carries it, and the voice is still told apart, under a new number.
+    let known = (request.voices?.known.prefix(Voices.mostKnown) ?? []).compactMap { sample in
+      VoiceSample.dataURL(sample).map { (name: sample.name, reference: $0) }
     }
     var language = request.language?.trimmingCharacters(in: .whitespaces).lowercased()
     if language?.isEmpty == true { language = nil }
@@ -385,27 +387,29 @@ enum Upload {
 enum VoiceSample {
   /// The stretch of audio the sample names, at most `Voices.sampleLength.upperBound` seconds of
   /// it, as 16-bit mono WAV in a `data:audio/wav;base64,` URL. A few hundred KB.
-  static func dataURL(_ sample: Voices.Sample) throws -> String {
-    let unreadable = SpacesError.storage("the recording could not be read")
-    guard let file = try? AVAudioFile(forReading: sample.audio) else { throw unreadable }
+  /// `nil` when the recording cannot be read, or holds less than a sample must.
+  static func dataURL(_ sample: Voices.Sample) -> String? {
+    guard let file = try? AVAudioFile(forReading: sample.audio) else { return nil }
     let format = file.processingFormat
     let rate = format.sampleRate
     let channels = Int(format.channelCount)
     let seconds = min(sample.end - sample.start, Voices.sampleLength.upperBound)
     guard rate > 0, channels > 0, sample.start.isFinite, seconds.isFinite, seconds > 0 else {
-      throw unreadable
+      return nil
     }
     let first = AVAudioFramePosition(max(0, sample.start) * rate)
     let wanted = min(Double(file.length - first), seconds * rate)
     guard first < file.length, wanted >= 1,
       let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(wanted))
-    else { throw unreadable }
+    else { return nil }
     file.framePosition = first
     guard (try? file.read(into: buffer, frameCount: AVAudioFrameCount(wanted))) != nil,
       let samples = buffer.floatChannelData
-    else { throw unreadable }
+    else { return nil }
 
     let frames = Int(buffer.frameLength)
+    // The file can end before the stretch the transcript gave: too short a sample is refused.
+    guard Double(frames) / rate >= Voices.sampleLength.lowerBound else { return nil }
     var wav = Data(capacity: 44 + frames * 2)
     func append<Number: FixedWidthInteger>(_ number: Number) {
       withUnsafeBytes(of: number.littleEndian) { wav.append(contentsOf: $0) }
