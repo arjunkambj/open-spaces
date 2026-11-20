@@ -5,8 +5,8 @@
 node_modules/
 .turbo/
 
-# The website (apps/web): files Astro and Wrangler make while they work
-.astro/
+# The website (apps/web): files TanStack Start and Wrangler make while they work
+.tanstack/
 .wrangler/
 
 # Swift builds

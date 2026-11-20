@@ -22,6 +22,11 @@ updates:
       # These two are released together and must have the same version.
       tailwind:
         patterns: ["tailwindcss", "@tailwindcss/*"]
+      # TanStack Start asks for one exact version of the router: move them together.
+      tanstack:
+        patterns: ["@tanstack/*"]
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
     # Wait a week before taking a new release, so a bad one can be pulled first.
     cooldown:
       default-days: 7

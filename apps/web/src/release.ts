@@ -1,9 +1,9 @@
-// The newest release, looked up once while the site is built and written into the HTML.
-// A visitor's browser asks GitHub nothing.
+// The newest release, looked up once while the site is built. vite.config.ts calls this and
+// writes the version into the page (src/version.ts). A visitor's browser asks GitHub nothing.
 
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { links } from "./content";
+import { links } from "./content.ts";
 
 export interface Release {
   /** For example "0.1.0". */

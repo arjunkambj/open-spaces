@@ -3,23 +3,31 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The Open Wisper website: one static page, served from Cloudflare.",
+  "description": "The Open Wisper website: one page, prerendered to static files and served from Cloudflare.",
   "scripts": {
-    "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
-    "build": "ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "dev": "vite dev --host 127.0.0.1 --port 4321 --strictPort",
+    "build": "vite build && node scripts/finish.mjs",
     "preview": "WRANGLER_SEND_METRICS=false wrangler dev --ip 127.0.0.1 --port 8788",
-    "lint": "ASTRO_TELEMETRY_DISABLED=1 astro check",
+    "lint": "tsc --noEmit",
     "check:site": "node scripts/check.mjs",
     "deploy": "pnpm run build && WRANGLER_SEND_METRICS=false wrangler deploy"
   },
+  "dependencies": {
+    "@tanstack/react-router": "1.170.46",
+    "@tanstack/react-start": "1.169.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
   "devDependencies": {
-    "@astrojs/check": "0.9.12",
     "@tailwindcss/vite": "4.3.5",
     "@types/node": "22.20.5",
-    "astro": "7.4.11",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
     "sharp": "0.35.5",
     "tailwindcss": "4.3.5",
     "typescript": "6.0.3",
+    "vite": "8.3.6",
     "wrangler": "4.160.1"
   }
 }
