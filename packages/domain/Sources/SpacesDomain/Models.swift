@@ -194,20 +194,32 @@ public struct MeetingSettings: Codable, Sendable, Equatable {
   public var autoSummarize: Bool
   /// Keep the audio files after the transcript is made.
   public var keepAudio: Bool
+  /// Offer to record when a call on the calendar starts, and give a meeting recorded during one
+  /// the event's title and the names of the people invited. Needs calendar access. macOS only.
+  public var offerCalendarMeetings: Bool
 
-  public init(captureSystemAudio: Bool = true, autoSummarize: Bool = true, keepAudio: Bool = true) {
+  public init(
+    captureSystemAudio: Bool = true,
+    autoSummarize: Bool = true,
+    keepAudio: Bool = true,
+    offerCalendarMeetings: Bool = false
+  ) {
     self.captureSystemAudio = captureSystemAudio
     self.autoSummarize = autoSummarize
     self.keepAudio = keepAudio
+    self.offerCalendarMeetings = offerCalendarMeetings
   }
 
-  private enum CodingKeys: String, CodingKey { case captureSystemAudio, autoSummarize, keepAudio }
+  private enum CodingKeys: String, CodingKey {
+    case captureSystemAudio, autoSummarize, keepAudio, offerCalendarMeetings
+  }
 
   public init(from decoder: any Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     captureSystemAudio = try c.decodeIfPresent(Bool.self, forKey: .captureSystemAudio) ?? true
     autoSummarize = try c.decodeIfPresent(Bool.self, forKey: .autoSummarize) ?? true
     keepAudio = try c.decodeIfPresent(Bool.self, forKey: .keepAudio) ?? true
+    offerCalendarMeetings = try c.decodeIfPresent(Bool.self, forKey: .offerCalendarMeetings) ?? false
   }
 }
 
@@ -662,6 +674,9 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
   /// Free-form Markdown written by the user or by an agent.
   public var userNotes: String
   public var tags: [String]
+  /// Names of the other people invited to the calendar event the meeting was recorded during.
+  /// Empty when there was no such event.
+  public var attendees: [String]
 
   public init(
     id: UUID = UUID(),
@@ -673,7 +688,8 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     segments: [TranscriptSegment] = [],
     notes: MeetingNotes? = nil,
     userNotes: String = "",
-    tags: [String] = []
+    tags: [String] = [],
+    attendees: [String] = []
   ) {
     self.id = id
     self.title = title
@@ -685,6 +701,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     self.notes = notes
     self.userNotes = userNotes
     self.tags = tags
+    self.attendees = attendees
   }
 
   public var duration: TimeInterval {
@@ -708,7 +725,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     }.joined(separator: "\n")
   }
 
-  /// The meeting as a Markdown document: title, date, summary, key points,
+  /// The meeting as a Markdown document: title, date, attendees, summary, key points,
   /// decisions, action items, the user's notes and the transcript. Times are in the
   /// device's time zone.
   public func markdown() -> String {
@@ -719,6 +736,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     var facts = ["**Date:** \(dateFormat.string(from: startedAt))"]
     if duration > 0 { facts.append("**Length:** \(max(1, Meeting.wholeSeconds(duration + 30) / 60)) min") }
     if !tags.isEmpty { facts.append("**Tags:** \(tags.joined(separator: ", "))") }
+    if !attendees.isEmpty { facts.append("**Attendees:** \(attendees.joined(separator: ", "))") }
     lines.append(facts.joined(separator: "  \n"))
     func section(_ heading: String, _ body: [String]) {
       guard !body.isEmpty else { return }
@@ -741,7 +759,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case id, title, startedAt, endedAt, status, failure, segments, notes, userNotes, tags
+    case id, title, startedAt, endedAt, status, failure, segments, notes, userNotes, tags, attendees
   }
 
   public init(from decoder: any Decoder) throws {
@@ -756,6 +774,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     notes = try c.decodeIfPresent(MeetingNotes.self, forKey: .notes)
     userNotes = try c.decodeIfPresent(String.self, forKey: .userNotes) ?? ""
     tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+    attendees = try c.decodeIfPresent([String].self, forKey: .attendees) ?? []
   }
 }
 

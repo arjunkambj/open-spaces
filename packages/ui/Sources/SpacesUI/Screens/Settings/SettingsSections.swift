@@ -120,6 +120,8 @@ struct MeetingSettingsSection: View {
   @Environment(AppModel.self) private var model
   @Environment(\.spacesIdiom) private var idiom
   @State private var computerAudioIsBlocked = false
+  /// Calendar access was refused: the calendar toggle says how to allow it.
+  @State private var calendarIsBlocked = false
 
   var body: some View {
     PageSection("Recording") {
@@ -130,6 +132,18 @@ struct MeetingSettingsSection: View {
             description:
               "Records the other side of a call too, not only your microphone.",
             isOn: model.settingBinding(\.meetings.captureSystemAudio)
+          )
+          SettingsDivider()
+        }
+        if model.calendar != nil {
+          ToggleRow(
+            "Offer to record calendar calls",
+            description: calendarIsBlocked
+              ? "Spaces may not read your calendar, so it cannot offer. Allow it in System Settings, "
+                + "under Privacy & Security, Calendars."
+              : "When a call on your calendar starts, Spaces asks if it should record. The meeting "
+                + "gets the event's name and who was invited.",
+            isOn: calendarOffers
           )
           SettingsDivider()
         }
@@ -167,9 +181,33 @@ struct MeetingSettingsSection: View {
           let blocked =
             permissions.needed.contains(.systemAudio) && permissions.status(.systemAudio) != .granted
           if blocked != computerAudioIsBlocked { computerAudioIsBlocked = blocked }
+          // Access taken away while the offers are on. (A refusal while off is kept until the next try.)
+          if model.settings.meetings.offerCalendarMeetings {
+            let refused = permissions.status(.calendar) != .granted
+            if refused != calendarIsBlocked { calendarIsBlocked = refused }
+          }
           try? await Task.sleep(for: .seconds(1))
         }
       }
+  }
+
+  /// Turning the offers on asks for calendar access first. Without it, they stay off.
+  private var calendarOffers: Binding<Bool> {
+    Binding(
+      get: { model.settings.meetings.offerCalendarMeetings },
+      set: { isOn in
+        guard isOn else {
+          calendarIsBlocked = false
+          model.update { $0.meetings.offerCalendarMeetings = false }
+          return
+        }
+        Task {
+          let allowed = await model.permissions.request(.calendar) == .granted
+          calendarIsBlocked = !allowed
+          if allowed { model.update { $0.meetings.offerCalendarMeetings = true } }
+        }
+      }
+    )
   }
 }
 

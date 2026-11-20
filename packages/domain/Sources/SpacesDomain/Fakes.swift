@@ -337,7 +337,7 @@ public final class FakePermissions: Permissions {
   public let needed: [Permission]
 
   public init(
-    needed: [Permission] = Permission.allCases,
+    needed: [Permission] = [.microphone, .accessibility, .systemAudio],
     statuses: [Permission: PermissionStatus] = [:]
   ) {
     self.needed = needed
@@ -352,6 +352,19 @@ public final class FakePermissions: Permissions {
   public func request(_ permission: Permission) async -> PermissionStatus {
     statuses[permission] = .granted
     return .granted
+  }
+}
+
+/// A calendar that holds only the events it was given.
+public struct FakeMeetingCalendar: MeetingCalendar {
+  private let events: [CalendarEvent]
+
+  public init(events: [CalendarEvent] = []) {
+    self.events = events
+  }
+
+  public func calls(at date: Date) async -> [CalendarEvent] {
+    events.filter { $0.start <= date && date < $0.end }.sorted { $0.start > $1.start }
   }
 }
 
@@ -442,6 +455,19 @@ public enum SampleData {
     }
   }
 
+  /// One call going on now, for a demo calendar.
+  public static func calendar(now: Date = Date()) -> [CalendarEvent] {
+    [
+      CalendarEvent(
+        id: "demo-design-review",
+        title: "Design review",
+        start: now.addingTimeInterval(-120),
+        end: now.addingTimeInterval(1_680),
+        attendees: ["Priya Raman", "Jordan Lee"]
+      )
+    ]
+  }
+
   public static func meetings(now: Date = Date()) -> [Meeting] {
     let start = now.addingTimeInterval(-26 * 3_600)
     let standup = Meeting(
@@ -511,7 +537,8 @@ public enum SampleData {
         keyPoints: ["Notes are dictated on phones", "Sharing happens over email"],
         actionItems: [ActionItem(text: "Send a summary and pricing", owner: "Alex")]
       ),
-      tags: ["customer"]
+      tags: ["customer"],
+      attendees: ["Dana Whitfield", "Luis Ortega"]
     )
     let untitledStart = now.addingTimeInterval(-6 * 86_400)
     let short = Meeting(

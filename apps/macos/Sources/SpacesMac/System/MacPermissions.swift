@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import ApplicationServices
+import EventKit
 import SpacesDomain
 
 /// The system permissions Spaces needs on a Mac.
@@ -11,6 +12,8 @@ import SpacesDomain
 ///   no prompt that grants it: the user turns the app on in System Settings.
 /// - **System audio**: to record the other side of a call in meetings. The
 ///   system shows a prompt once.
+/// - **Calendar**: full access to read events, only for calendar meetings. Not in
+///   `needed`. The system shows a prompt once.
 ///
 /// `status` never shows a prompt, so it is safe to poll while the user is in
 /// System Settings.
@@ -44,6 +47,13 @@ public final class MacPermissions: Permissions {
       case 2: return .notDetermined
       default: return .denied
       }
+    case .calendar:
+      switch EKEventStore.authorizationStatus(for: .event) {
+      case .fullAccess: return .granted
+      case .notDetermined: return .notDetermined
+      // Write-only access cannot read an event, so it is as good as no.
+      default: return .denied
+      }
     }
   }
 
@@ -65,6 +75,9 @@ public final class MacPermissions: Permissions {
           continuation.resume()
         }
       }
+    case (.calendar, .notDetermined):
+      // A refusal is an answer too: the status below says which it was.
+      _ = try? await EKEventStore().requestFullAccessToEvents()
     default:
       // The system will not ask twice. The user has to flip the switch.
       openSettings(for: permission)
@@ -79,6 +92,7 @@ public final class MacPermissions: Permissions {
       case .microphone: "Privacy_Microphone"
       case .accessibility: "Privacy_Accessibility"
       case .systemAudio: "Privacy_AudioCapture"
+      case .calendar: "Privacy_Calendars"
       }
     let pane = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(anchor)"
     guard let url = URL(string: pane) else { return }

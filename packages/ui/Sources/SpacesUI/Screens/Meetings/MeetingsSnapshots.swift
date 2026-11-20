@@ -310,7 +310,8 @@ private enum MeetingSamples {
       ),
       userNotes:
         "Follow up on the pricing page next week.\n\n- Ask Priya for the new screenshots\n- Book the launch retro",
-      tags: ["product", "launch"]
+      tags: ["product", "launch"],
+      attendees: ["Jordan Lee", "Priya Raman", "Sam Patel"]
     )
   }
 

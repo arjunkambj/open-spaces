@@ -106,6 +106,19 @@ enum SettingsSnapshots {
         SettingsPreview(section: .meetings),
         model: { SetupSnapshotModels.make(permissions: [.microphone: .granted, .accessibility: .granted]) }
       ),
+      // Calendar offers are on, but access to the calendar was taken away.
+      mac(
+        "settings-meetings-calendar-blocked",
+        SettingsPreview(section: .meetings),
+        model: {
+          SetupSnapshotModels.make(
+            permissions: [
+              .microphone: .granted, .accessibility: .granted, .systemAudio: .granted, .calendar: .denied,
+            ],
+            settings: { $0.meetings.offerCalendarMeetings = true }
+          )
+        }
+      ),
       // No iPhone has the spaces program. This one shows that the code wraps in a narrow box.
       phone(
         "settings-agents-narrow",
@@ -251,9 +264,10 @@ enum SetupSnapshotModels {
         languageModel: FakeLanguageModel(text: "This is a demo dictation."),
         target: FakeTextTarget(),
         permissions: FakePermissions(
-          needed: onPhone ? [.microphone] : Permission.allCases,
+          needed: onPhone ? [.microphone] : [.microphone, .accessibility, .systemAudio],
           statuses: permissions
         ),
+        calendar: onPhone ? nil : FakeMeetingCalendar(),
         host: host,
         checkAPIKey: { key in
           if !key.hasPrefix("sk-") { throw SpacesError.invalidAPIKey }

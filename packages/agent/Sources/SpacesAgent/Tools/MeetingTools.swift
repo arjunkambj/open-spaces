@@ -33,7 +33,8 @@ extension Catalogue {
       title: "Get a meeting",
       summary: "Show one meeting: its notes, action items and details.",
       description:
-        "Returns one meeting: title, times, status, tags, the AI summary, key points, decisions, action "
+        "Returns one meeting: title, times, status, tags, the people invited (from the calendar event "
+        + "it was recorded during, if any), the AI summary, key points, decisions, action "
         + "items (each with its own ID), the user's own notes, and how long the transcript is. The "
         + "transcript itself is left out unless include_transcript is true, because transcripts are long. "
         + "Prefer meetings_transcript with a time range or a speaker when you only need part of it.",
@@ -230,6 +231,7 @@ extension Toolbox {
       "status": .string(meeting.status.rawValue),
       "failure": meeting.failure.map(JSONValue.string),
       "tags": .strings(meeting.tags),
+      "attendees": .strings(meeting.attendees),
     ]
     if let notes = meeting.notes {
       object["summary"] = .string(notes.summary)
@@ -262,13 +264,14 @@ extension Toolbox {
     return head.joined(separator: "\n") + "\n\n" + markdown(of: copy)
   }
 
-  /// The meeting as a Markdown document. The title is the first line of the document, so it
-  /// and the tags are put on one line each whatever the file holds: nothing can follow the
-  /// heading on a line of its own that the meeting's owner did not put in the notes.
+  /// The meeting as a Markdown document. The title is the first line of the document, so it,
+  /// the tags and the attendees are put on one line each whatever the file holds: nothing can
+  /// follow the heading on a line of its own that the meeting's owner did not put in the notes.
   func markdown(of meeting: Meeting) -> String {
     var copy = meeting
     copy.title = Toolbox.oneLine(meeting.title)
     copy.tags = meeting.tags.map(Toolbox.oneLine)
+    copy.attendees = meeting.attendees.map(Toolbox.oneLine)
     // Dates no formatter can choke on, whatever the file holds.
     copy.startedAt = Toolbox.sane(meeting.startedAt)
     copy.endedAt = meeting.endedAt.map(Toolbox.sane)

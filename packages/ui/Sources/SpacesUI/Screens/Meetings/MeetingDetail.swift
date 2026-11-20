@@ -332,6 +332,12 @@ struct MeetingDetail: View {
       }
       Text(facts(meeting, phase: phase))
         .spacesText(.body, color: Spaces.Color.textSecondary)
+      if !meeting.attendees.isEmpty {
+        Text("With \(meeting.attendees.formatted(.list(type: .and)))")
+          .spacesText(.caption, color: Spaces.Color.textSecondary)
+          .lineLimit(2)
+          .accessibilityLabel("Invited: \(meeting.attendees.formatted(.list(type: .and)))")
+      }
       MeetingTagEditor(tags: meeting.tags, startsEditing: preset.editsTags) { typed in
         edit { $0.tags = MeetingsLogic.adding(typed, to: $0.tags) }
       } onRemove: { tag in

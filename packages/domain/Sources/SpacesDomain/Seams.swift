@@ -12,6 +12,7 @@ import Foundation
 //   AudioCapture   -> SpacesAudio.SystemAudioCapture   (AVFoundation / Core Audio)
 //   TextTarget     -> SpacesMac.MacTextTarget          (the app you are typing in)
 //   Permissions    -> SpacesMac.MacPermissions         (system permission prompts)
+//   MeetingCalendar -> SpacesMac.MacCalendar           (EventKit, the calendars on this Mac)
 
 // MARK: - Library
 
@@ -373,12 +374,16 @@ public protocol AudioCapture: Sendable {
 
 public enum Permission: String, Sendable, CaseIterable, Hashable {
   case microphone, accessibility, systemAudio
+  /// Reading the calendars, for `MeetingCalendar`. Asked for only when the person turns on
+  /// calendar meetings, so it is never among `Permissions.needed`.
+  case calendar
 
   public var label: String {
     switch self {
     case .microphone: "Microphone"
     case .accessibility: "Accessibility"
     case .systemAudio: "System audio recording"
+    case .calendar: "Calendar"
     }
   }
 }
@@ -582,7 +587,8 @@ public enum PermissionStatus: String, Sendable {
 /// The system permissions Spaces needs on this platform.
 @MainActor
 public protocol Permissions: AnyObject {
-  /// The permissions that matter on this platform, in the order to ask for them.
+  /// The permissions that matter on this platform, in the order to ask for them. Never
+  /// `.calendar`, which only one setting asks for.
   var needed: [Permission] { get }
   func status(_ permission: Permission) -> PermissionStatus
   /// Shows the system prompt, or opens the right System Settings pane when
@@ -591,6 +597,39 @@ public protocol Permissions: AnyObject {
   /// the user is in System Settings, so poll `status` to see it change.
   @discardableResult
   func request(_ permission: Permission) async -> PermissionStatus
+}
+
+// MARK: - Calendar
+
+/// An event on the person's calendar that looks like a call.
+public struct CalendarEvent: Sendable, Hashable, Identifiable {
+  /// Stable for one occurrence of the event: each meeting of a repeating event has its own.
+  public var id: String
+  public var title: String
+  public var start: Date
+  public var end: Date
+  /// Names of the other people invited (an email address when the calendar has no name).
+  /// Never the person using the app.
+  public var attendees: [String]
+
+  public init(id: String, title: String, start: Date, end: Date, attendees: [String] = []) {
+    self.id = id
+    self.title = title
+    self.start = start
+    self.end = end
+    self.attendees = attendees
+  }
+}
+
+/// The calls on the person's calendars, read on the device.
+///
+///   macOS -> SpacesMac.MacCalendar (EventKit)
+public protocol MeetingCalendar: Sendable {
+  /// The events going on at `date` that look like calls: they carry a Zoom, Google Meet,
+  /// Teams or Webex link, or other people are invited. All-day events, cancelled ones and
+  /// ones the person declined are left out. The one that started last comes first. Empty,
+  /// and never a prompt, while calendar access is not allowed.
+  func calls(at date: Date) async -> [CalendarEvent]
 }
 
 extension SpacesLink {

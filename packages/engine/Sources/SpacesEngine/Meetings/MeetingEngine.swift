@@ -76,6 +76,7 @@ public final class MeetingEngine {
   @ObservationIgnored private let capture: any AudioCapture
   @ObservationIgnored private let transcriber: any Transcriber
   @ObservationIgnored private let notes: MeetingNotesWriter
+  @ObservationIgnored private let calendar: (any MeetingCalendar)?
   @ObservationIgnored private var recording: Recording?
   @ObservationIgnored private var isStarting = false
   /// The meeting `start` is setting up, before `live` is set.
@@ -87,12 +88,14 @@ public final class MeetingEngine {
     library: any Library,
     capture: any AudioCapture,
     transcriber: any Transcriber,
-    languageModel: any LanguageModel
+    languageModel: any LanguageModel,
+    calendar: (any MeetingCalendar)? = nil
   ) {
     self.library = library
     self.capture = capture
     self.transcriber = transcriber
     notes = MeetingNotesWriter(languageModel: languageModel)
+    self.calendar = calendar
   }
 
   public var isRecording: Bool { live != nil }
@@ -101,9 +104,13 @@ public final class MeetingEngine {
 
   /// Starts recording a new meeting and returns its ID. `title` defaults to a
   /// dated placeholder that is replaced by a generated title when notes are written.
+  ///
+  /// The meeting belongs to `event` when one is given. Otherwise, while calendar meetings are
+  /// on in the settings, to the call on the calendar that is going on now, if there is one. A
+  /// meeting that belongs to an event takes its title, unless `title` names it, and its attendees.
   /// Throws `SpacesError` when capture cannot start or a meeting is already being recorded.
   @discardableResult
-  public func start(title: String? = nil) async throws -> Meeting.ID {
+  public func start(title: String? = nil, during event: CalendarEvent? = nil) async throws -> Meeting.ID {
     guard live == nil, recording == nil, !isStarting else {
       throw SpacesError.captureFailed("A meeting is already being recorded.")
     }
@@ -117,11 +124,17 @@ public final class MeetingEngine {
     let settings = try await library.settings()
     let options = try await transcriptionOptions(settings)
     let startedAt = Date()
+    var event = event
+    if event == nil, settings.meetings.offerCalendarMeetings, let calendar {
+      event = await calendar.calls(at: startedAt).first
+    }
     let given = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let named = (event?.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let meeting = Meeting(
-      title: given.isEmpty ? MeetingEngine.placeholderTitle(for: startedAt) : given,
+      title: !given.isEmpty ? given : !named.isEmpty ? named : MeetingEngine.placeholderTitle(for: startedAt),
       startedAt: startedAt,
-      status: .recording
+      status: .recording,
+      attendees: event?.attendees ?? []
     )
     let id = meeting.id
     startingID = id

@@ -78,7 +78,8 @@ The examples below were written by the app itself, from made-up data.
   "meetings" : {
     "autoSummarize" : true,
     "captureSystemAudio" : true,
-    "keepAudio" : true
+    "keepAudio" : true,
+    "offerCalendarMeetings" : false
   },
   "onboardedAt" : "2026-11-02T08:15:00Z",
   "playSounds" : true,
@@ -136,6 +137,10 @@ The examples below were written by the app itself, from made-up data.
 - `modifiers` values are `function`, `control`, `option`, `shift` and `command`. `keyCode`
   is a macOS key number. A shortcut with no `keyCode` is modifier keys only. The order
   inside `modifiers` does not matter.
+- `meetings.offerCalendarMeetings` (Mac only, off unless you turn it on): when a call on
+  your calendar starts, the app offers to record it, and a meeting recorded during a call
+  takes the event's title and the names of the people invited. The calendar is read on the
+  Mac itself; nothing from it is sent anywhere.
 - `language` is a two-letter code such as `en`. It is left out when the language is to be
   worked out from the audio.
 - Other keys you may see: `microphoneID`, and `apiBaseURL`, the address of a different
@@ -279,6 +284,10 @@ All four keys are required.
 
 ```json
 {
+  "attendees" : [
+    "Jordan Lee",
+    "Priya Raman"
+  ],
   "endedAt" : "2026-11-16T15:31:00Z",
   "id" : "00000000-0000-4000-8000-000000000006",
   "notes" : {
@@ -342,6 +351,9 @@ All four keys are required.
   recording. `speaker` is `me` (your microphone), `others` (the computer's sound), or a name.
 - `notes` holds the AI notes. It is missing until they have been written.
 - `userNotes` is your own free-form Markdown.
+- `attendees` holds the names of the other people invited to the calendar event the meeting
+  was recorded during (an email address when the calendar has no name). It is empty when
+  there was no such event, and an empty list when left out.
 - `endedAt` is missing while the meeting is being recorded.
 - At the top level, only `id` and `startedAt` are required. A meeting with no `title` is
   shown as "Untitled meeting".
@@ -415,7 +427,8 @@ JSON. Times are shown in the device's time zone.
 
 **Date:** 2026-11-16 15:00  
 **Length:** 31 min  
-**Tags:** product
+**Tags:** product  
+**Attendees:** Jordan Lee, Priya Raman
 
 ## Summary
 

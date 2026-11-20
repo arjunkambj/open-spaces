@@ -160,6 +160,7 @@ public struct PracticeStep: View {
     case .microphone: "Spaces cannot hear you without it."
     case .accessibility: "Spaces needs it to notice the key and to type the text for you."
     case .systemAudio: "It is only needed to record the other side of a call."
+    case .calendar: "It is only needed to offer to record calls on your calendar."
     }
   }
 

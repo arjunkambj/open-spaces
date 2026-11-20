@@ -5,5 +5,8 @@
 	<!-- With the hardened runtime on, the microphone needs this. -->
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
+	<!-- And reading the calendar, for "Offer to record calendar calls", needs this. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
 </dict>
 </plist>

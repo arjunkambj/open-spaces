@@ -32,7 +32,7 @@ struct MeetingNotesWriter: Sendable {
   /// Throws `SpacesError`. The meeting must have a transcript.
   func write(for meeting: Meeting, settings: Settings) async throws -> Draft {
     let model = settings.textModel
-    let who = MeetingNotesWriter.speakers(settings)
+    let who = MeetingNotesWriter.speakers(settings, invited: meeting.attendees)
     let parts = MeetingNotesWriter.parts(of: meeting.transcriptText, limit: characterLimit)
     guard parts.count > 1 else {
       return try await draft(
@@ -101,7 +101,7 @@ struct MeetingNotesWriter: Sendable {
   /// Answers `question` from the meeting alone. Throws `SpacesError`.
   func answer(_ question: String, about meeting: Meeting, settings: Settings) async throws -> String {
     let model = settings.textModel
-    let who = MeetingNotesWriter.speakers(settings)
+    let who = MeetingNotesWriter.speakers(settings, invited: meeting.attendees)
     var material: [String] = ["Meeting: \(meeting.title)"]
     if let notes = meeting.notes {
       let draft = Draft(
@@ -155,12 +155,22 @@ struct MeetingNotesWriter: Sendable {
 
   // MARK: Prompts
 
-  private static func speakers(_ settings: Settings) -> String {
+  /// Who is who in the transcript. `invited` are the other people on the calendar event.
+  private static func speakers(_ settings: Settings, invited: [String]) -> String {
     let name = settings.userName.trimmingCharacters(in: .whitespacesAndNewlines)
     let me =
       name.isEmpty ? "the person who recorded the meeting" : "\(name), the person who recorded the meeting"
+    // Names come from the calendar: one line each, and never more than a meeting room holds.
+    let others = invited.prefix(50)
+      .map { $0.split(whereSeparator: \.isNewline).joined(separator: " ") }
+      .map { String($0.trimmingCharacters(in: .whitespaces).prefix(100)) }
+      .filter { !$0.isEmpty }
     return "\"Me\" is \(me). \"Others\" is everyone else in the meeting; their voices are not told apart."
       + (name.isEmpty ? "" : " When Me took on a task, its owner is \"\(name)\".")
+      + (others.isEmpty
+        ? ""
+        : " The other people invited were: \(others.joined(separator: "; ")). When the transcript makes "
+          + "it clear that one of them took on a task, its owner is that name, spelled as given here.")
   }
 
   private static let rules = """

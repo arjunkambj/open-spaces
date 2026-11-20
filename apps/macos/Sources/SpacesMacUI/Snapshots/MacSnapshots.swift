@@ -133,6 +133,18 @@ public enum MacSnapshots {
         )
       ),
       (
+        "A call on the calendar",
+        PillState(
+          look: .question(
+            MacControls.callOffer(
+              for: CalendarEvent(id: "sync", title: "Weekly product sync", start: meeting, end: meeting)
+            ),
+            yes: "Record",
+            no: "Not now"
+          )
+        )
+      ),
+      (
         "Hands-free in a long meeting",
         PillState(look: .recording(mode: .dictation, handsFree: true), meetingSince: meeting)
       ),

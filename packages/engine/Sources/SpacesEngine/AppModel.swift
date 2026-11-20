@@ -54,6 +54,8 @@ public final class AppModel {
     public var languageModel: any LanguageModel
     public var target: any TextTarget
     public var permissions: any Permissions
+    /// The calls on the calendar, for meetings recorded during one. `nil` where there is no calendar.
+    public var calendar: (any MeetingCalendar)?
     public var host: HostActions
     /// Asks the server the settings name whether a key works. Throws `SpacesError` when it does not.
     public var checkAPIKey: @Sendable (String) async throws -> Void
@@ -69,6 +71,7 @@ public final class AppModel {
       languageModel: any LanguageModel,
       target: any TextTarget,
       permissions: any Permissions,
+      calendar: (any MeetingCalendar)? = nil,
       host: HostActions = HostActions(),
       checkAPIKey: @escaping @Sendable (String) async throws -> Void,
       checkClaudeKey: @escaping @Sendable (String) async throws -> Void
@@ -81,6 +84,7 @@ public final class AppModel {
       self.languageModel = languageModel
       self.target = target
       self.permissions = permissions
+      self.calendar = calendar
       self.host = host
       self.checkAPIKey = checkAPIKey
       self.checkClaudeKey = checkClaudeKey
@@ -92,6 +96,8 @@ public final class AppModel {
   public let secrets: any SecretStore
   public let capture: any AudioCapture
   public let permissions: any Permissions
+  /// The calls on the calendar. `nil` where there is no calendar.
+  public let calendar: (any MeetingCalendar)?
   public let host: HostActions
   public let dictation: DictationEngine
   public let meetings: MeetingEngine
@@ -139,6 +145,7 @@ public final class AppModel {
     secrets = dependencies.secrets
     capture = dependencies.capture
     permissions = dependencies.permissions
+    calendar = dependencies.calendar
     host = dependencies.host
     checkAPIKey = dependencies.checkAPIKey
     checkClaudeKey = dependencies.checkClaudeKey
@@ -160,7 +167,8 @@ public final class AppModel {
       library: dependencies.library,
       capture: dependencies.capture,
       transcriber: checked,
-      languageModel: checked
+      languageModel: checked,
+      calendar: dependencies.calendar
     )
   }
 
@@ -409,6 +417,7 @@ extension AppModel {
         languageModel: FakeLanguageModel(text: "This is a demo dictation."),
         target: FakeTextTarget(),
         permissions: FakePermissions(statuses: permissions),
+        calendar: FakeMeetingCalendar(events: SampleData.calendar()),
         host: HostActions(agentToolPath: "/Applications/Spaces.app/Contents/MacOS/spaces"),
         checkAPIKey: { key in
           if !key.hasPrefix("sk-") { throw SpacesError.invalidAPIKey }
