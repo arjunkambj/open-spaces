@@ -73,7 +73,7 @@ swift format lint --strict --recursive --parallel packages apps
 # Look at screens as PNG files, with no window opened:
 cd packages/ui && ../../scripts/swiftw run spaces-snapshots <folder>              # shared screens
 cd apps/ios/Phone && ../../../scripts/swiftw run spaces-phone-snapshots <folder>  # iPhone screens
-"apps/macos/build/Spaces.app/Contents/MacOS/Spaces" --snapshots <folder> # Mac screens
+"apps/macos/build/Spaces.app/Contents/MacOS/SpacesApp" --snapshots <folder> # Mac screens
 ```
 
 The website is the one part that is not Swift. Its words are all in `apps/web/src/content.ts`; say only what the README says is true. It is prerendered to plain HTML that reads in full without its scripts, and it loads nothing from other sites: no analytics, no cookies, no fonts or scripts from elsewhere. Keep it so. `apps/web/README.md` has the rest.

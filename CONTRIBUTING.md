@@ -34,7 +34,7 @@ It makes a free certificate of your own, asks for nothing, and keeps it in `~/.c
 To look at the app without touching your real data, microphone or key, start it on made-up data:
 
 ```bash
-"apps/macos/build/Spaces.app/Contents/MacOS/Spaces" --demo
+"apps/macos/build/Spaces.app/Contents/MacOS/SpacesApp" --demo
 ```
 
 The iPhone app also needs full Xcode and XcodeGen (`brew install xcodegen`). Run `pnpm ios:generate`, then open `apps/ios/Spaces.xcodeproj` with Xcode. [apps/ios/README.md](apps/ios/README.md) has the rest. Without Xcode you can still work on everything else, and on most of the iPhone code too: it lives in a package, `apps/ios/Phone`, that builds on any Mac. Our CI builds the iPhone app itself on every pull request.

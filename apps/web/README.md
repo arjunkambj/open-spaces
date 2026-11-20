@@ -55,7 +55,7 @@ The line for connecting an AI agent, and the tool names in the Agents section, a
 To make fresh pictures of the app, with no window opened (see "Commands" in [AGENTS.md](../../AGENTS.md)):
 
 ```bash
-"apps/macos/build/Spaces.app/Contents/MacOS/Spaces" --snapshots <folder>   # the Mac window
+"apps/macos/build/Spaces.app/Contents/MacOS/SpacesApp" --snapshots <folder>   # the Mac window
 cd packages/ui && ../../scripts/swiftw run spaces-snapshots <folder>                # shared screens
 ```
 

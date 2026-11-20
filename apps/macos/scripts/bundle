@@ -10,7 +10,7 @@
 # failed run never leaves half an app behind.
 #
 # What goes into the app:
-#   Contents/MacOS/Spaces        the app itself
+#   Contents/MacOS/SpacesApp     the app itself
 #   Contents/MacOS/spaces            the command-line tool for agents
 #   Contents/Frameworks/Sparkle.framework    the updater (see UPDATES below)
 #   Contents/Info.plist              from Resources/Info.plist, with the version filled in
@@ -169,9 +169,9 @@ fi
 # --- Build -------------------------------------------------------------------------------
 
 echo "==> Building Spaces $version, build $build_number ($config)"
-(cd "$here" && "$swiftw" build -c "$config" --product Spaces ${swift_flags[@]+"${swift_flags[@]}"})
+(cd "$here" && "$swiftw" build -c "$config" --product SpacesApp ${swift_flags[@]+"${swift_flags[@]}"})
 app_bin="$(cd "$here" && "$swiftw" build -c "$config" --show-bin-path ${swift_flags[@]+"${swift_flags[@]}"})"
-[[ -x "$app_bin/Spaces" ]] || fail "the build did not produce $app_bin/Spaces."
+[[ -x "$app_bin/SpacesApp" ]] || fail "the build did not produce $app_bin/SpacesApp."
 # SwiftPM puts the updater next to the app it built.
 sparkle="$app_bin/Sparkle.framework"
 [[ -f "$sparkle/Versions/B/Sparkle" ]] || fail "the build did not leave the updater (Sparkle.framework) in $app_bin."
@@ -191,9 +191,9 @@ trap cleanup EXIT
 staged="$staging/$app_name.app"
 mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Resources" "$staged/Contents/Frameworks"
 
-cp "$app_bin/Spaces" "$staged/Contents/MacOS/Spaces"
+cp "$app_bin/SpacesApp" "$staged/Contents/MacOS/SpacesApp"
 cp "$tool_bin/spaces" "$staged/Contents/MacOS/spaces"
-chmod 755 "$staged/Contents/MacOS/Spaces" "$staged/Contents/MacOS/spaces"
+chmod 755 "$staged/Contents/MacOS/SpacesApp" "$staged/Contents/MacOS/spaces"
 
 # The updater. `cp -R` keeps the links inside the framework as links, which it needs.
 framework="$staged/Contents/Frameworks/Sparkle.framework"
@@ -220,10 +220,10 @@ tidy_library_paths() {
     install_name_tool -delete_rpath "$path" "$program" 2>/dev/null
   done < <(library_paths "$program")
 }
-tidy_library_paths "$staged/Contents/MacOS/Spaces"
+tidy_library_paths "$staged/Contents/MacOS/SpacesApp"
 tidy_library_paths "$staged/Contents/MacOS/spaces"
-install_name_tool -add_rpath "@executable_path/../Frameworks" "$staged/Contents/MacOS/Spaces" 2>/dev/null
-for program in Spaces spaces; do
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$staged/Contents/MacOS/SpacesApp" 2>/dev/null
+for program in SpacesApp spaces; do
   if library_paths "$staged/Contents/MacOS/$program" | grep -v -x -e /usr/lib/swift -e "@executable_path/../Frameworks" >&2; then
     fail "$program would still look for libraries in the folders above."
   fi
@@ -303,7 +303,7 @@ sign --entitlements "$app_entitlements" "$staged"
 echo "==> Checking"
 plutil -lint "$staged/Contents/Info.plist" >/dev/null
 codesign --verify --deep --strict "$staged"
-for path in Contents/MacOS/Spaces Contents/MacOS/spaces Contents/Resources/AppIcon.icns \
+for path in Contents/MacOS/SpacesApp Contents/MacOS/spaces Contents/Resources/AppIcon.icns \
   Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle \
   Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate; do
   [[ -s "$staged/$path" ]] || fail "$path is missing from the app."
@@ -321,7 +321,7 @@ fi
 
 # The app must start and find the updater inside itself. `--help` prints a few lines and
 # quits before any window, sound or permission.
-"$staged/Contents/MacOS/Spaces" --help >/dev/null ||
+"$staged/Contents/MacOS/SpacesApp" --help >/dev/null ||
   fail "the finished app does not start. It may not be finding Contents/Frameworks/Sparkle.framework."
 "$staged/Contents/MacOS/spaces" --help >/dev/null || fail "the spaces tool in the app does not start."
 

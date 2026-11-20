@@ -7,7 +7,7 @@ let package = Package(
   name: "SpacesMac",
   platforms: [.macOS("14.4")],
   products: [
-    .executable(name: "Spaces", targets: ["Spaces"]),
+    .executable(name: "SpacesApp", targets: ["SpacesApp"]),
     .library(name: "SpacesMac", targets: ["SpacesMac"]),
     .library(name: "SpacesMacUI", targets: ["SpacesMacUI"]),
   ],
@@ -40,9 +40,10 @@ let package = Package(
         .product(name: "SpacesUI", package: "ui"),
       ]
     ),
-    // The app itself: windows, menu bar item and the wiring of real adapters.
+    // The app itself: windows, menu bar item and the wiring of real adapters. Not named
+    // "Spaces": on a Mac, file names ignore case, and the bundle also holds the `spaces` tool.
     .executableTarget(
-      name: "Spaces",
+      name: "SpacesApp",
       dependencies: [
         "SpacesMac",
         "SpacesMacUI",
