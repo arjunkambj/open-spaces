@@ -56,6 +56,27 @@ enum HomeSnapshots {
       SnapshotCase("home-delete-phone", canvas: .phone, model: { ScreenSamples.model(dictations: states) }) {
         HomeScreen(preview: HomePreview(deleting: states[0]))
       },
+      // Its server stopped a while ago: when it was last used, with an empty dot.
+      SnapshotCase(
+        "home-agent-last-used",
+        model: {
+          ScreenSamples.model(dictations: SampleData.dictations(), agents: agentSamples(connected: false))
+        }
+      ) { HomeScreen() },
+      SnapshotCase(
+        "home-agents-narrow",
+        canvas: .custom(width: 640, height: 720),
+        model: {
+          ScreenSamples.model(dictations: SampleData.dictations(), agents: agentSamples(connected: true))
+        }
+      ) { HomeScreen().background(Spaces.Color.panel) },
+      SnapshotCase(
+        "home-agents-wide",
+        canvas: .custom(width: 1_280, height: 720),
+        model: {
+          ScreenSamples.model(dictations: SampleData.dictations(), agents: agentSamples(connected: true))
+        }
+      ) { HomeScreen().background(Spaces.Color.panel) },
     ]
   }
 
@@ -122,6 +143,29 @@ enum HomeSnapshots {
     ]
   }
 
+  /// Claude Code and Codex. `connected: false` leaves only a Claude Code that stopped 40 minutes ago.
+  private static func agentSamples(connected: Bool, now: Date = Date()) -> [AgentSession] {
+    let stopped = now.addingTimeInterval(-2_400)
+    let claude = AgentSession(
+      pid: 4_242,
+      client: AgentClient(name: "claude-code", version: "2.1.0"),
+      startedAt: now.addingTimeInterval(-7_200),
+      lastActiveAt: connected ? now.addingTimeInterval(-60) : stopped,
+      lastTool: "meetings_get",
+      endedAt: connected ? nil : stopped
+    )
+    guard connected else { return [claude] }
+    return [
+      claude,
+      AgentSession(
+        pid: 5_151,
+        client: AgentClient(name: "codex-mcp-client", version: "0.9.2"),
+        startedAt: now.addingTimeInterval(-900),
+        lastActiveAt: now.addingTimeInterval(-600)
+      ),
+    ]
+  }
+
   /// A long history, to see how many days and rows sit together.
   private static func longSample(now: Date = Date()) -> [Dictation] {
     let lines = [
@@ -154,6 +198,7 @@ enum ScreenSamples {
     words: [DictionaryWord] = [],
     snippets: [Snippet] = [],
     dictations: [Dictation] = [],
+    agents: [AgentSession] = [],
     hasAPIKey: Bool = true
   ) -> AppModel {
     AppModel(
@@ -162,7 +207,8 @@ enum ScreenSamples {
           settings: settings,
           words: words,
           snippets: snippets,
-          dictations: dictations
+          dictations: dictations,
+          agents: agents
         ),
         secrets: InMemorySecretStore(apiKey: hasAPIKey ? "sk-demo" : nil),
         capture: FakeAudioCapture(),

@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SpacesDomain
+import SpacesUI
 
 /// Where the hub window is: the open section, the open meeting, whether
 /// Settings is up, and the few choices about the window itself.
@@ -79,7 +80,11 @@ public final class HubNavigation {
   }
   /// The meeting open in the Meetings section; `nil` shows the list.
   public var meeting: Meeting.ID?
-  public var showsSettings = false
+  public var showsSettings = false {
+    didSet { if !showsSettings { settingsSection = nil } }
+  }
+  /// The section Settings opens on, or `nil` for the first one. Forgotten when Settings closes.
+  public private(set) var settingsSection: SettingsSection?
   public var sidebarHidden: Bool {
     didSet { defaults?.set(sidebarHidden, forKey: Key.sidebarHidden) }
   }
@@ -109,6 +114,12 @@ public final class HubNavigation {
   public func show(_ section: Section) {
     showsSettings = false
     self.section = section
+  }
+
+  /// Opens Settings on one section.
+  public func showSettings(_ section: SettingsSection) {
+    settingsSection = section
+    showsSettings = true
   }
 
   /// Opens one meeting in the Meetings section.

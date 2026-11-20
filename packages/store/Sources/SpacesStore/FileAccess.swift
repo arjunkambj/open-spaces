@@ -12,10 +12,12 @@ struct FolderLayout: Sendable {
   static let meetings = "meetings"
   static let meetingFile = "meeting.json"
   static let meetingNotes = "notes.md"
+  static let agents = "agents"
 
   var lockFile: URL { root.appendingPathComponent(".lock") }
   var dictationAudio: URL { root.appendingPathComponent("dictation-audio", isDirectory: true) }
   var meetingsFolder: URL { root.appendingPathComponent(FolderLayout.meetings, isDirectory: true) }
+  var agentsFolder: URL { root.appendingPathComponent(FolderLayout.agents, isDirectory: true) }
 
   func file(_ name: String) -> URL { root.appendingPathComponent(name) }
 

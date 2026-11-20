@@ -13,6 +13,7 @@ import SwiftUI
 ///   It is shown as a row of General, under "App". `nil` leaves the row out.
 /// - pill: a row the Mac app supplies about its floating pill, such as putting it back in its
 ///   place. It is shown right under "Show the floating pill", on a Mac only. `nil` leaves it out.
+/// - section: the section to open on. `nil` opens General on a Mac and the list on iPhone.
 public struct SettingsScreen: View {
   private let shortcuts: AnyView?
   private let appearance: AnyView?
@@ -32,14 +33,15 @@ public struct SettingsScreen: View {
     shortcuts: AnyView? = nil,
     onClose: (() -> Void)? = nil,
     appearance: AnyView? = nil,
-    pill: AnyView? = nil
+    pill: AnyView? = nil,
+    section: SettingsSection? = nil
   ) {
     self.init(
       shortcuts: shortcuts,
       onClose: onClose,
       appearance: appearance,
       pill: pill,
-      preview: SettingsPreview()
+      preview: SettingsPreview(section: section)
     )
   }
 

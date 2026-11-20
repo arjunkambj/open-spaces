@@ -69,7 +69,8 @@ public struct HubView: View {
         shortcuts: AnyView(ShortcutsEditor()),
         onClose: { navigation.showsSettings = false },
         appearance: AnyView(AppearanceRow(navigation: navigation)),
-        pill: AnyView(PillPositionRow())
+        pill: AnyView(PillPositionRow()),
+        section: navigation.settingsSection
       )
       .frame(maxWidth: HubMetrics.settingsSize.width, maxHeight: HubMetrics.settingsSize.height)
       .modalSurface()
@@ -86,7 +87,7 @@ public struct HubView: View {
 
   @ViewBuilder private var screen: some View {
     switch navigation.section {
-    case .home: HomeScreen()
+    case .home: HomeScreen(showAgents: { navigation.showSettings(.agents) })
     case .meetings: MeetingsScreen(selection: $navigation.meeting)
     case .dictionary: DictionaryScreen()
     case .snippets: SnippetsScreen()

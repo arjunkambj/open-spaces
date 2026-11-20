@@ -166,6 +166,22 @@ struct SetupFact: View {
   }
 }
 
+/// A small dot: filled while an AI tool is connected, an outline once it is not.
+struct AgentDot: View {
+  let isConnected: Bool
+
+  var body: some View {
+    Circle()
+      .strokeBorder(
+        isConnected ? Spaces.Color.success : Spaces.Color.textTertiary,
+        lineWidth: Spaces.Stroke.focus
+      )
+      .background(Circle().fill(isConnected ? Spaces.Color.success : SwiftUI.Color.clear))
+      .frame(width: Spaces.Space.s, height: Spaces.Space.s)
+      .accessibilityHidden(true)
+  }
+}
+
 /// What to know about a custom server address, shown under the field it is typed into: the key
 /// goes there, and a warning when the connection can be read by others. Nothing for OpenAI itself.
 ///

@@ -16,6 +16,16 @@ enum SettingsSnapshots {
     cases += [
       phone("settings-list-phone", SettingsPreview()),
       mac(
+        "settings-agents-none",
+        SettingsPreview(section: .agents),
+        model: { SetupSnapshotModels.make(agents: []) }
+      ),
+      mac(
+        "settings-agents-several",
+        SettingsPreview(section: .agents),
+        model: { SetupSnapshotModels.make(agents: SetupSnapshotModels.severalAgents()) }
+      ),
+      mac(
         "settings-openai-nokey",
         SettingsPreview(section: .openAI),
         model: { SetupSnapshotModels.make(hasAPIKey: false) }
@@ -170,6 +180,23 @@ private struct ShortcutsStandIn: View {
 /// App models for the snapshots of settings and onboarding: made-up data on in-memory fakes.
 @MainActor
 enum SetupSnapshotModels {
+  /// Claude Code in two chats, Cursor stopped an hour ago, and a tool that gave no name.
+  static func severalAgents(now: Date = Date()) -> [AgentSession] {
+    let claude = AgentClient(name: "claude-code", version: "2.1.0")
+    return [
+      AgentSession(pid: 4_242, client: claude, startedAt: now.addingTimeInterval(-7_200), lastActiveAt: now),
+      AgentSession(pid: 4_300, client: claude, startedAt: now.addingTimeInterval(-600)),
+      AgentSession(
+        pid: 3_100,
+        client: AgentClient(name: "cursor-vscode", version: "1.4.2"),
+        startedAt: now.addingTimeInterval(-10_000),
+        lastActiveAt: now.addingTimeInterval(-3_700),
+        endedAt: now.addingTimeInterval(-3_700)
+      ),
+      AgentSession(pid: 2_000, client: AgentClient(name: ""), startedAt: now.addingTimeInterval(-20_000)),
+    ]
+  }
+
   /// - keyHost: the server the saved key is for. `nil` means the server the settings name, so
   ///   the key counts; name another host to show a key that is not used.
   static func make(
@@ -180,6 +207,7 @@ enum SetupSnapshotModels {
       .microphone: .granted, .accessibility: .granted, .systemAudio: .granted,
     ],
     onPhone: Bool = false,
+    agents: [AgentSession] = SampleData.agents(),
     settings change: (inout SpacesDomain.Settings) -> Void = { _ in }
   ) -> AppModel {
     var settings = SpacesDomain.Settings(
@@ -211,7 +239,8 @@ enum SetupSnapshotModels {
           words: SampleData.words(),
           snippets: SampleData.snippets(),
           dictations: SampleData.dictations(),
-          meetings: SampleData.meetings()
+          meetings: SampleData.meetings(),
+          agents: agents
         ),
         secrets: InMemorySecretStore(
           apiKey: hasAPIKey ? "sk-demo" : nil,

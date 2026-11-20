@@ -16,14 +16,18 @@ public struct HomeScreen: View {
   @State private var limit = HomeHistory.pageSize
   @State private var toast: Toast?
   private let preview: HomePreview
+  private let showAgents: (() -> Void)?
 
-  public init() {
-    self.init(preview: HomePreview())
+  /// - showAgents: opens Settings › Agents, when the line that says which AI tool is connected
+  ///   is clicked. `nil` leaves the line as plain text.
+  public init(showAgents: (() -> Void)? = nil) {
+    self.init(preview: HomePreview(), showAgents: showAgents)
   }
 
   /// Starts in a given state, so snapshots can show it.
-  init(preview: HomePreview) {
+  init(preview: HomePreview, showAgents: (() -> Void)? = nil) {
     self.preview = preview
+    self.showAgents = showAgents
     _query = State(initialValue: preview.query)
     _player = State(initialValue: preview.player ?? HomeAudioPlayer())
     _deleting = State(initialValue: preview.deleting)
@@ -39,7 +43,7 @@ public struct HomeScreen: View {
       notice
       history
     }
-    .titleAccessory { HomeSummary() }
+    .titleAccessory { HomeSummary(showAgents: showAgents) }
     .toast($toast)
     .dialog(
       isPresented: $isConfirmingDelete,
@@ -232,11 +236,14 @@ struct HomePreview {
   var player: HomeAudioPlayer?
 }
 
-/// The line under the title: how to dictate on a Mac, and the numbers so far.
+/// The line under the title: how to dictate on a Mac, and the numbers so far. On a Mac, a
+/// quiet line under it says which AI tool is connected, once one has used Spaces.
 ///
 /// It is its own view so the numbers are worked out when the history changes, not on every
 /// key typed into the search field.
 private struct HomeSummary: View {
+  let showAgents: (() -> Void)?
+
   @Environment(AppModel.self) private var model
   @Environment(\.spacesIdiom) private var idiom
 
@@ -245,17 +252,22 @@ private struct HomeSummary: View {
     if idiom == .phone {
       if let numbers { Text(numbers).spacesText(.body, color: Spaces.Color.textSecondary) }
     } else {
-      // Side by side when they fit; the numbers go under the hint in a narrow window.
-      ViewThatFits(in: .horizontal) {
-        HStack(alignment: .center, spacing: Spaces.Space.l) {
-          hint
-          Spacer(minLength: Spaces.Space.l)
-          if let numbers { Text(numbers).spacesText(.caption, color: Spaces.Color.textTertiary).fixedSize() }
+      VStack(alignment: .leading, spacing: Spaces.Space.s) {
+        // Side by side when they fit; the numbers go under the hint in a narrow window.
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .center, spacing: Spaces.Space.l) {
+            hint
+            Spacer(minLength: Spaces.Space.l)
+            if let numbers {
+              Text(numbers).spacesText(.caption, color: Spaces.Color.textTertiary).fixedSize()
+            }
+          }
+          VStack(alignment: .leading, spacing: Spaces.Space.s) {
+            hint
+            if let numbers { Text(numbers).spacesText(.caption, color: Spaces.Color.textTertiary) }
+          }
         }
-        VStack(alignment: .leading, spacing: Spaces.Space.s) {
-          hint
-          if let numbers { Text(numbers).spacesText(.caption, color: Spaces.Color.textTertiary) }
-        }
+        HomeAgentLine(sessions: model.agentSessions, open: showAgents)
       }
     }
   }
@@ -285,5 +297,45 @@ private struct HomeSummary: View {
       .fixedSize()
       .accessibilityElement(children: .combine)
     }
+  }
+}
+
+/// "Claude Code is connected", with a dot that is filled while it is. Nothing at all when no
+/// AI tool has used Spaces in the last day. The time in it moves on by itself.
+private struct HomeAgentLine: View {
+  let sessions: [AgentSession]
+  let open: (() -> Void)?
+
+  @State private var isHovered = false
+
+  var body: some View {
+    let tools = AgentStatus.list(sessions)
+    if !tools.isEmpty {
+      TimelineView(.periodic(from: .now, by: 60)) { timeline in
+        if let text = AgentStatus.homeLine(tools, now: timeline.date) {
+          let connected = tools.contains(where: \.isConnected)
+          if let open {
+            Button(action: open) { label(text, connected: connected) }
+              .buttonStyle(.plain)
+              .onHover { isHovered = $0 }
+              .help("See your AI tools in Settings")
+              .accessibilityHint("Opens Settings, Agents.")
+          } else {
+            label(text, connected: connected)
+          }
+        }
+      }
+    }
+  }
+
+  private func label(_ text: String, connected: Bool) -> some View {
+    HStack(spacing: Spaces.Space.s) {
+      AgentDot(isConnected: connected)
+      Text(text)
+        .spacesText(.caption, color: isHovered ? Spaces.Color.textPrimary : Spaces.Color.textTertiary)
+        .lineLimit(1)
+    }
+    .contentShape(Rectangle())
+    .accessibilityElement(children: .combine)
   }
 }

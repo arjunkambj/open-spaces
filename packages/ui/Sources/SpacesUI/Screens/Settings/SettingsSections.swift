@@ -434,6 +434,7 @@ struct AgentSettings: View {
         + "It works only with the files on this device."
     )
     if let path = model.host.agentToolPath {
+      AgentConnections(tools: AgentStatus.list(model.agentSessions))
       PageSection("Claude Code") {
         VStack(alignment: .leading, spacing: Spaces.Space.s) {
           CopyBlock("Claude Code command", text: AgentSetup.claudeCommand(toolPath: path))
@@ -482,6 +483,41 @@ struct AgentSettings: View {
         }
       }
       SetupLink("Read the guide", url: SetupLinks.agentsGuide)
+    }
+  }
+}
+
+/// The AI tools that used Spaces in the last day, and whether they are connected now.
+private struct AgentConnections: View {
+  let tools: [AgentStatus]
+
+  var body: some View {
+    PageSection("Connected") {
+      Card(padding: 0) {
+        if tools.isEmpty {
+          SettingRow(
+            "No AI tool is connected",
+            description: "Add Spaces to your AI tool below. It shows up here once it uses Spaces."
+          ) {
+            AgentDot(isConnected: false)
+          }
+        } else {
+          TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            VStack(spacing: 0) {
+              ForEach(Array(tools.enumerated()), id: \.element.id) { index, tool in
+                if index > 0 { SettingsDivider() }
+                SettingRow(
+                  tool.version.map { "\(tool.name) \($0)" } ?? tool.name,
+                  description: tool.detail(now: timeline.date)
+                ) {
+                  AgentDot(isConnected: tool.isConnected)
+                }
+                .accessibilityElement(children: .combine)
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

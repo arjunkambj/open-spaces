@@ -44,6 +44,7 @@ the app and the tool must be given the same value to see the same data.
   meetings/<ID>/meeting.json       one meeting
   meetings/<ID>/notes.md           the same meeting as Markdown, for reading
   meetings/<ID>/audio/             the meeting's audio (see below)
+  agents/<pid>.json                an AI tool connected through `spaces mcp` (see below)
   .lock                            empty; used to take turns (see below)
   .tickets/                        short-lived proof of where a link came from (see below)
 ```
@@ -447,6 +448,40 @@ Follow up on the pricing page next week.
 `notes.md` is for reading only. It is written again from `meeting.json` every time the
 meeting is saved, so anything you type into it is lost. To add your own notes, change
 `userNotes` in `meeting.json`. A section with nothing in it is left out.
+
+### agents/&lt;pid&gt;.json
+
+Each `spaces mcp` server (the program your AI tool starts) writes one file here, named after
+its process number, so the app can show which AI tool is connected. It holds who the tool says
+it is and when it was last used. It never holds anything the tool read or wrote.
+
+```json
+{
+  "client" : {
+    "name" : "claude-code",
+    "version" : "2.1.0"
+  },
+  "endedAt" : "2026-11-17T11:02:41Z",
+  "lastActiveAt" : "2026-11-17T11:02:40Z",
+  "lastTool" : "meetings_search",
+  "pid" : 4242,
+  "startedAt" : "2026-11-17T09:15:03Z"
+}
+```
+
+- `client` is how the tool names itself over MCP: `name`, and `title` and `version` when it gives
+  them. The tool is not checked, so this is for showing only. `name` is empty when it gave none.
+- The file is written when the first request arrives, and again when the tool names itself
+  differently.
+- `lastActiveAt` moves on when the tool calls a tool, reads a meeting document or uses a
+  ready-made request. To spare the disk, it is written at most about every 30 seconds.
+  `lastTool` is the name of the tool it called last.
+- `endedAt` is written when the server stops on its own, at the end of its input. While it is
+  missing the server is running. If the process with that number is gone (the server was
+  stopped without warning), readers treat the file as ended at `lastActiveAt`.
+- Files that ended more than a day ago are deleted by the app when it reads the folder.
+
+There is nothing here for you to change.
 
 ### .tickets/
 

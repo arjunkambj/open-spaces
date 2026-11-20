@@ -69,13 +69,20 @@ public protocol Library: Sendable {
   /// Folder where a meeting's audio chunks are written. Created on demand.
   func audioDirectory(forMeeting id: Meeting.ID) async throws -> URL
 
+  /// The AI tools that use Spaces through `spaces mcp`, most recently used first: every
+  /// server that is running, and those that stopped within `AgentSession.keptFor`. A server
+  /// that is gone is reported as stopped, even when it never said so.
+  func agentSessions() async throws -> [AgentSession]
+  /// Inserts or replaces by `id`. Only the `spaces mcp` server that a session describes saves it.
+  func save(_ session: AgentSession) async throws
+
   /// A stream of what changed, from this process or another one. Each call
   /// returns an independent stream; it ends when the caller stops iterating.
   func changes() -> AsyncStream<LibraryChange>
 }
 
 public enum LibraryChange: Sendable, Hashable, CaseIterable {
-  case settings, words, snippets, dictations, meetings
+  case settings, words, snippets, dictations, meetings, agents
 }
 
 extension Library {

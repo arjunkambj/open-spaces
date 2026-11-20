@@ -32,6 +32,7 @@ public actor InMemoryLibrary: Library {
   private var storedSnippets: [Snippet]
   private var storedDictations: [Dictation]
   private var storedMeetings: [Meeting]
+  private var storedAgents: [AgentSession]
   private let scratch: URL
   private let broadcaster = Broadcaster<LibraryChange>()
 
@@ -40,13 +41,15 @@ public actor InMemoryLibrary: Library {
     words: [DictionaryWord] = [],
     snippets: [Snippet] = [],
     dictations: [Dictation] = [],
-    meetings: [Meeting] = []
+    meetings: [Meeting] = [],
+    agents: [AgentSession] = []
   ) {
     storedSettings = settings
     storedWords = words
     storedSnippets = snippets
     storedDictations = dictations
     storedMeetings = meetings
+    storedAgents = agents
     scratch = FileManager.default.temporaryDirectory
       .appendingPathComponent("open-spaces-memory-\(UUID().uuidString)", isDirectory: true)
   }
@@ -158,6 +161,18 @@ public actor InMemoryLibrary: Library {
 
   public func audioDirectory(forMeeting id: Meeting.ID) throws -> URL {
     try directory("meetings/\(id.uuidString)")
+  }
+
+  public func agentSessions() -> [AgentSession] {
+    let cutoff = Date().addingTimeInterval(-AgentSession.keptFor)
+    return storedAgents.filter { $0.isConnected || $0.lastActiveAt > cutoff }
+      .sorted { $0.lastActiveAt > $1.lastActiveAt }
+  }
+
+  public func save(_ session: AgentSession) {
+    storedAgents.removeAll { $0.id == session.id }
+    storedAgents.append(session)
+    broadcaster.send(.agents)
   }
 
   public nonisolated func changes() -> AsyncStream<LibraryChange> {
@@ -351,8 +366,22 @@ public enum SampleData {
       words: words(now: now),
       snippets: snippets(now: now),
       dictations: dictations(now: now),
-      meetings: meetings(now: now)
+      meetings: meetings(now: now),
+      agents: agents(now: now)
     )
+  }
+
+  /// Claude Code, connected and used a few minutes ago.
+  public static func agents(now: Date = Date()) -> [AgentSession] {
+    [
+      AgentSession(
+        pid: 4_242,
+        client: AgentClient(name: "claude-code", version: "2.1.0"),
+        startedAt: now.addingTimeInterval(-2 * 3_600),
+        lastActiveAt: now.addingTimeInterval(-180),
+        lastTool: "meetings_search"
+      )
+    ]
   }
 
   public static func words(now: Date = Date()) -> [DictionaryWord] {

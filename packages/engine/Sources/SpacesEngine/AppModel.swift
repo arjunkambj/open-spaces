@@ -104,6 +104,9 @@ public final class AppModel {
   public private(set) var snippets: [Snippet] = []
   public private(set) var dictations: [Dictation] = []
   public private(set) var meetingList: [Meeting] = []
+  /// The AI tools using Spaces through `spaces mcp`, most recently used first. See
+  /// `Library.agentSessions()`.
+  public private(set) var agentSessions: [AgentSession] = []
   /// Whether a key is saved for the server the settings name right now. A key saved for
   /// another server does not count: it is never sent to this one.
   public private(set) var hasAPIKey = false
@@ -115,6 +118,9 @@ public final class AppModel {
   public var errorMessage: String?
 
   @ObservationIgnored private var observer: Task<Void, Never>?
+  /// Looks again in a while while an agent is connected: a server that is stopped without
+  /// warning leaves no change behind to notice.
+  @ObservationIgnored private var agentCheck: Task<Void, Never>?
   /// The newest settings change made here that is on its way to the library. Changes are
   /// stored one after another, in the order they were made.
   @ObservationIgnored private var settingsWrite: Task<Void, Never>?
@@ -300,8 +306,23 @@ public final class AppModel {
         dictations = history.filter { $0.id != dictation.unfinished }
       }
       if changes.contains(.meetings) { meetingList = try await library.meetings() }
+      if changes.contains(.agents) {
+        let sessions = try await library.agentSessions()
+        if sessions != agentSessions { agentSessions = sessions }
+        checkAgentsLater()
+      }
     } catch {
       errorMessage = message(for: error)
+    }
+  }
+
+  private func checkAgentsLater() {
+    agentCheck?.cancel()
+    guard agentSessions.contains(where: \.isConnected) else { return }
+    agentCheck = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(30))
+      guard !Task.isCancelled else { return }
+      await self?.refresh([.agents])
     }
   }
 

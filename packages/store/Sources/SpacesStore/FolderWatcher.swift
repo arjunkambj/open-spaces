@@ -9,8 +9,8 @@ import SpacesDomain
 /// library looks for itself, which is cheap. Bursts of activity arrive as one call.
 ///
 /// On macOS it listens to file system events. iOS has none of those for a folder tree, so
-/// there it watches the top folder and the meetings folder for files being added, replaced
-/// or removed, and also looks at everything once every `pollInterval` seconds, which catches
+/// there it watches the top folder, the meetings folder and the agents folder for files being
+/// added, replaced or removed, and also looks at everything once every `pollInterval` seconds, which catches
 /// what those two watches cannot see.
 final class FolderWatcher: @unchecked Sendable {
   private let layout: FolderLayout
@@ -105,10 +105,11 @@ final class FolderWatcher: @unchecked Sendable {
     watchFolders()
   }
 
-  /// Watches the two folders whose own contents change when a file is replaced in one step.
+  /// Watches the folders whose own contents change when a file is replaced in one step.
   /// A folder that is not there yet, or was replaced, is picked up on a later pass.
   private func watchFolders() {
-    for folder in [layout.root, layout.meetingsFolder] where folderSources[folder.path] == nil {
+    for folder in [layout.root, layout.meetingsFolder, layout.agentsFolder]
+    where folderSources[folder.path] == nil {
       let path = folder.path
       let descriptor = open(path, O_EVTONLY | O_CLOEXEC)
       guard descriptor >= 0 else { continue }

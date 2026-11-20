@@ -759,6 +759,66 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
   }
 }
 
+// MARK: - Agents
+
+/// An AI tool (Claude Code, Codex, Cursor…) that uses Spaces through `spaces mcp`.
+///
+/// Each `spaces mcp` server keeps one while it runs, and leaves it behind for a day after it
+/// stops. It says who the tool is and when it was last used, never anything from the library.
+public struct AgentSession: Codable, Sendable, Identifiable, Hashable {
+  /// The process ID of the `spaces mcp` server. One session per server.
+  public var pid: Int32
+  /// Who the tool says it is.
+  public var client: AgentClient
+  public var startedAt: Date
+  /// When the tool last read or changed something. Saved at most about every 30 seconds.
+  public var lastActiveAt: Date
+  /// The name of the tool it called last, such as `meetings_search`.
+  public var lastTool: String?
+  /// When the server stopped, or `nil` while it runs. A server that was stopped without
+  /// warning is read back as stopped at `lastActiveAt`.
+  public var endedAt: Date?
+
+  /// How long a session is kept after its server stopped.
+  public static let keptFor: TimeInterval = 86_400
+
+  public var id: Int32 { pid }
+  /// Whether the server is still running, so the tool can use Spaces right now.
+  public var isConnected: Bool { endedAt == nil }
+
+  public init(
+    pid: Int32,
+    client: AgentClient,
+    startedAt: Date = Date(),
+    lastActiveAt: Date? = nil,
+    lastTool: String? = nil,
+    endedAt: Date? = nil
+  ) {
+    self.pid = pid
+    self.client = client
+    self.startedAt = startedAt
+    self.lastActiveAt = lastActiveAt ?? startedAt
+    self.lastTool = lastTool
+    self.endedAt = endedAt
+  }
+}
+
+/// How an MCP client names itself, such as `claude-code` 2.1.0. It is not checked: use it
+/// only to show people which tool it is.
+public struct AgentClient: Codable, Sendable, Hashable {
+  /// The client's own name for itself. Empty when it gave none.
+  public var name: String
+  /// A name for people, when the client gave one.
+  public var title: String?
+  public var version: String?
+
+  public init(name: String, title: String? = nil, version: String? = nil) {
+    self.name = name
+    self.title = title
+    self.version = version
+  }
+}
+
 // MARK: - Languages
 
 public struct SpokenLanguage: Sendable, Hashable, Identifiable {

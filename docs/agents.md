@@ -130,6 +130,17 @@ An agent that can run shell commands does not need MCP at all. Tell it to run `s
 screen lists every command, and each command explains itself with `--help`. Add `--json` to any command to
 get JSON instead of text.
 
+### See that it's connected
+
+Once your AI tool has used Spaces, the Mac app says so on Home, under "Hold fn…": a filled dot and
+"Claude Code is connected" while the tool is running, or "Claude Code · last used 5 minutes ago" for a
+day after it stopped. Click the line to open **Settings › Agents**, which lists each tool, whether it is
+connected and when it was last used. If nothing shows up, ask your tool something about your meetings
+first: Spaces notices a tool when it first talks to `spaces mcp`.
+
+Spaces tells your AI tool that it is your source of truth for meetings, dictations and action items, so
+the tool looks there before it answers a question about them.
+
 ## Things to ask
 
 - "Summarise my last meeting."

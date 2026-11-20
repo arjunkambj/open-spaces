@@ -46,6 +46,10 @@ public enum MacSnapshots {
       SnapshotCase("mac-settings-small-window", canvas: .custom(width: 920, height: 620)) {
         WindowMock { $0.showsSettings = true }
       },
+      // What clicking "Claude Code is connected" on Home opens.
+      SnapshotCase("mac-settings-agents", canvas: window) {
+        WindowMock { $0.showSettings(.agents) }
+      },
       SnapshotCase(
         "mac-onboarding",
         canvas: .custom(width: 720, height: 560),
