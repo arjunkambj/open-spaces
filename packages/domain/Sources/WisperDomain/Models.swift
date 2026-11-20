@@ -11,7 +11,7 @@ public struct Settings: Codable, Sendable, Equatable {
   /// Set once the onboarding flow has been completed.
   public var onboardedAt: Date?
 
-  /// OpenAI transcription model, e.g. `gpt-transcribe`.
+  /// OpenAI transcription model, e.g. `gpt-live-transcribe`.
   public var transcriptionModel: String
   /// OpenAI chat model used for clean-up, command mode and meeting notes.
   public var textModel: String
@@ -77,10 +77,12 @@ public struct Settings: Codable, Sendable, Equatable {
     self.meetings = meetings
   }
 
-  public static let defaultTranscriptionModel = "gpt-transcribe"
+  /// Writes the text while the person speaks, so it is ready about a second after they stop.
+  /// Files (a retry, a meeting) go to `gpt-transcribe`, which it stands in for.
+  public static let defaultTranscriptionModel = "gpt-live-transcribe"
   public static let defaultTextModel = "gpt-6-luna"
   /// Models offered in pickers. The fields stay free-text so any model works.
-  public static let suggestedTranscriptionModels = ["gpt-transcribe", "whisper-1"]
+  public static let suggestedTranscriptionModels = ["gpt-live-transcribe", "gpt-transcribe", "whisper-1"]
   public static let suggestedTextModels = ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.2-sol", "gpt-6.2-astra"]
 
   public static let defaultStyles: [AppCategory: WritingStyle] = [

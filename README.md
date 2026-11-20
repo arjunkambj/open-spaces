@@ -90,13 +90,13 @@ An app you built yourself does not look for updates. See [Build and run](#build-
 ## How it works
 
 1. You speak. Open Wisper records the audio on your device.
-2. The audio goes to OpenAI, using **your own API key**. OpenAI sends back the words.
+2. While you talk, the audio goes to OpenAI, using **your own API key**. OpenAI writes the words as they come, so they are ready about a second after you stop.
 3. A second, quick request tidies the text: it removes "um" and "uh", fixes punctuation, and applies your writing style. You can turn this off.
 4. The text is typed into your app.
 
 Meetings work the same way: the audio is turned into text piece by piece while you talk, and the notes are written when you stop.
 
-Out of the box, Open Wisper asks for the model `gpt-transcribe` to turn speech into text and `gpt-6-luna` to tidy it and write notes. You can pick other models in Settings.
+Out of the box, Open Wisper asks for the model `gpt-live-transcribe` to turn speech into text while you talk, and `gpt-6-luna` to tidy it and write notes. Meetings and retries send the recorded file to `gpt-transcribe`. You can pick other models in Settings: with `gpt-transcribe`, dictation costs about a quarter as much to transcribe but the text comes a second or so later.
 
 **What leaves your device.** Your audio and the text made from it. To get spelling and style right, a few more things go along: your name, your dictionary words, and the name of the app you are typing into. Command mode also sends the text you selected. Meeting notes and questions send that meeting's title, transcript and notes. All of it goes only to OpenAI, or to the server you chose instead.
 
