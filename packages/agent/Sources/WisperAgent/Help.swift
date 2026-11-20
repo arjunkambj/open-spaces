@@ -99,7 +99,7 @@ enum Help {
         + wrap(
           "Everything is read from and saved to \(environment.dataFolder.path) on this computer. Nothing is "
             + "sent anywhere. Set \(WisperPaths.homeVariable) to use another folder. The API key is kept in "
-            + "the Keychain and this tool cannot read it.",
+            + "its own file and this tool never reads it.",
           indent: "  "
         )
     )

@@ -299,7 +299,7 @@ public final class AppModel {
     if let server = try? APIServer(address: address) {
       saved = ((try? await secrets.apiKey(for: server.host)) ?? nil) != nil
     }
-    // The address changed again while the Keychain was being asked: that change asks again.
+    // The address changed again while the key was being read: that change asks again.
     guard address == settings.apiBaseURL else { return }
     hasAPIKey = saved
   }

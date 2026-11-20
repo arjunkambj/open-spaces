@@ -334,7 +334,7 @@ struct CommandLineFrontEnd {
     lines.append(
       "MCP:          speaks \((MCPServer.modernVersions + MCPServer.handshakeVersions).joined(separator: ", "))"
     )
-    lines.append("API key:      kept in the Keychain. This tool cannot read it.")
+    lines.append("API key:      kept in its own file. This tool never reads it.")
     io.output(
       json
         ? JSONValue.object(data).serialized(pretty: true) : Toolbox.printable(lines.joined(separator: "\n"))

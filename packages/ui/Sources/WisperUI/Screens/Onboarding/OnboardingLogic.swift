@@ -82,10 +82,10 @@ enum OnboardingCopy {
 
   static func keyMessage(usesServer: Bool) -> String {
     usesServer
-      ? "Your voice is turned into text by the server you name below. If it needs a key, the key is kept "
-        + "in the Keychain on this device and is sent only to that server."
-      : "Your voice is turned into text by OpenAI, using your own key. The key is kept in the Keychain "
-        + "on this device and is sent only to OpenAI."
+      ? "Your voice is turned into text by the server you name below. If it needs a key, the key is saved "
+        + "on this device only and is sent only to that server."
+      : "Your voice is turned into text by OpenAI, using your own key. The key is saved on this device "
+        + "only and is sent only to OpenAI."
   }
 
   static func permissionsButton(allAllowed: Bool) -> String {

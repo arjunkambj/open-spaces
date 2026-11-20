@@ -4,8 +4,10 @@ Open Wisper keeps everything on your device, in one folder of plain files. There
 database and no server. You can open the files, back them up, or change them with your own
 tools.
 
-The one thing that is **not** in this folder is your OpenAI API key. That lives in the
-system Keychain and is never written to a file.
+Your OpenAI API key is kept apart from everything else, in its own file, `api-key.json`.
+Only your user account can open it, and the key is never written to any other file. On macOS
+that file is in this folder. On iOS it is in the app's own storage, outside the folder the
+app shares with its keyboard, so the keyboard cannot read it.
 
 ## Where the folder is
 
@@ -33,6 +35,7 @@ the app and the tool must be given the same value to see the same data.
 ```
 <folder>/
   settings.json                    your settings
+  api-key.json                     your API key (macOS only, see below)
   dictionary.json                  words to spell your way
   snippets.json                    voice shortcuts
   dictations.json                  dictation history
@@ -141,6 +144,21 @@ The examples below were written by the app itself, from made-up data.
 - A value the app does not know (a style it has no name for, say) makes the file count as
   damaged: it is moved aside, and that setting goes back to its default (see "A file that
   cannot be read" below).
+
+### api-key.json
+
+```json
+{"host": "api.openai.com", "key": "sk-..."}
+```
+
+- `host` is the server the key was saved for. The key is sent to that server only. If the
+  server address in `settings.json` names another host, the key is not used.
+- The file is readable by your user account only (mode 0600) and is left out of backups.
+  Removing the key in Settings deletes the file.
+- If you copy, zip or share the data folder, leave this file out.
+- On iOS this file is in the app's own `Application Support` folder, not in the shared
+  folder.
+- Tools must not read, copy or change this file. The `wisper` tool never opens it.
 
 ### dictionary.json
 

@@ -4,7 +4,7 @@ Open Wisper is an open-source voice dictation and meeting-notes app for macOS an
 
 ## Rules that never bend
 
-- **Everything is stored on the device.** Files under the data folder, the API key in the Keychain. No cloud, no analytics, no telemetry, no sign-up. The only network calls go to the OpenAI-compatible server the user configured, plus the Mac app's check for a new version on GitHub (about once a day; it sends no user data).
+- **Everything is stored on the device.** Files under the data folder, the API key in its own private file (`api-key.json`), not the Keychain. No cloud, no analytics, no telemetry, no sign-up. The only network calls go to the OpenAI-compatible server the user configured, plus the Mac app's check for a new version on GitHub (about once a day; it sends no user data).
 - **One branch, one environment.** `main` is the base branch. There is no staging or dev environment. Work on a branch, open a PR into `main`.
 - **Original work only.** The layout and flows are inspired by popular dictation apps, but never copy another product's code, images, icons, sounds, name or wording.
 - **No third-party Swift dependencies** without a strong reason. Apple frameworks and the standard library cover what we need. The one exception is Sparkle, the updater in the Mac app, imported in a single file (`AppUpdater.swift`).
@@ -19,7 +19,7 @@ apps/ios          iOS app, keyboard and widget extensions: thin Xcode targets (X
 apps/ios/Phone    WisperPhone, WisperKeyboard, WisperLive   nearly all iOS code; a package that builds on a Mac
 apps/web          the website whisper.0xhoney.com (Astro + Tailwind, static; on Cloudflare)
 packages/domain   WisperDomain   models, the seams (protocols), in-memory fakes, APIServer, LinkTicket
-packages/store    WisperStore    FileLibrary, KeychainSecretStore
+packages/store    WisperStore    FileLibrary, FileSecretStore
 packages/ai       WisperAI       OpenAI adapters
 packages/audio    WisperAudio    microphone + system-audio capture
 packages/engine   WisperEngine   DictationEngine, MeetingEngine, AppModel
@@ -78,7 +78,7 @@ cd apps/ios/Phone && ../../../scripts/swiftw run wisper-phone-snapshots <folder>
 
 The website is the one part that is not Swift. Its words are all in `apps/web/src/content.ts`; say only what the README says is true. It sends no JavaScript and loads nothing from other sites: keep it so. `apps/web/README.md` has the rest.
 
-The Mac app also starts with `--demo`: made-up data, no microphone, Keychain, shortcuts or network.
+The Mac app also starts with `--demo`: made-up data, no microphone, saved key, shortcuts or network.
 
 Always call `scripts/swiftw` instead of `swift` for build and run. It makes the build work on a Mac that has only the Command Line Tools (it picks an SDK whose compiler plugins are present).
 

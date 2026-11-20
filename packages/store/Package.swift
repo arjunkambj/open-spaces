@@ -1,7 +1,7 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// File-backed Library and Keychain secret store.
+// File-backed Library and secret store.
 let package = Package(
   name: "WisperStore",
   platforms: [.macOS("14.4"), .iOS(.v17)],

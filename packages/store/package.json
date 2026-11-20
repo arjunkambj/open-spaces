@@ -2,7 +2,7 @@
   "name": "@open-wisper/store",
   "version": "0.1.0",
   "private": true,
-  "description": "File-backed Library and Keychain secret store.",
+  "description": "File-backed Library and secret store.",
   "scripts": {
     "build": "../../scripts/swiftw build",
     "lint": "swift format lint --strict --recursive --parallel Package.swift Sources"

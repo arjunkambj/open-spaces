@@ -71,7 +71,7 @@ Use `scripts/swiftw` in place of `swift` to build and run. It makes the build wo
 ## Rules that never bend
 
 - **Everything stays on the device.** No cloud, no analytics, no sign-up. The only network calls go to the AI server the user set.
-- **The API key lives only in the Keychain.** Never in a file, a log or an error message. A saved key belongs to one server and is never sent to another.
+- **The API key lives only in its own private file** (`api-key.json`, mode 0600). Never in any other file, a log or an error message. A saved key belongs to one server and is never sent to another.
 - **Nothing starts listening behind the user's back.** A link that would start or stop a recording is followed only with a ticket from our own tool or keyboard, or after the user says yes.
 - **Original work only.** Do not copy code, images, icons, sounds, names or wording from any other product.
 - **No tests, no legacy, no fallbacks.** We keep no test suites. We keep no code for old callers or old data: change the callers instead. We write no second path in case the first one fails: fail plainly, with a clear message.
@@ -94,7 +94,7 @@ We like **deep modules**: a part that does a lot of work behind a small set of f
 
 ```
 packages/domain   the shared types and the contracts between parts
-packages/store    saving to files and to the Keychain
+packages/store    saving to files
 packages/ai       talking to OpenAI
 packages/audio    recording the microphone and system audio
 packages/engine   the dictation and meeting logic

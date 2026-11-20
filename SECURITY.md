@@ -34,7 +34,9 @@ Knowing the design helps you judge what counts as a problem.
 
 ### Your API key
 
-- **It lives only in the system Keychain**, on this device. It is not synced to iCloud. It is never written to a file, a log or an error message.
+- **It lives only in one private file**, `api-key.json`, on this device. Only your user account can open it. The file is left out of iCloud Backup and Time Machine. It is never written to any other file, a log or an error message.
+- **Why not the Keychain.** The Keychain asked for your password or a yes each time dictation started. A plain private file does not. The trade-off: any program running as you can read that file, the same as your other files, and macOS does not ask you first. That includes an AI agent that can run commands on your Mac.
+- **If you move the data folder** with `OPEN_WISPER_HOME` into a synced folder (iCloud Drive, Dropbox), the key file goes with it. If you zip the folder to share it, leave `api-key.json` out.
 - **It belongs to one server.** The key is saved together with the name of the server it is for, and it is sent only to that server. If the server address in your settings changes, by your hand or anyone else's, the key is not sent to the new address.
 - **A wrong server address is an error.** A custom address must start with `http://` or `https://` and name a server. If it does not, nothing is sent anywhere. Open Wisper never quietly sends your audio to OpenAI instead.
 
@@ -62,7 +64,7 @@ Open Wisper answers links that start with `openwisper://`. Any web page, documen
 The `wisper` command-line tool, which is also the MCP server, runs on your own Mac and works with the same local files.
 
 - It **can** read your meetings, notes, dictation history, dictionary and snippets, change a meeting's title, notes, tags and action items, delete a meeting, add and remove dictionary words and snippets, and ask the app to start or stop a meeting recording.
-- It **cannot** read your API key (it never opens the Keychain), change your settings or your server address, start dictation, type into another app, run a command, or use the network.
+- It **cannot** read your API key (it has no code that opens the key file), change your settings or your server address, start dictation, type into another app, run a command, or use the network.
 - **Saving a meeting to a file is narrow on purpose.** It only makes a new Markdown (`.md`) file in a folder that already exists. It never replaces a file, never writes a hidden file or into a hidden folder, and refuses the file names that AI tools read as instructions, such as `AGENTS.md`.
 - A meeting holds what other people said, and someone can say a sentence meant to trick an AI. The limits above hold even when an agent is tricked. Still, an agent you connect can read your meetings, so only connect agents you trust.
 
@@ -83,7 +85,7 @@ An app you built yourself, with your own certificate or none, does not look for 
 
 ## What we would like to hear about
 
-- The API key ending up anywhere other than the Keychain or the server it was saved for.
+- The API key ending up anywhere other than its own file or the server it was saved for.
 - Audio or text being sent to any place other than the server you set.
 - A web page, a document or a link making Open Wisper start dictation, record a meeting without asking you, or stop a recording.
 - The agent tool reading the API key, changing settings, replacing a file, or writing a file it should have refused.

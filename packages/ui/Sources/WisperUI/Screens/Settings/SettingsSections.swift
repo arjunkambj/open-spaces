@@ -283,9 +283,9 @@ enum OpenAICopy {
   /// - customHost: the host of the custom server, or `nil` when requests go to OpenAI.
   static func keyStatus(hasKey: Bool, customHost: String?) -> String {
     switch (hasKey, customHost) {
-    case (true, nil): "Kept in the Keychain on this device. It is sent only to OpenAI."
-    case (true, let host?): "Kept in the Keychain on this device. It is sent to \(host), not to OpenAI."
-    case (false, nil): "Add your key to start dictating. It is kept in the Keychain on this device."
+    case (true, nil): "Saved on this device only. It is sent only to OpenAI."
+    case (true, let host?): "Saved on this device only. It is sent to \(host), not to OpenAI."
+    case (false, nil): "Add your key to start dictating. It is saved on this device only."
     case (false, let host?):
       // Also what someone sees right after changing the address: the key they had is for
       // the other server and stays out of this one.
@@ -310,9 +310,9 @@ enum OpenAICopy {
 
   static func keyDialogSubtitle(customHost: String?) -> String {
     guard let customHost else {
-      return "The key is checked first, then kept in the Keychain on this device."
+      return "The key is checked first, then saved on this device only."
     }
-    return "The key is checked with \(customHost) first, then kept in the Keychain on this device. "
+    return "The key is checked with \(customHost) first, then saved on this device only. "
       + "It is sent to that server, not to OpenAI."
   }
 }

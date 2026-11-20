@@ -5,7 +5,7 @@ struct Launch {
   enum Mode {
     /// The real app.
     case app
-    /// The whole app on made-up data: no microphone, Keychain, shortcuts, network or sounds.
+    /// The whole app on made-up data: no microphone, saved key, shortcuts, network or sounds.
     /// `firstRun` starts it before setup, to see the first-run steps.
     case demo(firstRun: Bool)
     /// Draw the still pictures into a folder and quit.
