@@ -122,7 +122,7 @@ The examples below were written by the app itself, from made-up data.
     "workMessages" : "casual"
   },
   "textModel" : "gpt-6-luna",
-  "transcriptionModel" : "gpt-transcribe",
+  "transcriptionModel" : "gpt-live-transcribe",
   "userName" : "Alex"
 }
 ```

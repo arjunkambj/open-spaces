@@ -256,7 +256,8 @@ it is skipped before anything is sent, and nothing about a dictation changes.
   file path. If `gpt-live-transcribe` is the chosen model, files go to `gpt-transcribe`,
   because the live model does not take files.
 
-**What is not proven.** **Nothing has been tried against OpenAI itself**, because no key was
+**What was not proven when this was written.** (It has since been tried: see "Tried against
+OpenAI" below.) **Nothing had been tried against OpenAI itself**, because no key was
 available. The adapter follows the protocol as the documentation describes it. Things only a real key can
 show: whether the handshake and the settings are accepted as written, whether 24 kHz samples
 made from our 16 kHz recording are fine, how fast the final text really arrives, how long a
@@ -283,6 +284,51 @@ A weakness to know about: a live session that opens fine but never answers costs
 dictation its head start (about 2 s) until the model is changed back. The timings will show
 it (`path` is `file`, and `transcribeMs` is long). A rule that turns the live side off for a
 while after a few such misses would fix that, and is not written yet.
+
+## Tried against OpenAI, 20 November 2026
+
+The live path was tried for real for the first time, with the owner's key, from the owner's Mac.
+No microphone was used: the speech was made with the Mac's own `say` voice (a 6.8-second
+sentence, 16 kHz), and fed to `OpenAI.liveTranscriber` at the speed a person speaks, 0.1 s at a
+time. The same file then went through the file path. Three runs each.
+
+| | Live (`gpt-live-transcribe`) | File (`gpt-transcribe`) |
+| --- | --- | --- |
+| Opening the session (while speaking) | 1.2 to 2.0 s | none |
+| From the last sound to the text | 0.86 to 0.96 s | 1.5 to 2.1 s |
+| Text | right; kept the "Um", wrote "three p.m." | right; dropped the "Um", wrote "3 p.m." |
+
+The handshake, the settings and the 24 kHz samples are all accepted as written. The text pieces
+arrive while the sound is sent (29 updates for the sentence). The tidy-up step removes the
+filler and writes the number, so after it both paths give the same sentence.
+
+**What changed.** `gpt-live-transcribe` is now the default for a new install and is first in
+the list in Settings. A setting saved before keeps its model. The price is the one in the
+table above: about four times as much per minute of speech, for about a second less waiting.
+
+Opening takes up to 2 s, so a dictation shorter than that may find the session still opening
+when the key comes up. Such a dictation uses the file at once, as before.
+
+### Tidying, measured
+
+The app's own clean-up prompt, sent to each model four ways (the four sentences below come from
+the owner's history), twice each, on one open connection:
+
+| Model | Middle time | Slowest | What came back |
+| --- | --- | --- | --- |
+| `gpt-6-luna` (default) | 1.0 to 1.3 s | 2.0 s | right every time |
+| `gpt-6-luna`, `service_tier: priority` | 0.82 s | 1.08 s | the same text |
+| `gpt-5.6-luna` | 0.95 s | 1.6 s | right |
+| `gpt-5.4-mini` | 0.88 s | 0.97 s | kept a filler, dropped a capital letter |
+| `gpt-5.4-nano`, `gpt-4.1-mini` | about 1.05 s | 1.5 to 1.9 s | kept fillers and false starts |
+| `gpt-6.1-terra` | 1.7 s | 2.6 s | slower, and left words out |
+
+The app's own client took the same time as a bare request (middle 1.03 s), so nothing in the app
+adds to it. The 1.7 to 2.4 s in the owner's history were longer dictations, sent over a VPN.
+
+So the default model stays. Only the priority tier is clearly faster with the same text: about
+0.2 s in the middle and 0.4 s in the slow cases. OpenAI charges more for it, so it is not
+switched on; that is the owner's call.
 
 ## Still a proposal
 
