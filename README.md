@@ -105,7 +105,7 @@ The Mac app makes one other kind of request: about once a day it asks GitHub whe
 - **No account.** There is nothing to sign up for.
 - **No server of ours.** We do not run one. We never see your audio, your text or your key.
 - **No tracking.** No analytics and no usage reports.
-- **Your data stays with you.** History, meetings, dictionary and settings are plain files on your device. Your API key is kept in the system Keychain, the place your Mac and iPhone keep passwords.
+- **Your data stays with you.** History, meetings, dictionary and settings are plain files on your device. Your API key is kept in a private file on your device that only your user account can open.
 
 What you send to OpenAI is covered by OpenAI's own data rules, and you pay OpenAI for what you use.
 
@@ -236,7 +236,7 @@ On macOS, everything is in one folder:
 ~/Library/Application Support/Open Wisper
 ```
 
-The files are JSON, Markdown and audio. You can read them, back them up, or delete them yourself. Your API key is not in that folder; it is in the Keychain.
+The files are JSON, Markdown and audio. You can read them, back them up, or delete them yourself. Your API key is in that folder too, in `api-key.json`, which only your user account can open and which backups leave out. If you share or copy the folder, leave that file out.
 
 On an iPhone, the same files are kept inside the app's own storage, in a folder the app shares with its keyboard.
 
@@ -250,7 +250,7 @@ apps/ios          the iPhone app, its keyboard and its Lock Screen notice
 apps/ios/Phone    most of the iPhone app's code, as a package that also builds on a Mac
 apps/web          the website, whisper.0xhoney.com
 packages/domain   the shared types and the contracts between parts
-packages/store    saving to files and to the Keychain
+packages/store    saving to files
 packages/ai       talking to OpenAI
 packages/audio    recording the microphone and system audio
 packages/engine   the dictation and meeting logic

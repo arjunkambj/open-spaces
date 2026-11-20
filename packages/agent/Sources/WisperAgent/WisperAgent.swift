@@ -8,8 +8,8 @@ import WisperDomain
 /// (`wisper meetings list`) and a Model Context Protocol server
 /// (`wisper mcp`). Both are driven through `run`.
 ///
-/// It reads and writes the library only. It has no access to the Keychain, so
-/// it can never see the API key.
+/// It reads and writes the library only. It has no code that opens the API key's
+/// file, so it never hands the key to an agent.
 public struct WisperAgent: Sendable {
   /// The version reported by `wisper --version` and to MCP clients.
   public static let version = "0.1.0"

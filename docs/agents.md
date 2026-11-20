@@ -329,7 +329,8 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 
 **What an agent cannot do.**
 
-- Read your API key. `wisper` has no access to the Keychain.
+- Read your API key through `wisper`. It has no code that opens the key file. An agent that can also run
+  its own commands on your Mac could read that file directly, as it could any of your files.
 - Change your settings, or the address of the server your audio is sent to.
 - Start dictation, or type anything into another app.
 - Run a command, read a file outside the Open Wisper data folder, or use the network.
@@ -383,9 +384,11 @@ written as escapes, such as `\u001b`.
 - **Everything stays on your Mac.** `wisper` reads and writes the same folder as the app:
   `~/Library/Application Support/Open Wisper`. It makes no network calls at all. There is no account and no
   tracking.
-- **It cannot read your API key.** The key is kept in the macOS Keychain. `wisper` has no code that opens the
-  Keychain, so no agent can get the key through it. It also never shows the address of a custom server,
-  because an address can hold a password.
+- **It cannot read your API key.** The key is kept in its own file, `api-key.json`. `wisper` has no code that
+  opens that file, so no agent can get the key through it. It also never shows the address of a custom server,
+  because an address can hold a password. An agent that can run its own commands (most coding agents can)
+  could still open `api-key.json` the way it opens any file, and macOS would not ask you first. Only give
+  such an agent access to a Mac you trust it with.
 - **Your AI tool is a separate matter.** What an agent reads through `wisper` (a transcript, for example)
   goes to that agent's AI provider, like anything else you show it. Connect only tools you trust with your
   meetings.

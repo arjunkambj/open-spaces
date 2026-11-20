@@ -88,7 +88,7 @@ If the App Group is missing or the names do not match, the app still works: it k
 library in its own folder. The keyboard then cannot see it and says so instead of typing
 anything.
 
-Your OpenAI key is never shared. It stays in the app's own Keychain. The keyboard does not
+Your OpenAI key is never shared. It stays in a private file in the app's own storage. The keyboard does not
 need it and cannot read it.
 
 ## What works on the phone

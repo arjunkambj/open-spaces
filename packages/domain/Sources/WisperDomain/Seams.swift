@@ -4,7 +4,7 @@ import Foundation
 // package. `Fakes.swift` holds the in-memory ones that demo mode and the snapshots use.
 //
 //   Library        -> WisperStore.FileLibrary          (files on disk)
-//   SecretStore    -> WisperStore.KeychainSecretStore  (Keychain)
+//   SecretStore    -> WisperStore.FileSecretStore      (a private file)
 //   Transcriber    -> WisperAI.OpenAITranscriber       (OpenAI audio API)
 //   LiveTranscriber -> WisperAI.OpenAILiveTranscriber  (OpenAI realtime API)
 //   LanguageModel  -> WisperAI.OpenAILanguageModel     (OpenAI chat API)
@@ -89,7 +89,7 @@ extension Library {
 
 // MARK: - Secrets
 
-/// Holds the user's API key. Never written to the library files.
+/// Holds the user's API key. Never written into the library files themselves.
 ///
 /// There is one key, and it belongs to one server: the host it was saved for
 /// (see `APIServer.host`). It is handed out only for that host, so a change to

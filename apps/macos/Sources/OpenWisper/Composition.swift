@@ -18,11 +18,12 @@ enum Composition {
     var updater: AppUpdater?
   }
 
-  /// The real app: files on disk, the Keychain, the microphone, OpenAI and the global shortcuts.
+  /// The real app: files on disk, the microphone, OpenAI and the global shortcuts.
   static func real() -> Parts {
     let root = WisperPaths.defaultRoot()
     let library = FileLibrary(root: root)
-    let secrets = KeychainSecretStore()
+    // A private file, not the Keychain: the Keychain asked for a yes every time dictation started.
+    let secrets = FileSecretStore(file: root.appendingPathComponent(FileSecretStore.fileName))
     let openAI = OpenAI(
       secrets: secrets,
       // Read on every request, so a change in Settings takes effect at once. The address goes

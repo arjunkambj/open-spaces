@@ -169,8 +169,8 @@ export const privacy = {
       text: "History, meetings, dictionary and settings are JSON, Markdown and audio files in one folder. You can read them, back them up or delete them.",
     },
     {
-      title: "Your key in the Keychain",
-      text: "Your OpenAI API key is kept where your Mac keeps passwords. It is sent only to the server it was saved for.",
+      title: "Your key in a private file",
+      text: "Your OpenAI API key is kept in a file only your account can open. It is sent only to the server it was saved for.",
     },
     {
       title: "No account, no tracking",

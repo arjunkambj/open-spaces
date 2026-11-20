@@ -302,8 +302,10 @@ public final class PhoneSession {
   /// The real adapters, wired together. The only place that happens on the phone.
   private static func liveModel(device: PhoneDevice) -> AppModel {
     let library = FileLibrary(root: SharedFolder().root)
-    // The key stays in the app's own Keychain. The keyboard never needs it.
-    let secrets = KeychainSecretStore()
+    // The key stays in the app's own storage, outside the folder it shares with the keyboard.
+    // The keyboard never needs it.
+    let ownFolder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    let secrets = FileSecretStore(file: ownFolder.appendingPathComponent(FileSecretStore.fileName))
     let openAI = OpenAI(
       secrets: secrets,
       // The address goes through as typed: an unusable one is an error, never a quiet switch to OpenAI.

@@ -421,7 +421,7 @@ extension Toolbox {
       ("Keep history", settings.historyRetention.label),
       ("Meeting notes", settings.meetings.autoSummarize ? "written automatically" : "off"),
       ("Record computer sound", settings.meetings.captureSystemAudio ? "on" : "off"),
-      ("API key", "kept in the Keychain. This tool cannot read it."),
+      ("API key", "kept in its own file. This tool never reads it."),
     ]
     let lines = rows.map { ($0.0 + ":").padding(toLength: 24, withPad: " ", startingAt: 0) + $0.1 }
     return ToolOutput(data: data, text: lines.joined(separator: "\n"))
