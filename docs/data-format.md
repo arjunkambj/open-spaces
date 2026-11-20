@@ -348,7 +348,14 @@ All four keys are required.
   one too, when only a part is missing: a piece that could not be turned into text, notes
   that could not be written, or audio that was lost in a crash.
 - `segments` is the transcript. `start` and `end` are seconds from the start of the
-  recording. `speaker` is `me` (your microphone), `others` (the computer's sound), or a name.
+  recording. `speaker` is `me` (your microphone) or one of the people on the computer's
+  sound: `Speaker 1`, `Speaker 2` and so on for voices told apart that have no name yet, or
+  a name. A name comes from you, from an agent, or from the AI notes when the talk makes it
+  plain ("thanks, Priya"). `others` stands for everyone on the computer's sound when their
+  voices were not told apart: in meetings recorded through a server of your own, and in
+  meetings from before voices were told apart.
+- To rename a speaker, change `speaker` on every one of their segments, and `owner` on every
+  action item that names them. Never use `me` or `others` as a name.
 - `notes` holds the AI notes. It is missing until they have been written.
 - `userNotes` is your own free-form Markdown.
 - `attendees` holds the names of the other people invited to the calendar event the meeting
@@ -395,14 +402,29 @@ removed.
       "state" : "done",
       "track" : "microphone"
     }
+  ],
+  "voices" : [
+    {
+      "end" : 14.25,
+      "file" : "system-0000.m4a",
+      "name" : "Speaker 1",
+      "start" : 4.25
+    }
   ]
 }
 ```
 
 - `offset` and `duration` are in seconds. `offset` counts from the start of the meeting.
 - `state` is `pending` (not turned into text yet), `done` or `failed` (waiting for a retry).
-- `segments` holds what was heard in that piece, in the same shape as in `meeting.json`.
+- `segments` holds what was heard in that piece, in the same shape as in `meeting.json`. A
+  segment here keeps the speaker the app first gave it (`Speaker 1`); a new name lives in
+  `meeting.json` and is carried over whenever the app writes the transcript again.
 - `lostAudio` is `true` when some sound could not be saved. It is left out otherwise.
+- `voices` lists the voices told apart on the `system` track, at most four, each with a
+  stretch of 2 to 10 seconds (`start` to `end`, in seconds from the start of `file`) in which
+  only that voice speaks. Each later `system` piece is sent to OpenAI with these stretches, so
+  the same person keeps the same number from piece to piece. It is left out until the first
+  voice is found. Voices are only told apart when speech goes to OpenAI itself.
 
 **After a crash.** The audio files are the truth, and the manifest is only a record of
 them. The next time the app starts, it finishes every meeting that was left as `recording`

@@ -123,12 +123,59 @@ public struct TranscriptionRequest: Sendable {
   public var language: String?
   /// Words the transcriber should prefer (names, jargon).
   public var vocabulary: [String]
+  /// Set to tell the voices in the audio apart: each timed piece of the reply then says who
+  /// spoke it (`Transcript.Segment.speaker`). `model` and `vocabulary` are not used then: the
+  /// transcriber asks its own model that tells voices apart, which takes no word hints. Only
+  /// OpenAI's own server has that model.
+  public var voices: Voices?
 
-  public init(audio: URL, model: String, language: String? = nil, vocabulary: [String] = []) {
+  public init(
+    audio: URL,
+    model: String,
+    language: String? = nil,
+    vocabulary: [String] = [],
+    voices: Voices? = nil
+  ) {
     self.audio = audio
     self.model = model
     self.language = language
     self.vocabulary = vocabulary
+    self.voices = voices
+  }
+}
+
+/// The voices to tell apart in one recording.
+public struct Voices: Sendable, Equatable {
+  /// The most voices `known` may hold.
+  public static let mostKnown = 4
+  /// How long a sample of a voice must be, in seconds.
+  public static let sampleLength: ClosedRange<TimeInterval> = 2...10
+
+  /// Voices heard before, at most `mostKnown`. A piece said in one of them comes back with its
+  /// name. A piece in any other voice comes back with a label the transcriber makes up ("A",
+  /// "B"), which means nothing outside that one reply.
+  public var known: [Sample]
+
+  /// A stretch of audio in which one voice, and only that voice, speaks.
+  public struct Sample: Sendable, Equatable {
+    public var name: String
+    /// An audio file on disk.
+    public var audio: URL
+    /// Where the stretch starts and ends, in seconds from the start of the file. It must be
+    /// `sampleLength` long.
+    public var start: TimeInterval
+    public var end: TimeInterval
+
+    public init(name: String, audio: URL, start: TimeInterval, end: TimeInterval) {
+      self.name = name
+      self.audio = audio
+      self.start = start
+      self.end = end
+    }
+  }
+
+  public init(known: [Sample] = []) {
+    self.known = known
   }
 }
 
@@ -142,11 +189,15 @@ public struct Transcript: Sendable, Equatable {
     public var start: TimeInterval
     public var end: TimeInterval
     public var text: String
+    /// Who spoke, when the request asked for the voices to be told apart: the name of a known
+    /// voice, or a label of the transcriber's own. See `Voices`.
+    public var speaker: String?
 
-    public init(start: TimeInterval, end: TimeInterval, text: String) {
+    public init(start: TimeInterval, end: TimeInterval, text: String, speaker: String? = nil) {
       self.start = start
       self.end = end
       self.text = text
+      self.speaker = speaker
     }
   }
 

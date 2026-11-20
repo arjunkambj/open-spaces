@@ -10,11 +10,21 @@ import SpacesDomain
 /// An answer that trying again cannot change (the model name is not accepted, the key is
 /// refused) stops the queue: the chunks still waiting are left for the next `retryUnfinished`,
 /// instead of each being sent off to get the same answer.
+///
+/// **Voices.** With `Options.separatesVoices`, the voices on the system track are told apart
+/// and named "Speaker 1", "Speaker 2"… The transcriber labels each request on its own, so a
+/// voice gets its name from a sample: the first time a voice speaks long enough in one go, that
+/// stretch is kept as its sample (in the manifest), and every later system chunk is sent with
+/// the samples so far. Those chunks therefore go one at a time. A voice that never speaks long
+/// enough, or one past `Voices.mostKnown`, can get a new number in each chunk: the notes and
+/// the person can still give two numbers the same name.
 actor MeetingTranscription {
   struct Options: Sendable {
     var model: String
     var language: String?
     var vocabulary: [String]
+    /// Whether to tell the voices on the system track apart. Only OpenAI's own server can.
+    var separatesVoices = false
   }
 
   /// How many chunks are transcribed at the same time.
@@ -151,25 +161,60 @@ actor MeetingTranscription {
   private var isIdle: Bool { active.isEmpty && waiting.isEmpty }
 
   private func pump() {
-    while !stopped, active.count < MeetingTranscription.concurrency, !waiting.isEmpty {
-      let index = waiting.removeFirst()
+    while !stopped, active.count < MeetingTranscription.concurrency, let next = nextToStart() {
+      let index = waiting.remove(at: next)
       active.insert(index)
       let chunk = manifest.chunks[index]
+      let voices = tellsVoicesApart(chunk) ? knownVoices() : nil
       Task {
-        let outcome = await self.transcribe(chunk)
+        let outcome = await self.transcribe(chunk, voices: voices)
         self.finished(index, outcome)
       }
     }
+  }
+
+  /// Where in `waiting` the next chunk to start is. A system chunk whose voices are told apart
+  /// waits while another one is out: it is to be sent with the voices that one finds.
+  private func nextToStart() -> Int? {
+    guard options.separatesVoices, active.contains(where: { manifest.chunks[$0].track == .system }) else {
+      return waiting.indices.first
+    }
+    return waiting.firstIndex { manifest.chunks[$0].track != .system }
+  }
+
+  private func tellsVoicesApart(_ chunk: MeetingManifest.Chunk) -> Bool {
+    options.separatesVoices && chunk.track == .system
+  }
+
+  private func knownVoices() -> Voices {
+    Voices(
+      known: (manifest.voices ?? []).map { voice in
+        Voices.Sample(
+          name: voice.name,
+          audio: directory.appendingPathComponent(voice.file),
+          start: voice.start,
+          end: voice.end
+        )
+      }
+    )
   }
 
   private func finished(_ index: Int, _ outcome: Result<Transcript, SpacesError>) {
     active.remove(index)
     switch outcome {
     case .success(let transcript):
+      let chunk = manifest.chunks[index]
+      var names: [String: Speaker] = [:]
+      if tellsVoicesApart(chunk) {
+        var voices = manifest.voices ?? []
+        names = MeetingTranscription.names(in: transcript, chunk: chunk, voices: &voices, after: lastNumber())
+        if voices != (manifest.voices ?? []) { manifest.voices = voices }
+      }
       manifest.chunks[index].state = .done
       manifest.chunks[index].segments = MeetingTranscription.segments(
         from: transcript,
-        chunk: manifest.chunks[index]
+        chunk: chunk,
+        names: names
       )
       refusals = 0
     case .failure(let error):
@@ -198,8 +243,18 @@ actor MeetingTranscription {
     try? manifest.write(to: directory)
   }
 
-  private nonisolated func transcribe(_ chunk: MeetingManifest.Chunk) async -> Result<Transcript, SpacesError>
-  {
+  /// The highest number a voice told apart has had in this meeting so far, 0 before the first.
+  private func lastNumber() -> Int {
+    let speakers =
+      manifest.chunks.flatMap(\.segments).map(\.speaker)
+      + (manifest.voices ?? []).map { Speaker.named($0.name) }
+    return speakers.compactMap(\.unnamedNumber).max() ?? 0
+  }
+
+  private nonisolated func transcribe(
+    _ chunk: MeetingManifest.Chunk,
+    voices: Voices?
+  ) async -> Result<Transcript, SpacesError> {
     let audio = directory.appendingPathComponent(chunk.file)
     guard FileManager.default.fileExists(atPath: audio.path) else {
       return .failure(.notFound("Part of the recording"))
@@ -208,7 +263,8 @@ actor MeetingTranscription {
       audio: audio,
       model: options.model,
       language: options.language,
-      vocabulary: options.vocabulary
+      vocabulary: options.vocabulary,
+      voices: voices
     )
     let attempts = MeetingTranscription.attempts
     var failure = SpacesError.noSpeech
@@ -260,13 +316,75 @@ actor MeetingTranscription {
     return (400...499).contains(status) && status != 408 && status != 429
   }
 
-  /// What was heard in one chunk, with times counted from the start of the meeting.
+  /// The meeting's speaker for each label in one system chunk's reply. A known voice keeps its
+  /// name. Any other label is a voice new to the meeting and becomes the next "Speaker N",
+  /// counting on from `last`. While there is room, a new voice that speaks long enough in one
+  /// go has that stretch added to `voices` as its sample.
+  private static func names(
+    in transcript: Transcript,
+    chunk: MeetingManifest.Chunk,
+    voices: inout [MeetingManifest.Voice],
+    after last: Int
+  ) -> [String: Speaker] {
+    let known = Set(voices.map(\.name))
+    var names: [String: Speaker] = [:]
+    var number = last
+    for piece in transcript.segments {
+      guard let label = piece.speaker, names[label] == nil,
+        !piece.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      else { continue }
+      if known.contains(label) {
+        names[label] = .named(label)
+        continue
+      }
+      number += 1
+      let speaker = Speaker.unnamed(number)
+      names[label] = speaker
+      if voices.count < Voices.mostKnown, let sample = sample(of: label, in: transcript, chunk: chunk) {
+        voices.append(
+          MeetingManifest.Voice(
+            name: speaker.label,
+            file: chunk.file,
+            start: sample.lowerBound,
+            end: sample.upperBound
+          )
+        )
+      }
+    }
+    return names
+  }
+
+  /// The longest stretch of the chunk in which only `label` speaks, cut to what a sample may
+  /// be. A little is left off both ends, where the voice before or after may still be heard.
+  /// `nil` when no piece is long enough.
+  private static func sample(
+    of label: String,
+    in transcript: Transcript,
+    chunk: MeetingManifest.Chunk
+  ) -> ClosedRange<TimeInterval>? {
+    let margin = 0.25
+    let length = max(0, chunk.duration)
+    let stretches = transcript.segments.filter { $0.speaker == label }.compactMap {
+      piece -> ClosedRange<TimeInterval>? in
+      let start = min(max(0, piece.start), length) + margin
+      let end = min(max(0, piece.end), length) - margin
+      guard end - start >= Voices.sampleLength.lowerBound else { return nil }
+      return start...min(end, start + Voices.sampleLength.upperBound)
+    }
+    return stretches.max { $0.upperBound - $0.lowerBound < $1.upperBound - $1.lowerBound }
+  }
+
+  /// What was heard in one chunk, with times counted from the start of the meeting. A piece
+  /// the microphone heard is "Me". A piece from the system track is the speaker `names` gives
+  /// its label, or "Others" when its voice was not told apart.
   ///
   /// When the transcriber gives no timed pieces, the whole text becomes one segment that spans
   /// the chunk. That is the honest answer: where in the chunk each sentence was said is not known.
-  private static func segments(from transcript: Transcript, chunk: MeetingManifest.Chunk)
-    -> [TranscriptSegment]
-  {
+  private static func segments(
+    from transcript: Transcript,
+    chunk: MeetingManifest.Chunk,
+    names: [String: Speaker]
+  ) -> [TranscriptSegment] {
     let speaker: Speaker = chunk.track == .microphone ? .me : .others
     let length = max(0, chunk.duration)
     func inChunk(_ time: TimeInterval) -> TimeInterval {
@@ -278,7 +396,7 @@ actor MeetingTranscription {
       guard !text.isEmpty else { return nil }
       let start = inChunk(piece.start)
       return TranscriptSegment(
-        speaker: speaker,
+        speaker: speaker == .me ? .me : piece.speaker.flatMap { names[$0] } ?? .others,
         start: chunk.offset + start,
         end: chunk.offset + max(start, inChunk(piece.end)),
         text: text

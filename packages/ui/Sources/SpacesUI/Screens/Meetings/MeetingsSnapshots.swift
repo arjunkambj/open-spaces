@@ -71,6 +71,15 @@ enum MeetingsSnapshots {
       SnapshotCase("meeting-transcript", model: { model() }) {
         screen(sync, preset: MeetingsPreset(tab: .transcript))
       },
+      SnapshotCase("meeting-transcript-phone", canvas: .phone, model: { model() }) {
+        screen(sync, preset: MeetingsPreset(tab: .transcript))
+      },
+      SnapshotCase("meeting-rename-speaker", model: { model() }) {
+        screen(sync, preset: MeetingsPreset(tab: .transcript, renamesSpeaker: .unnamed(3)))
+      },
+      SnapshotCase("meeting-rename-speaker-phone", canvas: .phone, model: { model() }) {
+        screen(sync, preset: MeetingsPreset(tab: .transcript, renamesSpeaker: .named("Priya")))
+      },
       SnapshotCase("meeting-transcript-find", model: { model() }) {
         screen(sync, preset: MeetingsPreset(tab: .transcript, find: "billing"))
       },
@@ -171,7 +180,11 @@ enum MeetingsSnapshots {
     let capture = FakeAudioCapture()
     let lines = MeetingSamples.liveLines
     let transcriber = FakeTranscriber { request in
-      Transcript(text: lines[request.audio.lastPathComponent] ?? "")
+      let text = lines[request.audio.lastPathComponent] ?? ""
+      guard let voices = request.voices, !text.isEmpty else { return Transcript(text: text) }
+      // Like the model that tells voices apart: a voice it has a sample of comes back by name.
+      let speaker = voices.known.first?.name ?? "A"
+      return Transcript(text: text, segments: [.init(start: 1, end: 9, text: text, speaker: speaker)])
     }
     let model = model(capture: capture, transcriber: transcriber)
     Task {
@@ -276,12 +289,18 @@ private enum MeetingSamples {
     let start = ago(hours: 26)
     let lines: [(Speaker, TimeInterval, String)] = [
       (.me, 2, "Thanks for joining. Let's start with the launch date."),
-      (.others, 10, "We're on track for the 14th. The only open risk is the billing migration."),
-      (.others, 24, "Sam's team wants to move the billing data over the weekend before, so support is free."),
-      (.me, 41, "Okay. I'll check in with Sam about billing today."),
-      (.others, 52, "I can have the onboarding copy ready by Wednesday so design can review it."),
+      (.named("Priya"), 10, "We're on track for the 14th. The only open risk is the billing migration."),
+      (
+        .named("Priya"), 24,
+        "Sam's team wants to move the billing data over the weekend before, so support is free."
+      ),
+      (.me, 41, "Okay. I'll check in with Sam about billing today. Thanks, Priya. Jordan, the copy?"),
+      (.named("Jordan"), 52, "I can have the onboarding copy ready by Wednesday so design can review it."),
       (.me, 66, "Great. Is there anything else that could move the date?"),
-      (.others, 75, "Only if the billing move slips. We keep the old checkout on for a week as a fallback."),
+      (
+        .unnamed(3), 75,
+        "Only if the billing move slips. We keep the old checkout on for a week as a fallback."
+      ),
       (.me, 190, "Then we keep the 14th. I'll send the notes around after this."),
     ]
     return Meeting(

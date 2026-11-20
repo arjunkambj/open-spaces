@@ -13,6 +13,8 @@ struct MeetingNotesWriter: Sendable {
     var keyPoints: [String]
     var decisions: [String]
     var actionItems: [Item]
+    /// Names for voices that had none: 2 is "Speaker 2". Only names the transcript says.
+    var speakerNames: [Int: String] = [:]
 
     struct Item: Sendable, Equatable {
       var text: String
@@ -32,14 +34,16 @@ struct MeetingNotesWriter: Sendable {
   /// Throws `SpacesError`. The meeting must have a transcript.
   func write(for meeting: Meeting, settings: Settings) async throws -> Draft {
     let model = settings.textModel
-    let who = MeetingNotesWriter.speakers(settings, invited: meeting.attendees)
+    let who = MeetingNotesWriter.speakers(settings, meeting)
     let parts = MeetingNotesWriter.parts(of: meeting.transcriptText, limit: characterLimit)
     guard parts.count > 1 else {
-      return try await draft(
+      var result = try await draft(
         model: model,
         system: MeetingNotesWriter.notesPrompt(who),
         user: "Transcript:\n\(parts.first ?? "")"
       )
+      result.speakerNames = MeetingNotesWriter.names([result.speakerNames], in: meeting)
+      return result
     }
     let drafts = try await MeetingNotesWriter.map(parts, limit: concurrency) { index, part in
       try await draft(
@@ -49,7 +53,32 @@ struct MeetingNotesWriter: Sendable {
           + "Write the notes for this part only.\n\nTranscript:\n\(part)"
       )
     }
-    return try await combine(drafts, model: model, who: who)
+    var result = try await combine(drafts, model: model, who: who)
+    // Merging sees only the part notes, not the transcript: the names come from the parts.
+    result.speakerNames = MeetingNotesWriter.names(drafts.map(\.speakerNames), in: meeting)
+    return result
+  }
+
+  /// The names to give voices that have none, from what the model found in one or more parts
+  /// of the transcript. A name is kept only when the voice is in the meeting without a name,
+  /// the name is said in the transcript, and no part gave the voice another name.
+  private static func names(_ found: [[Int: String]], in meeting: Meeting) -> [Int: String] {
+    let unnamed = Set(meeting.segments.compactMap(\.speaker.unnamedNumber))
+    let said = meeting.segments.map(\.text).joined(separator: "\n")
+    var names: [Int: String] = [:]
+    var disputed: Set<Int> = []
+    for (number, name) in found.flatMap({ $0 }) {
+      guard unnamed.contains(number), let name = Meeting.speakerName(name),
+        Speaker.named(name).unnamedNumber == nil,
+        said.range(of: name, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+      else { continue }
+      if let earlier = names[number], earlier.compare(name, options: .caseInsensitive) != .orderedSame {
+        disputed.insert(number)
+      }
+      names[number] = names[number] ?? name
+    }
+    for number in disputed { names[number] = nil }
+    return names
   }
 
   /// Merges the notes of consecutive parts, in rounds when they do not fit in one request.
@@ -101,7 +130,7 @@ struct MeetingNotesWriter: Sendable {
   /// Answers `question` from the meeting alone. Throws `SpacesError`.
   func answer(_ question: String, about meeting: Meeting, settings: Settings) async throws -> String {
     let model = settings.textModel
-    let who = MeetingNotesWriter.speakers(settings, invited: meeting.attendees)
+    let who = MeetingNotesWriter.speakers(settings, meeting)
     var material: [String] = ["Meeting: \(meeting.title)"]
     if let notes = meeting.notes {
       let draft = Draft(
@@ -155,22 +184,38 @@ struct MeetingNotesWriter: Sendable {
 
   // MARK: Prompts
 
-  /// Who is who in the transcript. `invited` are the other people on the calendar event.
-  private static func speakers(_ settings: Settings, invited: [String]) -> String {
+  /// Who is who in the transcript, with the other people invited on the calendar event.
+  private static func speakers(_ settings: Settings, _ meeting: Meeting) -> String {
     let name = settings.userName.trimmingCharacters(in: .whitespacesAndNewlines)
     let me =
       name.isEmpty ? "the person who recorded the meeting" : "\(name), the person who recorded the meeting"
+    let speakers = Set(meeting.segments.map(\.speaker))
+    var lines = ["\"Me\" is \(me)."]
+    if speakers.contains(.others) {
+      lines.append("\"Others\" is everyone else in the meeting; their voices are not told apart.")
+    }
+    if speakers.contains(where: { $0.unnamedNumber != nil }) {
+      lines.append(
+        "\"Speaker 1\", \"Speaker 2\" and so on are other people in the meeting, told apart by their "
+          + "voices. Now and then one person shows up under two of these labels."
+      )
+    }
+    if speakers.contains(where: { $0 != .me && $0 != .others && $0.unnamedNumber == nil }) {
+      lines.append("Any other speaker is a person in the meeting, by name.")
+    }
+    if !name.isEmpty { lines.append("When Me took on a task, its owner is \"\(name)\".") }
     // Names come from the calendar: one line each, and never more than a meeting room holds.
-    let others = invited.prefix(50)
+    let invited = meeting.attendees.prefix(50)
       .map { $0.split(whereSeparator: \.isNewline).joined(separator: " ") }
       .map { String($0.trimmingCharacters(in: .whitespaces).prefix(100)) }
       .filter { !$0.isEmpty }
-    return "\"Me\" is \(me). \"Others\" is everyone else in the meeting; their voices are not told apart."
-      + (name.isEmpty ? "" : " When Me took on a task, its owner is \"\(name)\".")
-      + (others.isEmpty
-        ? ""
-        : " The other people invited were: \(others.joined(separator: "; ")). When the transcript makes "
-          + "it clear that one of them took on a task, its owner is that name, spelled as given here.")
+    if !invited.isEmpty {
+      lines.append(
+        "The other people invited were: \(invited.joined(separator: "; ")). When the transcript makes it "
+          + "clear that one of them took on a task, its owner is that name, spelled as given here."
+      )
+    }
+    return lines.joined(separator: " ")
   }
 
   private static let rules = """
@@ -182,6 +227,10 @@ struct MeetingNotesWriter: Sendable {
     - decisions: only what was clearly agreed. Leave the list empty when nothing was decided.
     - actionItems: tasks someone agreed to do. Set owner only when it is clear who took the task; \
     otherwise owner is null. Do not guess an owner. Mention a deadline only when one was said.
+    - speakers: for a voice labelled "Speaker" and a number, that person's name, only when the \
+    conversation makes it plain who they are: someone speaks to them by name ("thanks, Priya"), or \
+    they say their own name. Write the name exactly as it is said. Never guess, and leave a voice \
+    out when in doubt. Empty when no voice has a clear name.
     - When there is too little to go on, write less instead of guessing. Empty lists are fine.
     - Write in the language the meeting was held in.
     """
@@ -239,7 +288,7 @@ struct MeetingNotesWriter: Sendable {
       "title": "MeetingNotes",
       "type": "object",
       "additionalProperties": false,
-      "required": ["title", "summary", "keyPoints", "decisions", "actionItems"],
+      "required": ["title", "summary", "keyPoints", "decisions", "actionItems", "speakers"],
       "properties": {
         "title": {"type": "string"},
         "summary": {"type": "string"},
@@ -256,6 +305,18 @@ struct MeetingNotesWriter: Sendable {
               "owner": {"type": ["string", "null"]}
             }
           }
+        },
+        "speakers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "name"],
+            "properties": {
+              "label": {"type": "string"},
+              "name": {"type": "string"}
+            }
+          }
         }
       }
     }
@@ -269,10 +330,16 @@ struct MeetingNotesWriter: Sendable {
     var keyPoints: [String]?
     var decisions: [String]?
     var actionItems: [Item]?
+    var speakers: [Name]?
 
     struct Item: Decodable {
       var text: String?
       var owner: String?
+    }
+
+    struct Name: Decodable {
+      var label: String?
+      var name: String?
     }
   }
 
@@ -292,7 +359,14 @@ struct MeetingNotesWriter: Sendable {
         let text = clean(item.text)
         let owner = clean(item.owner)
         return text.isEmpty ? nil : Draft.Item(text: text, owner: owner.isEmpty ? nil : owner)
-      }
+      },
+      speakerNames: Dictionary(
+        (decoded.speakers ?? []).compactMap { entry in
+          guard let number = Speaker.named(clean(entry.label)).unnamedNumber else { return nil }
+          return (number, clean(entry.name))
+        },
+        uniquingKeysWith: { first, _ in first }
+      )
     )
   }
 

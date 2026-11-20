@@ -28,6 +28,9 @@ struct MeetingDetail: View {
   @State private var isConfirmingRewrite = false
   @State private var isRenaming = false
   @State private var newTitle = ""
+  /// The speaker whose new name is being typed.
+  @State private var renamingSpeaker: Speaker?
+  @State private var newSpeakerName = ""
   @State private var isExporting = false
   @State private var isStopping = false
   @State private var toast: Toast?
@@ -81,6 +84,17 @@ struct MeetingDetail: View {
         onClose()
       }
     }
+    .dialog(isPresented: isRenamingSpeaker, title: speakerDialogTitle, subtitle: speakerDialogSubtitle) {
+      SpacesTextField(text: $newSpeakerName, placeholder: "Name", focusOnAppear: true)
+        .onSubmit(renameSpeaker)
+    } footer: {
+      Button("Cancel") { renamingSpeaker = nil }
+        .buttonStyle(.spaces())
+      Button("Save", action: renameSpeaker)
+        .buttonStyle(.spaces(.primary))
+        .keyboardShortcut(.defaultAction)
+        .disabled(Meeting.speakerName(newSpeakerName) == nil)
+    }
   }
 
   // MARK: The meeting
@@ -115,6 +129,9 @@ struct MeetingDetail: View {
     let matchIndex = min(findIndex, max(matches.count - 1, 0))
     let thread = questions.thread(for: id)
     let canAsk = phase != .live && phase != .processing && hasSomethingToAskAbout(meeting)
+    // While the transcript is being written, the engine would write over a new name.
+    let canRename = phase != .live && phase != .processing
+    let onRenameSpeaker: ((Speaker) -> Void)? = canRename ? { startRenaming($0) } : nil
 
     return VStack(spacing: 0) {
       framed(
@@ -150,7 +167,8 @@ struct MeetingDetail: View {
               turns: turns,
               phase: phase,
               matches: matches,
-              currentMatch: matches.isEmpty ? nil : matches[matchIndex]
+              currentMatch: matches.isEmpty ? nil : matches[matchIndex],
+              onRename: onRenameSpeaker
             )
           case .myNotes:
             MeetingMyNotesTab(meeting: meeting)
@@ -237,6 +255,7 @@ struct MeetingDetail: View {
     }
     .onAppear {
       if preset.confirmsDelete { deleting = meeting }
+      if let speaker = preset.renamesSpeaker { startRenaming(speaker) }
     }
   }
 
@@ -263,6 +282,28 @@ struct MeetingDetail: View {
     guard isRenaming, !title.isEmpty else { return }
     isRenaming = false
     edit { $0.title = title }
+  }
+
+  private var isRenamingSpeaker: Binding<Bool> {
+    Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })
+  }
+
+  private var speakerDialogTitle: String { "Rename “\(renamingSpeaker?.label ?? "")”" }
+
+  private let speakerDialogSubtitle =
+    "Every line they said in this meeting, and every task they own, gets the new name."
+
+  private func startRenaming(_ speaker: Speaker) {
+    // A voice that has no name yet starts empty; a name starts as it is, to be corrected.
+    newSpeakerName = speaker == .others || speaker.unnamedNumber != nil ? "" : speaker.label
+    renamingSpeaker = speaker
+  }
+
+  private func renameSpeaker() {
+    // Return in the field can reach this twice: from the field and from the default button.
+    guard let speaker = renamingSpeaker, let name = Meeting.speakerName(newSpeakerName) else { return }
+    renamingSpeaker = nil
+    edit { $0.renameSpeaker(speaker, to: name) }
   }
 
   // MARK: Header

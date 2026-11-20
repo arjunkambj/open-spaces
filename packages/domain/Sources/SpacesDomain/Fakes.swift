@@ -483,7 +483,7 @@ public enum SampleData {
           text: "Thanks for joining. Let's start with the launch date."
         ),
         TranscriptSegment(
-          speaker: .others,
+          speaker: .named("Priya"),
           start: 10,
           end: 21,
           text: "We're on track for the 14th. The only open risk is the billing migration."
@@ -492,13 +492,19 @@ public enum SampleData {
           speaker: .me,
           start: 22,
           end: 30,
-          text: "Okay. I'll check in with Sam about billing today."
+          text: "Okay. I'll check in with Sam about billing today. Thanks, Priya. Jordan, how is the copy?"
         ),
         TranscriptSegment(
-          speaker: .others,
+          speaker: .named("Jordan"),
           start: 31,
           end: 44,
           text: "I can have the onboarding copy ready by Wednesday so design can review it."
+        ),
+        TranscriptSegment(
+          speaker: .unnamed(3),
+          start: 45,
+          end: 50,
+          text: "Support is ready for the launch as well."
         ),
       ],
       notes: MeetingNotes(

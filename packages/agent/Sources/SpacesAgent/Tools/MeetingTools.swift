@@ -53,14 +53,16 @@ extension Catalogue {
       summary: "Read what was said in a meeting, all of it or one part.",
       description:
         "Returns the transcript of one meeting as text, one line per segment: \"[mm:ss] Speaker: words\". "
-        + "The speaker is \"Me\" (the user's microphone), \"Others\" (everyone else on the call) or a name. "
+        + "The speaker is \"Me\" (the user's microphone), \"Speaker 1\", \"Speaker 2\"… (other voices on "
+        + "the call, told apart but not yet named), \"Others\" (everyone else, when voices were not told "
+        + "apart) or a name. "
         + "Narrow it with from and to (a time range) or speaker. Long transcripts come in pages: when the "
         + "result has next_offset, call again with that offset to read on.",
       params: [
         .text("meeting", Catalogue.meetingHelp, required: true, positional: true),
         .text("from", "Start of the range, from the start of the recording: seconds (90) or mm:ss (1:30)."),
         .text("to", "End of the range, in the same form as from."),
-        .text("speaker", "Only lines from this speaker: \"me\", \"others\" or a name."),
+        .text("speaker", "Only lines from this speaker: \"me\", \"others\", \"speaker 1\" or a name."),
         .number("offset", "How many matching segments to skip.", in: 0...1_000_000, fallback: 0),
         .number("limit", "The most segments to return.", in: 1...1_000, fallback: 200),
       ],
@@ -134,6 +136,38 @@ extension Catalogue {
       hints: .destroys,
       example: "spaces meetings update latest --title \"Pricing review\" --add-tags pricing,q4",
       run: { box, arguments in try await box.updateMeeting(arguments) }
+    ),
+    Tool(
+      path: ["meetings", "rename-speaker"],
+      title: "Rename a speaker",
+      summary: "Give a speaker in a meeting a name, everywhere in that meeting.",
+      description:
+        "Renames one speaker in one meeting: every transcript line they said and every action item they "
+        + "own. Use it to name a voice the app could only number (\"Speaker 1\"), to name \"Others\" "
+        + "when one other person was on the call, or to fix a name. Giving a name another speaker "
+        + "already has makes the two one speaker, which cannot be undone. \"Me\" is the user and cannot "
+        + "be renamed, and no speaker can be named \"Me\" or \"Others\". Only rename when the user asked, "
+        + "or the transcript makes it plain who the speaker is. It returns the meeting's speakers "
+        + "afterwards.",
+      params: [
+        .text("meeting", Catalogue.meetingHelp, required: true, positional: true),
+        .text(
+          "speaker",
+          "The speaker as the transcript names them now, such as \"Speaker 1\" or \"Others\". Case does "
+            + "not matter.",
+          required: true,
+          positional: true
+        ),
+        .text(
+          "name",
+          "The new name. One line, at most \(Meeting.longestSpeakerName) characters.",
+          required: true,
+          positional: true
+        ),
+      ],
+      hints: .destroys,
+      example: "spaces meetings rename-speaker latest \"Speaker 2\" Priya",
+      run: { box, arguments in try await box.renameSpeaker(arguments) }
     ),
     Tool(
       path: ["meetings", "export"],
@@ -542,6 +576,46 @@ extension Toolbox {
       data: details(of: meeting),
       text: "Updated the \(changed.joined(separator: ", ")) of \"\(meeting.name)\"."
     )
+  }
+
+  fileprivate func renameSpeaker(_ arguments: Arguments) async throws -> ToolOutput {
+    let meeting = try await meeting(arguments.text("meeting"))
+    try ensureEditable(meeting)
+    let asked = Toolbox.oneLine(arguments.text("speaker"))
+    let typed = Toolbox.oneLine(arguments.text("name"))
+    guard let speaker = meeting.segments.map(\.speaker).first(where: { Toolbox.same($0.label, asked) }) else {
+      throw AgentError.failed(
+        "\"\(meeting.name)\" has no speaker called \"\(asked)\". Its speakers are: "
+          + speakers(of: meeting).joined(separator: ", ") + "."
+      )
+    }
+    guard speaker != .me else {
+      throw AgentError.failed("\"Me\" is the user and cannot be renamed.")
+    }
+    guard let name = Meeting.speakerName(typed) else {
+      throw AgentError.usage(
+        "\"name\" must be one line of 1 to \(Meeting.longestSpeakerName) characters, and not \"Me\" or "
+          + "\"Others\"."
+      )
+    }
+    // Changed on the stored copy, in one step, so an edit made in the app meanwhile is kept.
+    let renamed = try await stored(library.updateMeeting(meeting.id) { $0.renameSpeaker(speaker, to: name) })
+    return ToolOutput(
+      data: [
+        "meeting_id": .string(renamed.id.uuidString),
+        "title": .string(renamed.title),
+        "speakers": .strings(speakers(of: renamed)),
+      ],
+      text: "Renamed \"\(speaker.label)\" to \"\(name)\" in \"\(renamed.name)\"."
+    )
+  }
+
+  /// The speakers of a meeting, each once, in the order they first speak.
+  private func speakers(of meeting: Meeting) -> [String] {
+    var seen = Set<String>()
+    return meeting.segments.sorted { $0.start < $1.start }.map(\.speaker.label).filter {
+      seen.insert($0).inserted
+    }
   }
 
   // MARK: Export

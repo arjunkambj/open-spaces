@@ -574,9 +574,22 @@ public struct DictationStats: Sendable, Equatable {
 public enum Speaker: Codable, Sendable, Hashable {
   /// The microphone: the person using the app.
   case me
-  /// The computer's audio: everyone else on the call.
+  /// The computer's audio, when its voices were not told apart: everyone else on the call.
   case others
+  /// One person: a voice told apart on the computer's audio ("Speaker 1", "Speaker 2"… until
+  /// it has a name), or a name someone gave a speaker.
   case named(String)
+
+  /// The label of a voice told apart that has no name yet: "Speaker 1" for `number` 1.
+  public static func unnamed(_ number: Int) -> Speaker { .named("Speaker \(number)") }
+
+  /// The number of a voice that has no name yet, as in `unnamed`. `nil` for any other speaker.
+  public var unnamedNumber: Int? {
+    guard case .named(let name) = self, name.hasPrefix("Speaker "),
+      let number = Int(name.dropFirst("Speaker ".count)), number > 0, Speaker.unnamed(number) == self
+    else { return nil }
+    return number
+  }
 
   public var label: String {
     switch self {
@@ -835,6 +848,41 @@ public struct AgentClient: Codable, Sendable, Hashable {
     self.name = name
     self.title = title
     self.version = version
+  }
+}
+
+extension Meeting {
+  /// The most characters a speaker's name may have.
+  public static let longestSpeakerName = 60
+
+  /// A name someone typed for a speaker, tidied: one line, no white space around it. `nil` when
+  /// nothing is left, when it is longer than `longestSpeakerName`, or when it is "Me" or
+  /// "Others", which stand for the person recording and for everyone else.
+  public static func speakerName(_ text: String) -> String? {
+    let name = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).joined(separator: " ")
+    guard !name.isEmpty, name.count <= longestSpeakerName,
+      !["me", "others"].contains(name.lowercased())
+    else { return nil }
+    return name
+  }
+
+  /// Gives `speaker` the name `name` (see `speakerName`) everywhere in this meeting: every line
+  /// they said and every action item they own. A name another speaker already has makes the
+  /// two one speaker. "Me" is the person recording and keeps that name. Returns whether
+  /// anything changed.
+  @discardableResult
+  public mutating func renameSpeaker(_ speaker: Speaker, to name: String) -> Bool {
+    guard speaker != .me, let name = Meeting.speakerName(name), speaker != .named(name) else { return false }
+    var changed = false
+    for index in segments.indices where segments[index].speaker == speaker {
+      segments[index].speaker = .named(name)
+      changed = true
+    }
+    for index in notes?.actionItems.indices ?? 0..<0 where notes?.actionItems[index].owner == speaker.label {
+      notes?.actionItems[index].owner = name
+      changed = true
+    }
+    return changed
   }
 }
 

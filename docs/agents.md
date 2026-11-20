@@ -17,7 +17,7 @@ tool where `spaces` is, and it can then use everything listed on this page.
   lines with the time they were said, not whole meetings.
 - **Work with action items.** List what is still open across all meetings, add items, tick them off,
   change them, remove them.
-- **Add to a meeting.** Add notes, change the title, set tags.
+- **Add to a meeting.** Add notes, change the title, set tags, give a speaker a name.
 - **Export.** Get a meeting as one Markdown document, or save it to a new `.md` file.
 - **Record.** Start and stop a meeting recording in the running app, and check whether one is running.
 - **Dictation history.** Read and search what you dictated.
@@ -172,6 +172,7 @@ spaces meetings search "pricing"               # short matching lines, with time
 spaces meetings search "pricing" --since 2026-10-01 --until 2026-11-01
 spaces meetings add-note latest "Sam confirmed the migration is done."
 spaces meetings update latest --title "Pricing review" --add-tags pricing,q4
+spaces meetings rename-speaker latest "Speaker 2" Priya
 spaces meetings export latest --path ~/Desktop # saves a Markdown file
 spaces actions list --open --owner Alex        # what is still to do
 spaces actions add latest "Send the proposal" --owner Alex
@@ -224,6 +225,7 @@ ask you before it runs a tool that overwrites or deletes, or that saves a file o
 | `meetings_search` | `spaces meetings search <query> [--limit N] [--per-meeting N] [--since SINCE] [--until UNTIL]` | Find where something was said or noted, across all meetings. | Reads |
 | `meetings_add_note` | `spaces meetings add-note <meeting> <text>` | Add text to the end of a meeting's notes. | Adds |
 | `meetings_update` | `spaces meetings update <meeting> [--title TITLE] [--notes NOTES] [--tags A,B] [--add-tags A,B] [--remove-tags A,B]` | Change a meeting's title, notes or tags. | Overwrites or deletes |
+| `meetings_rename_speaker` | `spaces meetings rename-speaker <meeting> <speaker> <name>` | Give a speaker in a meeting a name, everywhere in that meeting. | Overwrites or deletes |
 | `meetings_export` | `spaces meetings export <meeting> [--path PATH] [--no-include-transcript]` | Get a meeting as one Markdown document, or save it to a new .md file. | Reads, or saves a new file |
 | `meetings_delete` | `spaces meetings delete <meeting>` | Delete a meeting, its transcript, notes and audio for good. | Overwrites or deletes |
 
@@ -354,6 +356,8 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 
 - Read meetings, notes, action items, dictations, dictionary words, snippets and a few settings.
 - Change a meeting's title, notes, tags and action items, and delete a meeting.
+- Give a speaker in a meeting a name. That changes who a transcript line is shown as said by, never
+  what it says.
 - Add and remove dictionary words and snippets.
 - Ask the app to start or stop a meeting recording.
 - Save a meeting as a new Markdown file.
@@ -366,7 +370,7 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 - Start dictation, or type anything into another app.
 - Run a command, read a file outside the Spaces data folder, or use the network.
 - Replace or delete any file outside the Spaces data folder.
-- Create or edit a transcript. Only the app writes those.
+- Create a transcript, or change the words in one. Only the app writes those.
 
 **Recording is authorised by a ticket.** `spaces` proves to the app that a request to start or stop is its
 own by leaving a one-time ticket in the data folder (see "Recording, and the app's links" above). A web page

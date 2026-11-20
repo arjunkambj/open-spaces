@@ -42,7 +42,7 @@ Spaces is an independent open-source project. It is not affiliated with Wispr Fl
 **Meetings**
 
 - **Record a meeting.** It records your microphone and what your Mac plays, so both sides of a call are captured.
-- **Transcript with speakers.** Lines are marked "Me" or "Others".
+- **Transcript with speakers.** Your lines are marked "Me". On a Mac, with OpenAI, the other voices on the call are told apart as "Speaker 1", "Speaker 2" and so on. The AI notes give a voice its name when the talk makes it plain ("thanks, Priya"), and you can rename any speaker by clicking their name. With a server of your own, everyone else is "Others".
 - **AI notes.** A summary, key points, decisions and action items, written when the meeting ends.
 - **Ask about a meeting.** Ask a question and get an answer from that meeting's transcript and notes.
 - **Markdown export.** Copy, share or save a meeting as a Markdown file.
