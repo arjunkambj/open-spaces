@@ -83,6 +83,7 @@ enum Help {
     parts.append(
       """
       Examples
+        spaces day summary yesterday
         spaces meetings list --since 7d
         spaces meetings get latest
         spaces meetings search "pricing"

@@ -104,7 +104,8 @@ extension Catalogue {
 }
 
 extension Toolbox {
-  private func entry(_ item: ActionItem, in meeting: Meeting) -> JSONObject {
+  /// An action item with the meeting it belongs to.
+  func entry(_ item: ActionItem, in meeting: Meeting) -> JSONObject {
     var object = Toolbox.json(item)
     object["meeting_id"] = .string(meeting.id.uuidString)
     object["meeting_title"] = .string(meeting.title)

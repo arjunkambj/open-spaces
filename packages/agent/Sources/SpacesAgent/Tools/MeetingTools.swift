@@ -82,6 +82,7 @@ extension Catalogue {
         .number("limit", "The most snippets to return in total.", in: 1...100, fallback: 20),
         .number("per_meeting", "The most snippets to return for any one meeting.", in: 1...50, fallback: 5),
         .text("since", "Only search meetings that started at or after this moment. \(Toolbox.dateHelp)"),
+        .text("until", "Only search meetings that started before this moment. Same forms as since."),
       ],
       hints: .reads,
       example: "spaces meetings search \"pricing\"",
@@ -371,6 +372,10 @@ extension Toolbox {
     if let since = arguments.string("since") {
       let start = try date(from: since, argument: "since")
       all.removeAll { $0.startedAt < start }
+    }
+    if let until = arguments.string("until") {
+      let end = try date(from: until, argument: "until")
+      all.removeAll { $0.startedAt >= end }
     }
     let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
     let words = query.split(whereSeparator: \.isWhitespace).map(String.init)

@@ -350,12 +350,13 @@ struct Tool: Sendable {
 enum Catalogue {
   /// Every tool, in the order it is listed everywhere.
   static let tools: [Tool] =
-    meetings + actions + recording + dictations + dictionary + snippets + settings
+    day + meetings + actions + recording + dictations + dictionary + snippets + settings
 
   static func tool(named name: String) -> Tool? { tools.first { $0.name == name } }
 
   /// The groups in listing order, with the heading shown for each.
   static let groups: [(key: String, title: String)] = [
+    ("day", "Daily summary"),
     ("meetings", "Meetings"),
     ("actions", "Action items"),
     ("recording", "Recording"),

@@ -9,6 +9,8 @@ tool where `spaces` is, and it can then use everything listed on this page.
 
 ## What an agent can do
 
+- **Sum up a day.** For one day: how much you dictated and where, the meetings you had, their action items,
+  and everything still open.
 - **Read meetings.** List them, read the summary, key points, decisions and action items, and read the
   transcript (all of it, or one part by time or by speaker).
 - **Search.** Find where something was said or noted, across every meeting. It gets back short matching
@@ -138,16 +140,24 @@ get JSON instead of text.
 - "Draft a follow-up email for my last meeting and save the notes to my Desktop as Markdown."
 - "Start recording a meeting called Design review." Later: "Stop the recording."
 - "Add Kubernetes to my dictionary. It keeps getting written as cooper netties."
+- "What did I do today? Write me a short end-of-day note."
+- "Across all my meetings, what have we said about the launch date? Tell me which meeting each point is
+  from."
+- "Post the notes of my last meeting to Slack #team." Your AI writes the update and posts it with your
+  Slack tool, after you say yes to the draft. Spaces itself sends nothing.
 
 ## Commands for the terminal
 
 ```bash
 spaces --help                                  # everything, on one screen
+spaces day summary                             # today: dictations, meetings, action items
+spaces day summary yesterday                   # the same for another day
 spaces meetings list --since 7d                # meetings from the last 7 days
 spaces meetings get latest                     # notes and action items of the newest meeting
 spaces meetings show 3F2A9C1E                  # the same, for one meeting by the start of its ID
 spaces meetings transcript latest --from 10:00 --to 15:00
 spaces meetings search "pricing"               # short matching lines, with times
+spaces meetings search "pricing" --since 2026-10-01 --until 2026-11-01
 spaces meetings add-note latest "Sam confirmed the migration is done."
 spaces meetings update latest --title "Pricing review" --add-tags pricing,q4
 spaces meetings export latest --path ~/Desktop # saves a Markdown file
@@ -186,6 +196,12 @@ ask you before it runs a tool that overwrites or deletes, or that saves a file o
 
 <!-- After changing a tool, run `spaces tools --markdown` and paste what it prints between these two markers. -->
 <!-- tools:start -->
+### Daily summary
+
+| MCP tool | Command | What it does | Effect |
+| --- | --- | --- | --- |
+| `day_summary` | `spaces day summary [date] [--limit N]` | One day at a glance: dictations, meetings and action items. | Reads |
+
 ### Meetings
 
 | MCP tool | Command | What it does | Effect |
@@ -193,7 +209,7 @@ ask you before it runs a tool that overwrites or deletes, or that saves a file o
 | `meetings_list` | `spaces meetings list [--limit N] [--since SINCE] [--until UNTIL] [--status recording\|processing\|ready\|failed] [--tag TAG]` | List meetings, newest first. | Reads |
 | `meetings_get` | `spaces meetings get <meeting> [--include-transcript]` | Show one meeting: its notes, action items and details. | Reads |
 | `meetings_transcript` | `spaces meetings transcript <meeting> [--from FROM] [--to TO] [--speaker SPEAKER] [--offset N] [--limit N]` | Read what was said in a meeting, all of it or one part. | Reads |
-| `meetings_search` | `spaces meetings search <query> [--limit N] [--per-meeting N] [--since SINCE]` | Find where something was said or noted, across all meetings. | Reads |
+| `meetings_search` | `spaces meetings search <query> [--limit N] [--per-meeting N] [--since SINCE] [--until UNTIL]` | Find where something was said or noted, across all meetings. | Reads |
 | `meetings_add_note` | `spaces meetings add-note <meeting> <text>` | Add text to the end of a meeting's notes. | Adds |
 | `meetings_update` | `spaces meetings update <meeting> [--title TITLE] [--notes NOTES] [--tags A,B] [--add-tags A,B] [--remove-tags A,B]` | Change a meeting's title, notes or tags. | Overwrites or deletes |
 | `meetings_export` | `spaces meetings export <meeting> [--path PATH] [--no-include-transcript]` | Get a meeting as one Markdown document, or save it to a new .md file. | Reads, or saves a new file |
@@ -260,13 +276,16 @@ Four commands are only for the terminal: `spaces mcp` (what your AI tool runs), 
 the list. `openspaces://meetings/latest` is always the newest one. Clients that ask for change notices are
 told when a meeting is added or changed.
 
-**Ready-made requests.** Three prompts show up in clients that have a prompt menu:
+**Ready-made requests.** Six prompts show up in clients that have a prompt menu:
 
 | Prompt | What it does |
 | --- | --- |
 | `summarise_meeting` | Summarises a meeting: outcome, decisions, action items. Uses the newest meeting unless you name one. |
 | `open_action_items` | Goes through your open action items and says what to do first. |
 | `follow_up_email` | Drafts a short follow-up email for a meeting. |
+| `daily_summary` | Writes a short end-of-day note from one day (today unless you name another): what you dictated, your meetings, new and open action items. |
+| `ask_meetings` | Answers a question from all your meetings. It searches, reads the best meetings, and says which meeting, date and time each point comes from. If Spaces has nothing, it says so. |
+| `share_meeting` | Turns a meeting's notes into a short update and posts it where your team works (a Slack channel, Notion, Linear, email), using your AI tool's own connections to those apps. It shows you the draft and asks before it posts. Spaces itself sends nothing. |
 
 **Protocol versions.** `spaces mcp` speaks the current MCP revision (`2026-07-28`) and the older ones that
 start with a handshake (`2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`). It reads one JSON message

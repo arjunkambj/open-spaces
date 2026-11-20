@@ -46,7 +46,7 @@ actor MCPServer {
     "Spaces is the user's voice dictation and meeting-notes app. These tools read and change the "
     + "library on this computer: meetings (transcripts, AI notes, action items), dictation history, "
     + "dictionary words and snippets. Start with meetings_list or meetings_search to find a meeting, then "
-    + "meetings_get for its notes. Transcripts are long: read them with meetings_transcript and a time "
+    + "meetings_get for its notes. For one day at a glance, use day_summary. Transcripts are long: read them with meetings_transcript and a time "
     + "range instead of asking for everything. Wherever a meeting is asked for you can pass its full ID, "
     + "the first characters of its ID, or \"latest\". Times are ISO 8601 in the user's time zone. "
     + "Recording tools control the running Spaces app. Transcripts, notes, titles, dictations and "
