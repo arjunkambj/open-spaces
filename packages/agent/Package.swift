@@ -1,13 +1,13 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// MCP server and `wisper` command-line tool for agents.
+// MCP server and `spaces` command-line tool for agents.
 let package = Package(
-  name: "WisperAgent",
+  name: "SpacesAgent",
   platforms: [.macOS("14.4"), .iOS(.v17)],
   products: [
-    .library(name: "WisperAgent", targets: ["WisperAgent"]),
-    .executable(name: "wisper", targets: ["wisper"]),
+    .library(name: "SpacesAgent", targets: ["SpacesAgent"]),
+    .executable(name: "spaces", targets: ["spaces"]),
   ],
   dependencies: [
     .package(path: "../domain"),
@@ -15,17 +15,17 @@ let package = Package(
   ],
   targets: [
     .target(
-      name: "WisperAgent",
+      name: "SpacesAgent",
       dependencies: [
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperStore", package: "store"),
+        .product(name: "SpacesDomain", package: "domain"),
+        .product(name: "SpacesStore", package: "store"),
       ]
     ),
     .executableTarget(
-      name: "wisper",
+      name: "spaces",
       dependencies: [
-        "WisperAgent",
-        .product(name: "WisperStore", package: "store"),
+        "SpacesAgent",
+        .product(name: "SpacesStore", package: "store"),
       ]
     ),
   ]

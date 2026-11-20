@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup-signing: make the two keys that let Open Wisper update itself, once per maintainer.
+# setup-signing: make the two keys that let Spaces update itself, once per maintainer.
 #
 #   scripts/setup-signing             make what is missing, check everything, say where it is
 #   scripts/setup-signing --github    the same, then give GitHub Actions what it needs to
@@ -10,7 +10,7 @@
 #
 # WHAT IT MAKES, AND WHY
 #
-# 1. A code-signing certificate, "Open Wisper Self-Signed". macOS ties the Microphone and
+# 1. A code-signing certificate, "Spaces Self-Signed". macOS ties the Microphone and
 #    Accessibility permissions to the certificate an app is signed with. With no certificate
 #    every build looks like a new app and the permissions stop working. With one certificate
 #    for every build, on this Mac and on GitHub, they carry over from version to version.
@@ -24,7 +24,7 @@
 #
 # WHERE IT ALL GOES
 #
-# In ~/.config/open-wisper/signing (override with OPEN_WISPER_SIGNING_DIR), a folder only
+# In ~/.config/open-spaces/signing (override with SPACES_SIGNING_DIR), a folder only
 # you can open. Nothing secret is ever written into the repository or printed.
 #
 #   identity.p12                 the certificate and its private key           SECRET
@@ -49,8 +49,8 @@ fail() {
 trap 'fail "stopped at line $LINENO (see the output above)."' ERR
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-dir="${OPEN_WISPER_SIGNING_DIR:-$HOME/.config/open-wisper/signing}"
-name="Open Wisper Self-Signed"
+dir="${SPACES_SIGNING_DIR:-$HOME/.config/open-spaces/signing}"
+name="Spaces Self-Signed"
 info_plist="$root/apps/macos/Resources/Info.plist"
 
 github=0
@@ -216,7 +216,7 @@ if [[ -n "${CI:-}" ]]; then
   /usr/bin/security list-keychains -d user -s "$keychain" ${existing[@]+"${existing[@]}"}
 fi
 if ! probe_error="$(/usr/bin/codesign --force --options runtime --timestamp=none --keychain "$keychain" \
-  --sign "$fingerprint" --identifier dev.openwisper.probe "$scratch/probe" 2>&1)"; then
+  --sign "$fingerprint" --identifier dev.openspaces.probe "$scratch/probe" 2>&1)"; then
   fail "codesign could not sign with the certificate in $keychain. It said: $probe_error"
 fi
 /usr/bin/codesign --verify --strict "$scratch/probe"
@@ -228,7 +228,7 @@ lower_fingerprint="$(printf '%s' "$fingerprint" | tr 'A-F' 'a-f')"
 # Sparkle's own signing tool is there once the Mac app has been built.
 sign_update="$(find "$root/apps/macos" -maxdepth 6 -type f -name sign_update -path '*/artifacts/sparkle/Sparkle/bin/*' 2>/dev/null | head -1)"
 if [[ -n "$sign_update" ]]; then
-  printf 'Open Wisper update signing check\n' >"$scratch/message"
+  printf 'Spaces update signing check\n' >"$scratch/message"
   signature="$("$sign_update" --ed-key-file "$update_key" -p "$scratch/message")"
   swift "$root/scripts/ed25519.swift" verify "$public_key" "$signature" "$scratch/message" ||
     fail "a signature made by Sparkle's sign_update does not match the public key."

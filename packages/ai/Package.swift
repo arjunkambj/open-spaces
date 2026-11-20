@@ -3,19 +3,19 @@ import PackageDescription
 
 // OpenAI adapters: transcription and language model.
 let package = Package(
-  name: "WisperAI",
+  name: "SpacesAI",
   platforms: [.macOS("14.4"), .iOS(.v17)],
   products: [
-    .library(name: "WisperAI", targets: ["WisperAI"])
+    .library(name: "SpacesAI", targets: ["SpacesAI"])
   ],
   dependencies: [
     .package(path: "../domain")
   ],
   targets: [
     .target(
-      name: "WisperAI",
+      name: "SpacesAI",
       dependencies: [
-        .product(name: "WisperDomain", package: "domain")
+        .product(name: "SpacesDomain", package: "domain")
       ]
     )
   ]

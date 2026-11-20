@@ -1,13 +1,13 @@
-# Open Wisper
+# Spaces
 
-[![CI](https://github.com/arjunkambj/open-wisper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/arjunkambj/open-wisper/actions/workflows/ci.yml)
+[![CI](https://github.com/arjunkambj/open-spaces/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/arjunkambj/open-spaces/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Open Wisper is a free, open-source app for macOS and iOS that turns your voice into text. Hold a key, speak, and clean text appears in whatever app you are typing in; it can also record your meetings and write the notes.
+Spaces is a free, open-source app for macOS and iOS that turns your voice into text. Hold a key, speak, and clean text appears in whatever app you are typing in; it can also record your meetings and write the notes.
 
 **Website and download: [whisper.0xhoney.com](https://whisper.0xhoney.com)**
 
-![The Open Wisper window on a Mac, showing dictation history](docs/images/mac-home.png)
+![The Spaces window on a Mac, showing dictation history](docs/images/mac-home.png)
 
 | Recording a meeting | The floating pill, in each state |
 | --- | --- |
@@ -23,7 +23,7 @@ All pictures show made-up sample data.
 
 > **Status: early.** This is a first version. Some things will be rough or broken. The macOS app is the main focus. The iOS app is newer and less tested. The Mac download is not checked by Apple, so macOS asks you to allow it the first time (see [Install](#install)). Bug reports are welcome.
 
-Open Wisper is an independent open-source project. It is not affiliated with Wispr Flow.
+Spaces is an independent open-source project. It is not affiliated with Wispr Flow.
 
 ## What it does
 
@@ -32,7 +32,7 @@ Open Wisper is an independent open-source project. It is not affiliated with Wis
 - **Dictate anywhere.** Hold a key, talk, let go. The text is typed into the app you are using.
 - **Hands-free mode.** Press once to start, press again to stop. Good for long thoughts.
 - **Command mode.** Select some text, hold a key, and say how to change it ("make this shorter").
-- **A small pill at the edge of the screen.** It shows when Open Wisper is listening. Click it to dictate, or drag it to any edge; on a side edge it stands upright.
+- **A small pill at the edge of the screen.** It shows when Spaces is listening. Click it to dictate, or drag it to any edge; on a side edge it stands upright.
 - **Personal dictionary.** Teach it names and words it keeps getting wrong.
 - **Snippets.** Say a short phrase ("my calendar link") and get a longer piece of text.
 - **Writing style per kind of app.** Formal in email, casual in chat. You choose.
@@ -58,10 +58,10 @@ Open Wisper is an independent open-source project. It is not affiliated with Wis
 
 For a Mac with Apple silicon and macOS 14.4 or newer.
 
-1. Download [`Open-Wisper.dmg`](https://github.com/arjunkambj/open-wisper/releases/latest/download/Open-Wisper.dmg), the newest version. Every version is on the [releases page](https://github.com/arjunkambj/open-wisper/releases).
-2. Open the file and drag **Open Wisper** onto **Applications**.
+1. Download [`Spaces.dmg`](https://github.com/arjunkambj/open-spaces/releases/latest/download/Spaces.dmg), the newest version. Every version is on the [releases page](https://github.com/arjunkambj/open-spaces/releases).
+2. Open the file and drag **Spaces** onto **Applications**.
 3. Open it from Applications. The first time, macOS stops it and says it could not check the app. Click **Done**.
-4. Open **System Settings → Privacy & Security**, scroll down to **Security**, and click **Open Anyway** next to the line about Open Wisper. The button is there for about an hour after step 3.
+4. Open **System Settings → Privacy & Security**, scroll down to **Security**, and click **Open Anyway** next to the line about Spaces. The button is there for about an hour after step 3.
 5. macOS asks once more. Confirm, and type your Mac password.
 
 You do steps 3 to 5 only once. macOS asks because the app is not signed with an Apple developer certificate, which costs money each year. Apple has not checked it. If you would rather not run such an app, [build it yourself](#build-and-run) from the code on this page.
@@ -72,49 +72,51 @@ There is no iPhone download. To use the iPhone app, [build it with Xcode](#iphon
 
 ## Updates
 
-Open Wisper keeps itself up to date.
+Spaces keeps itself up to date.
 
 - **It checks by itself, about once a day.** When there is a new version, a window shows what changed and asks whether to install it. Nothing is installed without your yes.
-- **You can check any time.** Choose **Check for Updates…** from the Open Wisper menu, from its menu bar item, or in Settings.
+- **You can check any time.** Choose **Check for Updates…** from the Spaces menu, from its menu bar item, or in Settings.
 - **Your permissions and settings stay.** Every version is signed with the same certificate, so macOS knows it is the same app. You do not have to allow the microphone or Accessibility again.
 - **Only a real update is installed.** Each release is signed with a key that only the project holds. The app checks that signature before it opens a download, and refuses anything that does not match. This holds even if someone took over the download page.
 
 The check asks GitHub, where the releases are, for a small file that lists the newest version. It sends the app's name and version, and nothing about you or what you dictate. To turn the daily check off, run this once in Terminal. You can still check from the menu.
 
 ```bash
-defaults write dev.openwisper.mac SUEnableAutomaticChecks -bool false
+defaults write dev.openspaces.mac SUEnableAutomaticChecks -bool false
 ```
 
 An app you built yourself does not look for updates. See [Build and run](#build-and-run).
 
 ## How it works
 
-1. You speak. Open Wisper records the audio on your device.
+1. You speak. Spaces records the audio on your device.
 2. While you talk, the audio goes to OpenAI, using **your own API key**. OpenAI writes the words as they come, so they are ready about a second after you stop.
 3. A second, quick request tidies the text: it removes "um" and "uh", fixes punctuation, and applies your writing style. You can turn this off.
 4. The text is typed into your app.
 
 Meetings work the same way: the audio is turned into text piece by piece while you talk, and the notes are written when you stop.
 
-Out of the box, Open Wisper asks for the model `gpt-live-transcribe` to turn speech into text while you talk, and `gpt-6-luna` to tidy it and write notes. Meetings and retries send the recorded file to `gpt-transcribe`. You can pick other models in Settings: with `gpt-transcribe`, dictation costs about a quarter as much to transcribe but the text comes a second or so later.
+Out of the box, Spaces asks for the model `gpt-live-transcribe` to turn speech into text while you talk, and `gpt-6-luna` to tidy it and write notes. Meetings and retries send the recorded file to `gpt-transcribe`. You can pick other models in Settings: with `gpt-transcribe`, dictation costs about a quarter as much to transcribe but the text comes a second or so later.
 
-**What leaves your device.** Your audio and the text made from it. To get spelling and style right, a few more things go along: your name, your dictionary words, and the name of the app you are typing into. Command mode also sends the text you selected. Meeting notes and questions send that meeting's title, transcript and notes. All of it goes only to OpenAI, or to the server you chose instead.
+**Claude, if you like.** Add an Anthropic API key under Settings › AI keys and pick a Claude model (such as `claude-opus-5-5`) as the text model. Claude then tidies your words, follows commands and writes meeting notes. OpenAI still turns your voice into text, because Anthropic does not offer that. You pay Anthropic directly for what Claude does.
+
+**What leaves your device.** Your audio and the text made from it. To get spelling and style right, a few more things go along: your name, your dictionary words, and the name of the app you are typing into. Command mode also sends the text you selected. Meeting notes and questions send that meeting's title, transcript and notes. All of it goes only to OpenAI, or to the server you chose instead. If you picked a Claude model, the text work (not your audio) goes to Anthropic.
 
 The Mac app makes one other kind of request: about once a day it asks GitHub whether there is a newer version (see [Updates](#updates)). That request carries the app's name and version, and none of your data.
 
 - **No account.** There is nothing to sign up for.
 - **No server of ours.** We do not run one. We never see your audio, your text or your key.
 - **No tracking.** No analytics and no usage reports.
-- **Your data stays with you.** History, meetings, dictionary and settings are plain files on your device. Your API key is kept in a private file on your device that only your user account can open.
+- **Your data stays with you.** History, meetings, dictionary and settings are plain files on your device. Your API keys are kept in a private file on your device that only your user account can open.
 
-What you send to OpenAI is covered by OpenAI's own data rules, and you pay OpenAI for what you use.
+What you send to OpenAI or Anthropic is covered by their own data rules, and you pay them for what you use.
 
 ### Using your own server
 
 In Settings, under OpenAI, you can type the address of another server that works like OpenAI's.
 
 - **A saved key belongs to one server.** It is sent only to the server it was saved for. If you change the address, the old key stays behind and you add a key for the new server (if it needs one).
-- **A wrong address is an error.** The address must be a web address that starts with `http://` or `https://`. If it is not, nothing is sent anywhere. Open Wisper never falls back to OpenAI on its own.
+- **A wrong address is an error.** The address must be a web address that starts with `http://` or `https://`. If it is not, nothing is sent anywhere. Spaces never falls back to OpenAI on its own.
 
 ## What you need
 
@@ -132,15 +134,15 @@ In Settings, under OpenAI, you can type the address of another server that works
 The Command Line Tools are enough. You do not need Xcode.
 
 ```bash
-git clone https://github.com/arjunkambj/open-wisper.git
-cd open-wisper
+git clone https://github.com/arjunkambj/open-spaces.git
+cd open-spaces
 pnpm install
 pnpm mac
 ```
 
-`pnpm mac` builds the app, wraps it into `Open Wisper.app`, and opens it. The first build takes a few minutes. The app then asks for your name, your API key and a few permissions, and lets you try the shortcut.
+`pnpm mac` builds the app, wraps it into `Spaces.app`, and opens it. The first build takes a few minutes. The app then asks for your name, your API key and a few permissions, and lets you try the shortcut.
 
-The finished app is at `apps/macos/build/Open Wisper.app`. You can move it into your Applications folder. `pnpm mac:dmg` also makes a disk image, `apps/macos/build/Open-Wisper-<version>.dmg`.
+The finished app is at `apps/macos/build/Spaces.app`. You can move it into your Applications folder. `pnpm mac:dmg` also makes a disk image, `apps/macos/build/Spaces-<version>.dmg`.
 
 **If you build it more than once,** run this first, once:
 
@@ -148,9 +150,9 @@ The finished app is at `apps/macos/build/Open Wisper.app`. You can move it into 
 scripts/setup-signing
 ```
 
-It makes a free signing certificate of your own and keeps it in `~/.config/open-wisper/signing`, outside the project. It asks for nothing. From then on every build is signed with it.
+It makes a free signing certificate of your own and keeps it in `~/.config/open-spaces/signing`, outside the project. It asks for nothing. From then on every build is signed with it.
 
-Why it matters: macOS ties the permissions you gave to the signature of the app. Without a certificate every build has a different one, so after a rebuild the switches in System Settings look on but do nothing, until you remove Open Wisper from each list and add it again. With your certificate, permissions you gave once keep working.
+Why it matters: macOS ties the permissions you gave to the signature of the app. Without a certificate every build has a different one, so after a rebuild the switches in System Settings look on but do nothing, until you remove Spaces from each list and add it again. With your certificate, permissions you gave once keep working.
 
 A build of your own does not look for updates, and has no **Check for Updates…** in its menus: an update from this project is signed with the project's keys, and would replace your build with a different app. Get new versions with `git pull` and `pnpm mac`. If you publish releases from a fork, [CONTRIBUTING.md](CONTRIBUTING.md#making-a-release) has the steps.
 
@@ -161,18 +163,18 @@ The iPhone app needs full Xcode.
 ```bash
 pnpm install
 pnpm ios:generate
-open apps/ios/OpenWisper.xcodeproj
+open apps/ios/Spaces.xcodeproj
 ```
 
-`pnpm ios:generate` makes the Xcode project, `apps/ios/OpenWisper.xcodeproj`. Pick an iPhone simulator and press Run. A simulator needs no other setup.
+`pnpm ios:generate` makes the Xcode project, `apps/ios/Spaces.xcodeproj`. Pick an iPhone simulator and press Run. A simulator needs no other setup.
 
 To put it on your own iPhone you need to do three things first: pick your team for each of the three targets under **Signing & Capabilities**, change the app's IDs to ones of your own, and change the name of the folder the app shares with its keyboard. [apps/ios/README.md](apps/ios/README.md) has the steps.
 
-To turn on the keyboard, go to **Settings → General → Keyboard → Keyboards → Add New Keyboard** on your phone and pick Open Wisper. Then tap it in the list and turn on **Allow Full Access**. The app walks you through this the first time you open it.
+To turn on the keyboard, go to **Settings → General → Keyboard → Keyboards → Add New Keyboard** on your phone and pick Spaces. Then tap it in the list and turn on **Allow Full Access**. The app walks you through this the first time you open it.
 
 ## Permissions on first run
 
-macOS asks before an app can listen or type for you. Open Wisper asks for three things and tells you why.
+macOS asks before an app can listen or type for you. Spaces asks for three things and tells you why.
 
 | Permission | Why it is needed | Needed for |
 | --- | --- | --- |
@@ -182,7 +184,7 @@ macOS asks before an app can listen or type for you. Open Wisper asks for three 
 
 You can skip any of them and allow it later. Without Accessibility, the shortcuts do not work and no text can be typed for you. You can change any of these in **System Settings → Privacy & Security**.
 
-If you do not want your Mac's sound recorded, turn off **Record computer audio** in Open Wisper's Settings, under Meetings. Meetings then record only your microphone.
+If you do not want your Mac's sound recorded, turn off **Record computer audio** in the Spaces settings, under Meetings. Meetings then record only your microphone.
 
 The iPhone app asks only for the microphone.
 
@@ -208,7 +210,7 @@ Good to know:
 
 ## Connect an agent
 
-Open Wisper comes with a command-line tool called `wisper`, which is also an MCP server. It sits inside the app, at `Open Wisper.app/Contents/MacOS/wisper`. With it, an AI agent can look through your meetings and dictations, read notes, add notes and action items, and start or stop a meeting recording. Changes an agent makes show up in the app right away.
+Spaces comes with a command-line tool called `spaces`, which is also an MCP server. It sits inside the app, at `Spaces.app/Contents/MacOS/spaces`. With it, an AI agent can look through your meetings and dictations, read notes, add notes and action items, and start or stop a meeting recording. Changes an agent makes show up in the app right away.
 
 The tool is kept on a short lead:
 
@@ -220,9 +222,9 @@ In the app, **Settings → Agents** has the lines to copy into your AI tool. See
 
 ### Links
 
-Other tools can open links that start with `openwisper://`, such as `openwisper://meetings/start`. Any web page or document can open such a link too, so the app is careful with the ones that would make it listen:
+Other tools can open links that start with `openspaces://`, such as `openspaces://meetings/start`. Any web page or document can open such a link too, so the app is careful with the ones that would make it listen:
 
-- A link from the `wisper` tool carries a one-time ticket that proves where it came from. The app follows it at once.
+- A link from the `spaces` tool carries a one-time ticket that proves where it came from. The app follows it at once.
 - A link with no ticket that asks to record a meeting makes the app ask you first.
 - A link with no ticket that asks to start dictation or stop a recording is not followed.
 
@@ -233,10 +235,10 @@ Links that only show something, such as a meeting, always work. [docs/agents.md]
 On macOS, everything is in one folder:
 
 ```
-~/Library/Application Support/Open Wisper
+~/Library/Application Support/Spaces
 ```
 
-The files are JSON, Markdown and audio. You can read them, back them up, or delete them yourself. Your API key is in that folder too, in `api-key.json`, which only your user account can open and which backups leave out. If you share or copy the folder, leave that file out.
+The files are JSON, Markdown and audio. You can read them, back them up, or delete them yourself. Your API keys are in that folder too, in `api-key.json`, which only your user account can open and which backups leave out. If you share or copy the folder, leave that file out.
 
 On an iPhone, the same files are kept inside the app's own storage, in a folder the app shares with its keyboard.
 
@@ -255,7 +257,7 @@ packages/ai       talking to OpenAI
 packages/audio    recording the microphone and system audio
 packages/engine   the dictation and meeting logic
 packages/ui       shared colours, fonts and screens
-packages/agent    the `wisper` tool and the MCP server
+packages/agent    the `spaces` tool and the MCP server
 assets            the app icon and the menu bar mark
 docs              guides, and the pictures on this page
 scripts           build and CI scripts
@@ -263,7 +265,7 @@ scripts           build and CI scripts
 
 The apps are all Swift. There is one library we did not write: [Sparkle](https://sparkle-project.org), the open-source updater most Mac apps outside the App Store use. It is in the Mac app only. [Turborepo](https://turborepo.dev) and pnpm run each part's build and style check in the right order.
 
-The website is the one part that is not Swift: a static page built with Astro and Tailwind CSS. [apps/web/README.md](apps/web/README.md) says how to run and deploy it.
+The website is the one part that is not Swift: one page built with TanStack Start (React) and Tailwind CSS, prerendered to static files. [apps/web/README.md](apps/web/README.md) says how to run and deploy it.
 
 Useful commands:
 
@@ -283,7 +285,7 @@ Ideas, not promises:
 - Transcription that runs fully on your device, with no API key.
 - More languages for the app's own text. Today it is in English only.
 
-Have an idea? [Open an issue](https://github.com/arjunkambj/open-wisper/issues/new/choose).
+Have an idea? [Open an issue](https://github.com/arjunkambj/open-spaces/issues/new/choose).
 
 ## Contributing
 
@@ -293,4 +295,4 @@ Found a security problem? Please report it privately. See [SECURITY.md](SECURITY
 
 ## Licence
 
-[MIT](LICENSE). Anyone may use Open Wisper, change it and share it, for any purpose, including in a product they sell. There is nothing to ask and nothing to pay. The one condition: keep the copyright and licence text with any copy you pass on. It comes with no warranty. This covers everything in this repository, the website included.
+[MIT](LICENSE). Anyone may use Spaces, change it and share it, for any purpose, including in a product they sell. There is nothing to ask and nothing to pay. The one condition: keep the copyright and licence text with any copy you pass on. It comes with no warranty. This covers everything in this repository, the website included.

@@ -3,19 +3,19 @@ import PackageDescription
 
 // File-backed Library and secret store.
 let package = Package(
-  name: "WisperStore",
+  name: "SpacesStore",
   platforms: [.macOS("14.4"), .iOS(.v17)],
   products: [
-    .library(name: "WisperStore", targets: ["WisperStore"])
+    .library(name: "SpacesStore", targets: ["SpacesStore"])
   ],
   dependencies: [
     .package(path: "../domain")
   ],
   targets: [
     .target(
-      name: "WisperStore",
+      name: "SpacesStore",
       dependencies: [
-        .product(name: "WisperDomain", package: "domain")
+        .product(name: "SpacesDomain", package: "domain")
       ]
     )
   ]

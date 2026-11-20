@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# dmg: put the built "Open Wisper.app" into a disk image people can download.
+# dmg: put the built "Spaces.app" into a disk image people can download.
 #
-#   apps/macos/scripts/dmg          -> apps/macos/build/Open-Wisper-<version>.dmg
+#   apps/macos/scripts/dmg          -> apps/macos/build/Spaces-<version>.dmg
 #
 # Run apps/macos/scripts/bundle first (`pnpm mac:dmg` does both). The disk image holds
 # the app and a shortcut to the Applications folder, so installing is one drag.
@@ -33,7 +33,7 @@ case "${1:-}" in
   *) fail "unknown option '$1'. This script takes none." ;;
 esac
 
-app_name="Open Wisper"
+app_name="Spaces"
 out="$here/build"
 app="$out/$app_name.app"
 [[ -d "$app" ]] || fail "there is no $app. Run apps/macos/scripts/bundle first."
@@ -43,7 +43,7 @@ codesign --verify --deep --strict "$app" || fail "the app's signature is not int
 version="$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")"
 build_number="$(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist")"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || fail "the app has an odd version: '$version'."
-dmg="$out/Open-Wisper-$version.dmg"
+dmg="$out/Spaces-$version.dmg"
 
 load_signing || fail "could not get the signing certificate ready."
 
@@ -51,7 +51,7 @@ staging="$(mktemp -d "$out/.dmg.XXXXXX")"
 cleanup() { rm -rf "${staging:?}"; }
 trap cleanup EXIT
 
-echo "==> Making the disk image for Open Wisper $version (build $build_number)"
+echo "==> Making the disk image for Spaces $version (build $build_number)"
 mkdir "$staging/image"
 # `cp -R` keeps the links and the signature of the app as they are.
 cp -R "$app" "$staging/image/"
@@ -61,7 +61,7 @@ hdiutil create -quiet -volname "$app_name" -srcfolder "$staging/image" -fs HFS+ 
   -imagekey zlib-level=9 -ov "$staging/image.dmg"
 
 echo "==> Signing with $(describe_signing)"
-sign_identifier=(--identifier dev.openwisper.mac.dmg)
+sign_identifier=(--identifier dev.openspaces.mac.dmg)
 codesign --force "${sign_options[@]}" --sign "$sign_identity" "${sign_identifier[@]}" "$staging/image.dmg"
 
 echo "==> Checking"

@@ -52,7 +52,7 @@ another destination by itself.
 feels instant, it is almost certainly using a local model with live preview, because its OpenAI
 path does the same slow thing ours did. That is an inference from the code, not a measurement.
 
-## How Open Wisper worked before this change
+## How Spaces worked before this change
 
 1. Key down: the microphone opens and sound is written to one `.m4a` file.
 2. Key up: wait up to 0.25 s for the last sound, close the file.
@@ -67,7 +67,7 @@ in waiting.
 
 ## Where the time goes between "stop speaking" and "text appears"
 
-| Step | T3 Code, local model | Open Wisper before | Open Wisper now |
+| Step | T3 Code, local model | Spaces before | Spaces now |
 | --- | --- | --- | --- |
 | Finish the recording | flush half a second of sound | up to 0.25 s, plus closing the file | the same |
 | Open a connection | none (same Mac) | 0.1 to 2 s when none was open (see the measurement below) | 0 in the usual case: opened at key down |
@@ -187,7 +187,7 @@ long it took to fail.
   - `MicrophoneSource.stop()` waits up to 0.25 s for the last piece of sound so the last word is
     not cut off. Typical cost is about a tenth of a second. It cannot be tested without a real
     microphone, so it was not touched. `timing.captureMs` now measures it.
-  - The paste path (`apps/macos/Sources/WisperMac/Text/MacTextTarget.swift`, read only) has no
+  - The paste path (`apps/macos/Sources/SpacesMac/Text/MacTextTarget.swift`, read only) has no
     fixed sleep before the paste. It waits, in steps of 20 ms and for at most 0.4 s, for ⌃, ⌥
     and ⇧ to be let go, which matters only when one of those is the dictation key. The 1.5 s
     before the clipboard is given back happens after the paste and holds nothing up.
@@ -268,8 +268,8 @@ than without the live side (the head start), and `timing.path` in the history sa
 **To switch it on**, two things are needed, and until both are done nothing changes:
 
 1. The apps pass the live adapter in. One line where each app builds its model
-   (`apps/macos/Sources/OpenWisper/Composition.swift`,
-   `apps/ios/Phone/Sources/WisperPhone/PhoneSession.swift`), next to `transcriber:`:
+   (`apps/macos/Sources/SpacesApp/Composition.swift`,
+   `apps/ios/Phone/Sources/SpacesPhone/PhoneSession.swift`), next to `transcriber:`:
 
    ```swift
    transcriber: openAI.transcriber,

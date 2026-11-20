@@ -1,5 +1,5 @@
 {
-  "name": "@open-wisper/audio",
+  "name": "@open-spaces/audio",
   "version": "0.1.0",
   "private": true,
   "description": "Microphone and system-audio capture.",
@@ -8,6 +8,6 @@
     "lint": "swift format lint --strict --recursive --parallel Package.swift Sources"
   },
   "dependencies": {
-    "@open-wisper/domain": "workspace:*"
+    "@open-spaces/domain": "workspace:*"
   }
 }

@@ -5,17 +5,17 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Open Wisper</string>
+	<string>Spaces</string>
 	<key>CFBundleExecutable</key>
-	<string>OpenWisper</string>
+	<string>SpacesApp</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.openwisper.mac</string>
+	<string>dev.openspaces.mac</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Open Wisper</string>
+	<string>Spaces</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<!-- scripts/bundle fills in the two version numbers. -->
@@ -29,10 +29,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>dev.openwisper.mac</string>
+			<string>dev.openspaces.mac</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>openwisper</string>
+				<string>openspaces</string>
 			</array>
 		</dict>
 	</array>
@@ -48,9 +48,9 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Open source under the MIT licence.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Open Wisper listens to your microphone while you dictate or record a meeting, and turns what you say into text.</string>
+	<string>Spaces listens to your microphone while you dictate or record a meeting, and turns what you say into text.</string>
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>Open Wisper records the sound your Mac plays during a meeting, so the notes include what other people said.</string>
+	<string>Spaces records the sound your Mac plays during a meeting, so the notes include what other people said.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticTermination</key>
@@ -62,7 +62,7 @@
 	  and when "Check for Updates…" is chosen. GitHub sends the request on to the newest release.
 	-->
 	<key>SUFeedURL</key>
-	<string>https://github.com/arjunkambj/open-wisper/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/arjunkambj/open-spaces/releases/latest/download/appcast.xml</string>
 	<!--
 	  The public half of the update signing key. A download, and the list of versions itself,
 	  is only accepted when it was signed with the private half, which scripts/setup-signing

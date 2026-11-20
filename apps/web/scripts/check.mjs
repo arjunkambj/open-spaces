@@ -4,10 +4,13 @@
 //   node scripts/check.mjs [address]      default: https://whisper.0xhoney.com
 //
 // It asks for the page, then for every file and link the page names, and stops with an
-// error when something is missing: a broken link, a file from another site, a response
-// header we promise, the version next to the Download button, the 404 page.
+// error when something is missing: a broken link, a file from another site, a script the
+// Content-Security-Policy does not allow, a response header we promise, the version next to
+// the Download button, the 404 page.
 // The deploy workflow runs it after each deploy. `pnpm preview` gives a local copy to try
 // it on: node scripts/check.mjs http://127.0.0.1:8788
+
+import { createHash } from "node:crypto";
 
 const live = "https://whisper.0xhoney.com";
 const base = (process.argv[2] ?? live).replace(/\/$/, "");
@@ -29,7 +32,7 @@ if (page.status !== 200) fail(`the page answered ${page.status}`);
 // --- Headers -----------------------------------------------------------------------------
 
 const wanted = {
-  "content-security-policy": /default-src 'none'/,
+  "content-security-policy": /default-src 'none'.*script-src 'self'/,
   "strict-transport-security": /max-age=\d+/,
   "x-content-type-options": /nosniff/,
   "referrer-policy": /no-referrer/,
@@ -42,11 +45,31 @@ for (const [name, pattern] of Object.entries(wanted)) {
 }
 if (page.headers.has("set-cookie")) fail("the page sets a cookie");
 
+// Scripts may come from this site, or be one of the inline scripts the policy names by hash.
+const scriptSrc = /script-src([^;]*)/.exec(page.headers.get("content-security-policy") ?? "")?.[1] ?? "";
+for (const source of scriptSrc.trim().split(/\s+/).filter(Boolean)) {
+  if (source !== "'self'" && !/^'sha256-[A-Za-z0-9+/=]+'$/.test(source)) {
+    fail(`the Content-Security-Policy allows scripts from ${source}`);
+  }
+}
+
 // --- What the page says ------------------------------------------------------------------
 
 const version = /Version (\d+\.\d+\.\d+[^\s<]*)/.exec(html)?.[1];
 if (!version) fail("the page does not show a version");
-if (/<script/i.test(html)) fail("the page holds a script (the site sends none; was one added on the way?)");
+if (!html.includes("Where your words go")) fail("the prerendered page does not hold the page's text");
+if (!html.includes('href="https://github.com/arjunkambj/open-spaces/releases/latest/download/Spaces.dmg"')) {
+  fail("the prerendered page has no Download link");
+}
+for (const [, attributes, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  const src = /\ssrc="([^"]*)"/.exec(attributes)?.[1];
+  if (src !== undefined) {
+    if (!src.startsWith("/")) fail(`the page loads a script from another site: ${src} (was one added on the way?)`);
+    continue;
+  }
+  const hash = `'sha256-${createHash("sha256").update(body, "utf8").digest("base64")}'`;
+  if (!scriptSrc.includes(hash)) fail(`the page holds an inline script the policy does not allow: ${body.slice(0, 60)}`);
+}
 
 // --- Every address the page names --------------------------------------------------------
 
@@ -79,7 +102,7 @@ for (const address of named) {
 for (const address of [...own, `${base}/robots.txt`, `${base}/sitemap.xml`, `${base}/favicon.ico`]) {
   const response = await ask(address);
   if (response.status !== 200) fail(`${address} answered ${response.status}`);
-  const fingerprinted = new URL(address).pathname.startsWith("/_astro/");
+  const fingerprinted = new URL(address).pathname.startsWith("/assets/");
   if (fingerprinted && !/immutable/.test(response.headers.get("cache-control") ?? "")) {
     fail(`${address} is not kept by browsers (cache-control: ${response.headers.get("cache-control")})`);
   }

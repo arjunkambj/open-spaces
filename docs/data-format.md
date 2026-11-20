@@ -1,10 +1,11 @@
-# Where Open Wisper keeps your data
+# Where Spaces keeps your data
 
-Open Wisper keeps everything on your device, in one folder of plain files. There is no
+Spaces keeps everything on your device, in one folder of plain files. There is no
 database and no server. You can open the files, back them up, or change them with your own
 tools.
 
-Your OpenAI API key is kept apart from everything else, in its own file, `api-key.json`.
+Your API keys (OpenAI, and Anthropic if you use Claude) are kept apart from everything else, in
+one file, `api-key.json`.
 Only your user account can open it, and the key is never written to any other file. On macOS
 that file is in this folder. On iOS it is in the app's own storage, outside the folder the
 app shares with its keyboard, so the keyboard cannot read it.
@@ -13,18 +14,18 @@ app shares with its keyboard, so the keyboard cannot read it.
 
 | Platform | Folder |
 | --- | --- |
-| macOS | `~/Library/Application Support/Open Wisper` |
-| iOS | `Open Wisper`, in the folder the app shares with its keyboard (its App Group) |
+| macOS | `~/Library/Application Support/Spaces` |
+| iOS | `Spaces`, in the folder the app shares with its keyboard (its App Group) |
 
 On iOS, a copy of the app that was built without the shared folder keeps its data in
-`Application Support/Open Wisper` inside its own storage instead. The keyboard cannot see
+`Application Support/Spaces` inside its own storage instead. The keyboard cannot see
 that folder. See [apps/ios/README.md](../apps/ios/README.md).
 
-To use a different folder, set the `OPEN_WISPER_HOME` environment variable before starting
-the app or the `wisper` tool:
+To use a different folder, set the `SPACES_HOME` environment variable before starting
+the app or the `spaces` tool:
 
 ```bash
-OPEN_WISPER_HOME=~/wisper-test wisper …
+SPACES_HOME=~/spaces-test spaces …
 ```
 
 A leading `~` is expanded. The folder is created the first time something is saved. Both
@@ -35,7 +36,7 @@ the app and the tool must be given the same value to see the same data.
 ```
 <folder>/
   settings.json                    your settings
-  api-key.json                     your API key (macOS only, see below)
+  api-key.json                     your API keys (macOS only, see below)
   dictionary.json                  words to spell your way
   snippets.json                    voice shortcuts
   dictations.json                  dictation history
@@ -148,17 +149,19 @@ The examples below were written by the app itself, from made-up data.
 ### api-key.json
 
 ```json
-{"host": "api.openai.com", "key": "sk-..."}
+{"keys": {"api.openai.com": "sk-...", "api.anthropic.com": "sk-ant-..."}}
 ```
 
-- `host` is the server the key was saved for. The key is sent to that server only. If the
-  server address in `settings.json` names another host, the key is not used.
+- `keys` holds one key per server, under the host it was saved for. Each key is sent to its
+  own server only. If the server address in `settings.json` names another host, no key is
+  sent there until you save one for it.
+- `api.anthropic.com` is the Anthropic key, used only when `textModel` is a Claude model.
 - The file is readable by your user account only (mode 0600) and is left out of backups.
-  Removing the key in Settings deletes the file.
+  Removing the last key in Settings deletes the file.
 - If you copy, zip or share the data folder, leave this file out.
 - On iOS this file is in the app's own `Application Support` folder, not in the shared
   folder.
-- Tools must not read, copy or change this file. The `wisper` tool never opens it.
+- Tools must not read, copy or change this file. The `spaces` tool never opens it.
 
 ### dictionary.json
 
@@ -242,7 +245,7 @@ All four keys are required.
 - `failure` is present only when the dictation did not work. It holds the message shown to
   you. `text` is then empty, and the audio is kept for a retry whatever the audio setting.
 - **The "not finished" entry.** An entry is written as soon as you stop speaking, before
-  the text is made. Its `failure` reads "Open Wisper closed before this dictation was
+  the text is made. Its `failure` reads "Spaces closed before this dictation was
   finished. Try it again." and its `rawText` and `text` are empty. When the text is ready,
   the finished entry takes its place, with the same `id`. The app does not show the entry
   while it is working. If the app closes in between, the entry stays and you can retry it
@@ -447,9 +450,9 @@ meeting is saved, so anything you type into it is lost. To add your own notes, c
 
 ### .tickets/
 
-The app answers links that start with `openwisper://`. Any web page or document can open
+The app answers links that start with `openspaces://`. Any web page or document can open
 such a link, so a link that would start or stop a recording has to prove where it came
-from. Before the `wisper` tool (or the iPhone keyboard) sends one, it puts an empty file
+from. Before the `spaces` tool (or the iPhone keyboard) sends one, it puts an empty file
 with a long random name in this folder and adds that name to the link. The app checks for
 the file and deletes it. A ticket works once, and only for one minute. Old tickets are
 cleaned up by themselves.
@@ -459,8 +462,8 @@ ticket tells the app to start listening without asking you.
 
 ## Rules for tools that change these files
 
-The app and the `wisper` tool can both be running, and both write to this folder. The
-simplest safe way to change data is to go through the `wisper` tool. If you write the files
+The app and the `spaces` tool can both be running, and both write to this folder. The
+simplest safe way to change data is to go through the `spaces` tool. If you write the files
 yourself, follow these rules so that nobody's change is lost.
 
 1. **Take the lock.** Open `<folder>/.lock` (create it if it is missing) and take an
@@ -476,7 +479,7 @@ For example, in a shell script on macOS. `lockf` comes with macOS and takes the 
 the app uses; `-k` tells it to leave the `.lock` file in place afterwards.
 
 ```bash
-cd "${OPEN_WISPER_HOME:-$HOME/Library/Application Support/Open Wisper}"
+cd "${SPACES_HOME:-$HOME/Library/Application Support/Spaces}"
 lockf -k .lock sh -c '
   jq ".userName = \"Sam\"" settings.json > .tmp-settings.json-$$ &&
   mv .tmp-settings.json-$$ settings.json

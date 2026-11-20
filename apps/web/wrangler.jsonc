@@ -1,13 +1,14 @@
 {
-  // The website on Cloudflare: a Worker that only serves the files in dist/.
-  // There is no Worker code, so nothing runs per visit.
+  // The website on Cloudflare: a Worker that only serves the prerendered files in dist/client.
+  // There is no Worker code, so nothing runs per visit. (The build also leaves dist/server, the
+  // code that prerendered the pages; it is not deployed.)
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "open-wisper-web",
+  "name": "open-spaces-web",
   "compatibility_date": "2026-11-01",
   "assets": {
-    "directory": "./dist",
+    "directory": "./dist/client",
     "html_handling": "auto-trailing-slash",
-    // An address that does not exist gets dist/404.html with status 404.
+    // An address that does not exist gets dist/client/404.html with status 404.
     "not_found_handling": "404-page"
   },
   // A custom domain: Cloudflare makes the DNS record and the certificate itself.

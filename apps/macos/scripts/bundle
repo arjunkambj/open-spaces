@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# bundle: build Open Wisper and wrap it into "Open Wisper.app".
+# bundle: build Spaces and wrap it into "Spaces.app".
 #
-#   apps/macos/scripts/bundle            release build -> apps/macos/build/Open Wisper.app
+#   apps/macos/scripts/bundle            release build -> apps/macos/build/Spaces.app
 #   apps/macos/scripts/bundle --debug    debug build (faster to compile, slower to run)
 #   apps/macos/scripts/bundle --open     open the app when it is ready
 #
@@ -10,8 +10,8 @@
 # failed run never leaves half an app behind.
 #
 # What goes into the app:
-#   Contents/MacOS/OpenWisper        the app itself
-#   Contents/MacOS/wisper            the command-line tool for agents
+#   Contents/MacOS/SpacesApp     the app itself
+#   Contents/MacOS/spaces            the command-line tool for agents
 #   Contents/Frameworks/Sparkle.framework    the updater (see UPDATES below)
 #   Contents/Info.plist              from Resources/Info.plist, with the version filled in
 #   Contents/Resources/AppIcon.icns  from Resources/ (made by scripts/make-icon.swift)
@@ -19,10 +19,10 @@
 #   Contents/Resources/*.bundle      resource bundles SwiftPM made for the targets, if any
 #
 # Settings, all optional, read from the environment:
-#   OPEN_WISPER_VERSION        the version, such as 0.2.0. Default: apps/macos/package.json.
-#   OPEN_WISPER_BUILD          the build number. Default: worked out as described below.
-#   OPEN_WISPER_SWIFT_FLAGS    more options for every `swift build`, such as "-j 4".
-#   OPEN_WISPER_SIGN_IDENTITY  a certificate to sign with, or "-" for none (see scripts/signing.sh).
+#   SPACES_VERSION        the version, such as 0.2.0. Default: apps/macos/package.json.
+#   SPACES_BUILD          the build number. Default: worked out as described below.
+#   SPACES_SWIFT_FLAGS    more options for every `swift build`, such as "-j 4".
+#   SPACES_SIGN_IDENTITY  a certificate to sign with, or "-" for none (see scripts/signing.sh).
 #
 # VERSION AND BUILD NUMBER
 #
@@ -50,15 +50,15 @@
 #     changes with every build. macOS then treats each build as a stranger: the switches
 #     in System Settings look on but do nothing, until you remove the app from each list
 #     and add it again.
-#   - With OPEN_WISPER_SIGN_IDENTITY="Developer ID Application: ..." the app is signed for
+#   - With SPACES_SIGN_IDENTITY="Developer ID Application: ..." the app is signed for
 #     handing to other people with no warning from macOS (it must also be notarised). That
 #     needs a paid Apple developer account. A certificate you make yourself is not known
 #     to other people's Macs, so they are asked to allow the app the first time.
 #
 # Everything is signed from the inside out: the updater's own helper programs, then the
-# updater, then the `wisper` tool, then the app, which seals all of it. All with the
+# updater, then the `spaces` tool, then the app, which seals all of it. All with the
 # hardened runtime. The app has one entitlement of its own, the microphone
-# (Resources/OpenWisper.entitlements). Typing into other apps and the global shortcuts
+# (Resources/Spaces.entitlements). Typing into other apps and the global shortcuts
 # need no entitlement, only the Accessibility permission.
 #
 # Without an Apple Developer ID, one more entitlement is added: the one that lets the app
@@ -115,17 +115,17 @@ for arg in "$@"; do
   esac
 done
 
-app_name="Open Wisper"
+app_name="Spaces"
 out="$here/build"
 app="$out/$app_name.app"
 info="$here/Resources/Info.plist"
-entitlements="$here/Resources/OpenWisper.entitlements"
+entitlements="$here/Resources/Spaces.entitlements"
 icon="$here/Resources/AppIcon.icns"
 menu_bar_mark="$root/assets/menubar-template.pdf"
 # Extra options for `swift build`, split on spaces.
 swift_flags=()
-if [[ -n "${OPEN_WISPER_SWIFT_FLAGS:-}" ]]; then
-  read -r -a swift_flags <<<"$OPEN_WISPER_SWIFT_FLAGS"
+if [[ -n "${SPACES_SWIFT_FLAGS:-}" ]]; then
+  read -r -a swift_flags <<<"$SPACES_SWIFT_FLAGS"
 fi
 
 [[ -x "$swiftw" ]] || fail "cannot find $swiftw."
@@ -140,7 +140,7 @@ load_signing || fail "could not get the signing certificate ready."
 
 # --- Version and build number ------------------------------------------------------------
 
-version="${OPEN_WISPER_VERSION:-}"
+version="${SPACES_VERSION:-}"
 if [[ -z "$version" ]]; then
   version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$here/package.json" | head -1)"
 fi
@@ -152,7 +152,7 @@ patch=$((10#${BASH_REMATCH[3]}))
 ((minor < 100 && patch < 100)) || fail "in version $version the second and third numbers must stay below 100."
 ((major * 10000 + minor * 100 + patch > 0)) || fail "the version must be above 0.0.0."
 
-build_number="${OPEN_WISPER_BUILD:-}"
+build_number="${SPACES_BUILD:-}"
 if [[ -z "$build_number" ]]; then
   commits="$(git -C "$root" rev-list --count HEAD 2>/dev/null || true)"
   [[ "$commits" =~ ^[0-9]+$ ]] || commits=0
@@ -168,18 +168,18 @@ fi
 
 # --- Build -------------------------------------------------------------------------------
 
-echo "==> Building Open Wisper $version, build $build_number ($config)"
-(cd "$here" && "$swiftw" build -c "$config" --product OpenWisper ${swift_flags[@]+"${swift_flags[@]}"})
+echo "==> Building Spaces $version, build $build_number ($config)"
+(cd "$here" && "$swiftw" build -c "$config" --product SpacesApp ${swift_flags[@]+"${swift_flags[@]}"})
 app_bin="$(cd "$here" && "$swiftw" build -c "$config" --show-bin-path ${swift_flags[@]+"${swift_flags[@]}"})"
-[[ -x "$app_bin/OpenWisper" ]] || fail "the build did not produce $app_bin/OpenWisper."
+[[ -x "$app_bin/SpacesApp" ]] || fail "the build did not produce $app_bin/SpacesApp."
 # SwiftPM puts the updater next to the app it built.
 sparkle="$app_bin/Sparkle.framework"
 [[ -f "$sparkle/Versions/B/Sparkle" ]] || fail "the build did not leave the updater (Sparkle.framework) in $app_bin."
 
-echo "==> Building the wisper tool ($config)"
-(cd "$root/packages/agent" && "$swiftw" build -c "$config" --product wisper ${swift_flags[@]+"${swift_flags[@]}"})
+echo "==> Building the spaces tool ($config)"
+(cd "$root/packages/agent" && "$swiftw" build -c "$config" --product spaces ${swift_flags[@]+"${swift_flags[@]}"})
 tool_bin="$(cd "$root/packages/agent" && "$swiftw" build -c "$config" --show-bin-path ${swift_flags[@]+"${swift_flags[@]}"})"
-[[ -x "$tool_bin/wisper" ]] || fail "the build did not produce $tool_bin/wisper."
+[[ -x "$tool_bin/spaces" ]] || fail "the build did not produce $tool_bin/spaces."
 
 # --- Put the app together ----------------------------------------------------------------
 
@@ -191,9 +191,9 @@ trap cleanup EXIT
 staged="$staging/$app_name.app"
 mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Resources" "$staged/Contents/Frameworks"
 
-cp "$app_bin/OpenWisper" "$staged/Contents/MacOS/OpenWisper"
-cp "$tool_bin/wisper" "$staged/Contents/MacOS/wisper"
-chmod 755 "$staged/Contents/MacOS/OpenWisper" "$staged/Contents/MacOS/wisper"
+cp "$app_bin/SpacesApp" "$staged/Contents/MacOS/SpacesApp"
+cp "$tool_bin/spaces" "$staged/Contents/MacOS/spaces"
+chmod 755 "$staged/Contents/MacOS/SpacesApp" "$staged/Contents/MacOS/spaces"
 
 # The updater. `cp -R` keeps the links inside the framework as links, which it needs.
 framework="$staged/Contents/Frameworks/Sparkle.framework"
@@ -220,10 +220,10 @@ tidy_library_paths() {
     install_name_tool -delete_rpath "$path" "$program" 2>/dev/null
   done < <(library_paths "$program")
 }
-tidy_library_paths "$staged/Contents/MacOS/OpenWisper"
-tidy_library_paths "$staged/Contents/MacOS/wisper"
-install_name_tool -add_rpath "@executable_path/../Frameworks" "$staged/Contents/MacOS/OpenWisper" 2>/dev/null
-for program in OpenWisper wisper; do
+tidy_library_paths "$staged/Contents/MacOS/SpacesApp"
+tidy_library_paths "$staged/Contents/MacOS/spaces"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$staged/Contents/MacOS/SpacesApp" 2>/dev/null
+for program in SpacesApp spaces; do
   if library_paths "$staged/Contents/MacOS/$program" | grep -v -x -e /usr/lib/swift -e "@executable_path/../Frameworks" >&2; then
     fail "$program would still look for libraries in the folders above."
   fi
@@ -295,7 +295,7 @@ sign --preserve-metadata=entitlements "$inside/XPCServices/Downloader.xpc"
 sign "$inside/Autoupdate"
 sign "$inside/Updater.app"
 sign "$framework"
-sign --identifier dev.openwisper.mac.wisper "$staged/Contents/MacOS/wisper"
+sign --identifier dev.openspaces.mac.spaces "$staged/Contents/MacOS/spaces"
 sign --entitlements "$app_entitlements" "$staged"
 
 # --- Check -------------------------------------------------------------------------------
@@ -303,13 +303,13 @@ sign --entitlements "$app_entitlements" "$staged"
 echo "==> Checking"
 plutil -lint "$staged/Contents/Info.plist" >/dev/null
 codesign --verify --deep --strict "$staged"
-for path in Contents/MacOS/OpenWisper Contents/MacOS/wisper Contents/Resources/AppIcon.icns \
+for path in Contents/MacOS/SpacesApp Contents/MacOS/spaces Contents/Resources/AppIcon.icns \
   Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle \
   Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate; do
   [[ -s "$staged/$path" ]] || fail "$path is missing from the app."
 done
 bundle_id="$(plutil -extract CFBundleIdentifier raw "$staged/Contents/Info.plist")"
-[[ "$bundle_id" == "dev.openwisper.mac" ]] || fail "unexpected bundle id '$bundle_id'."
+[[ "$bundle_id" == "dev.openspaces.mac" ]] || fail "unexpected bundle id '$bundle_id'."
 
 # What macOS will hold a later build to before it lets it keep this one's permissions.
 requirement="$(codesign -dr - "$staged" 2>&1 | sed -n 's/^#\{0,1\} *designated => //p')"
@@ -321,9 +321,9 @@ fi
 
 # The app must start and find the updater inside itself. `--help` prints a few lines and
 # quits before any window, sound or permission.
-"$staged/Contents/MacOS/OpenWisper" --help >/dev/null ||
+"$staged/Contents/MacOS/SpacesApp" --help >/dev/null ||
   fail "the finished app does not start. It may not be finding Contents/Frameworks/Sparkle.framework."
-"$staged/Contents/MacOS/wisper" --help >/dev/null || fail "the wisper tool in the app does not start."
+"$staged/Contents/MacOS/spaces" --help >/dev/null || fail "the spaces tool in the app does not start."
 
 # Swap the finished app in.
 rm -rf "${app:?}"

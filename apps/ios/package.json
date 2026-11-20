@@ -1,20 +1,20 @@
 {
-  "name": "@open-wisper/ios",
+  "name": "@open-spaces/ios",
   "version": "0.1.0",
   "private": true,
-  "description": "Open Wisper for iPhone, with its keyboard.",
+  "description": "Spaces for iPhone, with its keyboard.",
   "scripts": {
     "generate": "../../scripts/ios generate",
     "build": "../../scripts/swiftw build --package-path Phone && ../../scripts/ios build",
     "lint": "swift format lint --strict --recursive --parallel App Keyboard Widgets Shared Phone/Package.swift Phone/Sources",
-    "snapshots": "../../scripts/swiftw run --package-path Phone wisper-phone-snapshots build/snapshots"
+    "snapshots": "../../scripts/swiftw run --package-path Phone spaces-phone-snapshots build/snapshots"
   },
   "dependencies": {
-    "@open-wisper/domain": "workspace:*",
-    "@open-wisper/store": "workspace:*",
-    "@open-wisper/ai": "workspace:*",
-    "@open-wisper/audio": "workspace:*",
-    "@open-wisper/engine": "workspace:*",
-    "@open-wisper/ui": "workspace:*"
+    "@open-spaces/domain": "workspace:*",
+    "@open-spaces/store": "workspace:*",
+    "@open-spaces/ai": "workspace:*",
+    "@open-spaces/audio": "workspace:*",
+    "@open-spaces/engine": "workspace:*",
+    "@open-spaces/ui": "workspace:*"
   }
 }

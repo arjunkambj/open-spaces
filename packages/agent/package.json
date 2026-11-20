@@ -1,14 +1,14 @@
 {
-  "name": "@open-wisper/agent",
+  "name": "@open-spaces/agent",
   "version": "0.1.0",
   "private": true,
-  "description": "MCP server and `wisper` command-line tool for agents.",
+  "description": "MCP server and `spaces` command-line tool for agents.",
   "scripts": {
     "build": "../../scripts/swiftw build",
     "lint": "swift format lint --strict --recursive --parallel Package.swift Sources"
   },
   "dependencies": {
-    "@open-wisper/domain": "workspace:*",
-    "@open-wisper/store": "workspace:*"
+    "@open-spaces/domain": "workspace:*",
+    "@open-spaces/store": "workspace:*"
   }
 }

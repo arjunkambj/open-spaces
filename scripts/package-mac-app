@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# package-mac-app <zip-path>: check the built "Open Wisper.app" and zip it.
+# package-mac-app <zip-path>: check the built "Spaces.app" and zip it.
 #
 # Run apps/macos/scripts/bundle first. This finds the bundle it made, checks
 # that its code signature is intact (an ad hoc signature counts), and writes a
@@ -10,8 +10,8 @@ set -euo pipefail
 zip_path="${1:?usage: package-mac-app <zip-path>}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-app="$(find "$root/apps/macos" -maxdepth 3 -type d -name 'Open Wisper.app' -not -path '*/.build/*' | head -1)"
-[[ -n "$app" ]] || { echo "error: no 'Open Wisper.app' under apps/macos. Run apps/macos/scripts/bundle first." >&2; exit 1; }
+app="$(find "$root/apps/macos" -maxdepth 3 -type d -name 'Spaces.app' -not -path '*/.build/*' | head -1)"
+[[ -n "$app" ]] || { echo "error: no 'Spaces.app' under apps/macos. Run apps/macos/scripts/bundle first." >&2; exit 1; }
 
 echo "Bundle: $app"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' \

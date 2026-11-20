@@ -16,6 +16,6 @@
 - [ ] No tests, no code kept for old callers or old data, and no fallback paths were added.
 - [ ] Nothing new leaves the device: no analytics, no new network calls except to the AI server the user set.
 - [ ] The API key is not in any file, log or error message.
-- [ ] The docs still match: `docs/data-format.md` if what is saved to disk changed, `docs/agents.md` if a `wisper` tool changed.
+- [ ] The docs still match: `docs/data-format.md` if what is saved to disk changed, `docs/agents.md` if a `spaces` tool changed.
 - [ ] Text people see is plain English. Screens work in light and dark mode and have VoiceOver labels.
 - [ ] No code, images, sounds or wording copied from another product.
