@@ -71,15 +71,15 @@ public struct Page<Toolbar: View, Content: View>: View {
     let phone = idiom == .phone
     GeometryReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: Spaces.Space.xl) {
+        VStack(alignment: .leading, spacing: phone ? Spaces.Space.xl : Spaces.Space.xxl) {
           header
-          VStack(alignment: .leading, spacing: Spaces.Space.xl) { content }
+          VStack(alignment: .leading, spacing: phone ? Spaces.Space.xl : Spaces.Space.xxl) { content }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: phone ? .infinity : width.points, alignment: .leading)
-        .padding(.horizontal, phone ? 20 : 40)
-        .padding(.top, phone ? Spaces.Space.s : 36)
-        .padding(.bottom, phone ? Spaces.Space.xl : 40)
+        .padding(.horizontal, phone ? Spaces.Space.l + Spaces.Space.xs : Spaces.Space.xxxl)
+        .padding(.top, phone ? Spaces.Space.s : Spaces.Space.xxl + Spaces.Space.s)
+        .padding(.bottom, phone ? Spaces.Space.xl : Spaces.Space.xxxl)
         .frame(maxWidth: .infinity)
         .frame(minHeight: proxy.size.height, alignment: .top)
       }

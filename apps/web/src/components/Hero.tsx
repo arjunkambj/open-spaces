@@ -15,7 +15,7 @@ export function Hero() {
         <p className="label">{hero.saidLabel}</p>
         <div className="mt-3 flex items-center gap-4">
           <Pill label={hero.pillLabel} />
-          <p className="said font-mono text-base text-stone-500 sm:text-lg dark:text-stone-400">
+          <p className="said font-mono text-base text-neutral-500 sm:text-lg dark:text-neutral-400">
             {hero.said.map((word, index) => (
               <Fragment key={index}>
                 {index > 0 && " "}
@@ -37,20 +37,20 @@ export function Hero() {
         </p>
       </figure>
 
-      <div className="mt-10 grid gap-x-16 gap-y-8 border-t border-stone-900/10 pt-8 sm:mt-12 lg:grid-cols-[minmax(0,1fr)_auto] dark:border-white/10">
+      <div className="mt-10 grid gap-x-16 gap-y-8 border-t border-neutral-900/10 pt-8 sm:mt-12 lg:grid-cols-[minmax(0,1fr)_auto] dark:border-white/10">
         <div className="max-w-xl">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-[28px]">{hero.headline}</h1>
-          <p className="mt-3 text-lg text-pretty text-stone-600 dark:text-stone-300">{hero.lead}</p>
+          <p className="mt-3 text-lg text-pretty text-neutral-600 dark:text-neutral-300">{hero.lead}</p>
         </div>
         <div className="lg:max-w-sm">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
             <DownloadButton />
-            <span className="text-sm text-stone-500 dark:text-stone-400">{hero.status}</span>
+            <span className="text-sm text-neutral-500 dark:text-neutral-400">{hero.status}</span>
           </div>
-          <p className="mt-4 text-sm text-stone-600 dark:text-stone-400">
+          <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
             {`Version ${version} · ${download.requirements}`}
           </p>
-          <p className="mt-1 text-sm text-pretty text-stone-600 dark:text-stone-400">
+          <p className="mt-1 text-sm text-pretty text-neutral-600 dark:text-neutral-400">
             {download.firstLaunch}{" "}
             <a href={links.install} className="link">
               {download.firstLaunchLink}

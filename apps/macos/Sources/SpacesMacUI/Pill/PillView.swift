@@ -257,7 +257,6 @@ struct PillBody: View {
   private var fill: SwiftUI.Color {
     switch state.look {
     case .resting: Spaces.Color.inverse.opacity(0.94)
-    case .recording(.command, _): Spaces.Color.accent
     default: Spaces.Color.inverse
     }
   }

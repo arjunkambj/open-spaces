@@ -19,9 +19,9 @@ private struct ToggleBody: View {
   @Environment(\.spacesIdiom) private var idiom
 
   var body: some View {
-    let width: CGFloat = idiom == .phone ? 51 : 42
-    let height: CGFloat = idiom == .phone ? 31 : 24
-    let inset: CGFloat = idiom == .phone ? 2 : 3
+    let width: CGFloat = idiom == .phone ? 51 : 36
+    let height: CGFloat = idiom == .phone ? 31 : 20
+    let inset: CGFloat = 2
     Button {
       configuration.isOn.toggle()
     } label: {
@@ -34,7 +34,7 @@ private struct ToggleBody: View {
           .overlay(alignment: configuration.isOn ? .trailing : .leading) {
             Circle()
               .fill(configuration.isOn ? Spaces.Color.onInverse : Spaces.Color.knob)
-              .shadow(color: .black.opacity(0.18), radius: 1.5, y: 1)
+              .shadow(color: .black.opacity(0.16), radius: 1, y: 0.5)
               .padding(inset)
           }
           .animation(Spaces.Motion.smooth, value: configuration.isOn)
@@ -73,7 +73,7 @@ public struct SettingRow<Control: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       control
     }
-    .padding(.horizontal, 20)
+    .padding(.horizontal, Spaces.Space.xl)
     .padding(.vertical, Spaces.Space.l)
     .frame(minHeight: 64)
   }
@@ -96,7 +96,7 @@ public struct ToggleRow: View {
       SettingText(title: title, description: description)
     }
     .toggleStyle(.spaces)
-    .padding(.horizontal, 20)
+    .padding(.horizontal, Spaces.Space.xl)
     .padding(.vertical, Spaces.Space.l)
     .frame(minHeight: 64)
   }
@@ -189,7 +189,7 @@ public struct Dropdown<Value: Hashable>: View {
         .lineLimit(1)
       Spacer(minLength: 0)
       Image(systemName: "chevron.down")
-        .font(.system(size: 11, weight: .semibold))
+        .font(.system(size: 11, weight: .medium))
         .foregroundStyle(Spaces.Color.textSecondary)
     }
   }
@@ -201,7 +201,7 @@ private struct DropdownButtonStyle: ButtonStyle {
   }
 }
 
-/// The white, bordered box of a select box.
+/// The bordered box of a select box.
 private struct DropdownBox<Label: View>: View {
   @ViewBuilder let label: Label
   @Environment(\.spacesIdiom) private var idiom
@@ -213,7 +213,7 @@ private struct DropdownBox<Label: View>: View {
     label
       .padding(.horizontal, Spaces.Space.m)
       .frame(minHeight: idiom == .phone ? 44 : 36)
-      .background(isHovered ? Spaces.Color.surface : Spaces.Color.raised, in: shape)
+      .background(isHovered ? Spaces.Color.surfaceHover : Spaces.Color.raised, in: shape)
       .overlay { shape.strokeBorder(Spaces.Color.borderStrong, lineWidth: Spaces.Stroke.hairline) }
       .opacity(isEnabled ? 1 : 0.45)
       .contentShape(shape)
@@ -226,7 +226,7 @@ private struct DropdownBox<Label: View>: View {
 public enum TabsStyle: Sendable {
   /// Text tabs on a hairline, the current one underlined. For the top of a page.
   case underline
-  /// A compact box of segments. For a choice inside a card or on iPhone.
+  /// A compact capsule of segments. For a choice inside a card or on iPhone.
   case segmented
 }
 
@@ -289,7 +289,7 @@ public struct Tabs<Value: Hashable, Trailing: View>: View {
               if isSelected {
                 Rectangle()
                   .fill(Spaces.Color.textPrimary)
-                  .frame(height: 2)
+                  .frame(height: Spaces.Stroke.focus)
                   .matchedGeometryEffect(id: "underline", in: namespace)
               }
             }
@@ -310,7 +310,7 @@ public struct Tabs<Value: Hashable, Trailing: View>: View {
     HStack(spacing: Spaces.Space.xxs) {
       ForEach(options, id: \.self) { option in
         let isSelected = option == selection
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        let shape = PillShape()
         Button {
           withAnimation(Spaces.Motion.smooth) { selection = option }
         } label: {
@@ -321,13 +321,13 @@ public struct Tabs<Value: Hashable, Trailing: View>: View {
             )
             .lineLimit(1)
             .minimumScaleFactor(0.85)
-            .padding(.horizontal, 6)
-            .frame(maxWidth: .infinity, minHeight: idiom == .phone ? 36 : 30)
+            .padding(.horizontal, Spaces.Space.m)
+            .frame(maxWidth: .infinity, minHeight: idiom == .phone ? 36 : 28)
             .background {
               if isSelected {
                 shape
                   .fill(Spaces.Color.segment)
-                  .shadow(color: .black.opacity(0.08), radius: 1.5, y: 1)
+                  .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
                   .matchedGeometryEffect(id: "segment", in: namespace)
               }
             }
@@ -337,12 +337,15 @@ public struct Tabs<Value: Hashable, Trailing: View>: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
       }
     }
-    .padding(3)
-    .background(Spaces.Color.surfaceSelected, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+    .padding(Spaces.Space.xxs)
+    .background(Spaces.Color.surfaceHover, in: Capsule())
   }
 }
 
-/// A small pill with a word in it: "New", "Beta", a status.
+/// A small label with a word in it: "New", "Beta", a status.
+///
+/// The tones are black and white: `accent` is solid ink, `warning` an outline, `danger` red.
+/// `neutral` and `success` are quiet grey; let the word say which.
 public struct Badge: View {
   public enum Tone: Sendable {
     case neutral, accent, success, warning, danger
@@ -357,27 +360,38 @@ public struct Badge: View {
   }
 
   public var body: some View {
+    let shape = RoundedRectangle(cornerRadius: Spaces.Radius.small, style: .continuous)
     Text(text)
-      .font(.system(size: 11.5, weight: .semibold))
+      .font(.system(size: 11.5, weight: .medium))
       .foregroundStyle(foreground)
       .lineLimit(1)
       .padding(.horizontal, 7)
       .padding(.vertical, 3)
-      .background(
-        tone == .neutral ? Spaces.Color.surfaceSelected : foreground.opacity(Self.tintOpacity),
-        in: RoundedRectangle(cornerRadius: Spaces.Radius.small, style: .continuous)
-      )
+      .background(fill, in: shape)
+      .overlay {
+        if tone == .warning {
+          shape.strokeBorder(Spaces.Color.borderStrong, lineWidth: Spaces.Stroke.hairline)
+        }
+      }
   }
 
-  /// How strongly a tone colours its own background.
+  /// How strongly the danger tone colours its own background.
   nonisolated static let tintOpacity = 0.12
+
+  private var fill: SwiftUI.Color {
+    switch tone {
+    case .neutral, .success: Spaces.Color.surfaceSelected
+    case .accent: Spaces.Color.accent
+    case .warning: .clear
+    case .danger: Spaces.Color.danger.opacity(Self.tintOpacity)
+    }
+  }
 
   private var foreground: SwiftUI.Color {
     switch tone {
     case .neutral: Spaces.Color.textSecondary
-    case .accent: Spaces.Color.accent
-    case .success: Spaces.Color.success
-    case .warning: Spaces.Color.warning
+    case .accent: Spaces.Color.onAccent
+    case .success, .warning: Spaces.Color.textPrimary
     case .danger: Spaces.Color.danger
     }
   }

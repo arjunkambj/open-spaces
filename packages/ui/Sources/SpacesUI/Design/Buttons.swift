@@ -3,9 +3,9 @@ import SwiftUI
 /// The button looks of Spaces. Use it as `.buttonStyle(.spaces(.primary))`.
 public struct SpacesButtonStyle: ButtonStyle {
   public enum Kind: Sendable {
-    /// The one main action of a screen or dialog: near-black fill.
+    /// The one main action of a screen or dialog: near-black fill (white in dark mode).
     case primary
-    /// Normal actions: warm-grey fill.
+    /// Normal actions: light grey fill.
     case secondary
     /// Quiet actions next to other content: white with a hairline border.
     case tertiary
@@ -30,7 +30,7 @@ public struct SpacesButtonStyle: ButtonStyle {
 }
 
 extension ButtonStyle where Self == SpacesButtonStyle {
-  /// An Spaces button.
+  /// A Spaces button: a capsule.
   /// - fullWidth: stretches the button to the width it is given (bottom-of-screen actions on iPhone).
   public static func spaces(
     _ kind: SpacesButtonStyle.Kind = .secondary,
@@ -53,7 +53,7 @@ private struct ButtonBody: View {
   @State private var isHovered = false
 
   var body: some View {
-    let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+    let shape = PillShape()
     configuration.label
       .labelStyle(ButtonLabelStyle())
       .spacesText(size == .regular ? .bodyStrong : .captionStrong, color: foreground)
@@ -77,26 +77,17 @@ private struct ButtonBody: View {
     switch (idiom, size) {
     case (.mac, .regular): 36
     case (.mac, .small): 28
-    case (.phone, .regular): 50
+    case (.phone, .regular): 48
     case (.phone, .small): 36
     }
   }
 
   private var horizontalPadding: CGFloat {
     switch (idiom, size) {
-    case (.mac, .regular): 16
-    case (.mac, .small): 11
-    case (.phone, .regular): 20
-    case (.phone, .small): 14
-    }
-  }
-
-  private var radius: CGFloat {
-    switch (idiom, size) {
-    case (.mac, .regular): Spaces.Radius.control
-    case (.mac, .small): 8
-    case (.phone, .regular): 14
-    case (.phone, .small): Spaces.Radius.control
+    case (.mac, .regular): 18
+    case (.mac, .small): 12
+    case (.phone, .regular): 24
+    case (.phone, .small): 16
     }
   }
 
@@ -149,7 +140,61 @@ private struct ButtonLabelStyle: LabelStyle {
   }
 }
 
-/// The square look shared by `IconButton` and `OverflowMenu`.
+/// A capsule: a rectangle with fully round ends. The kit draws buttons, the search field and
+/// segments with it: a stroked system `Capsule` can show stray lines beside its ends.
+struct PillShape: InsettableShape {
+  private var inset: CGFloat = 0
+
+  func path(in rect: CGRect) -> Path {
+    let box = rect.insetBy(dx: inset, dy: inset)
+    let radius = min(box.width, box.height) / 2
+    // Drawn arc by arc: a path made as a rounded rectangle is drawn the same way as `Capsule`.
+    var path = Path()
+    path.move(to: CGPoint(x: box.minX + radius, y: box.minY))
+    path.addLine(to: CGPoint(x: box.maxX - radius, y: box.minY))
+    path.addArc(
+      center: CGPoint(x: box.maxX - radius, y: box.minY + radius),
+      radius: radius,
+      startAngle: .degrees(-90),
+      endAngle: .degrees(0),
+      clockwise: false
+    )
+    path.addLine(to: CGPoint(x: box.maxX, y: box.maxY - radius))
+    path.addArc(
+      center: CGPoint(x: box.maxX - radius, y: box.maxY - radius),
+      radius: radius,
+      startAngle: .degrees(0),
+      endAngle: .degrees(90),
+      clockwise: false
+    )
+    path.addLine(to: CGPoint(x: box.minX + radius, y: box.maxY))
+    path.addArc(
+      center: CGPoint(x: box.minX + radius, y: box.maxY - radius),
+      radius: radius,
+      startAngle: .degrees(90),
+      endAngle: .degrees(180),
+      clockwise: false
+    )
+    path.addLine(to: CGPoint(x: box.minX, y: box.minY + radius))
+    path.addArc(
+      center: CGPoint(x: box.minX + radius, y: box.minY + radius),
+      radius: radius,
+      startAngle: .degrees(180),
+      endAngle: .degrees(270),
+      clockwise: false
+    )
+    path.closeSubpath()
+    return path
+  }
+
+  func inset(by amount: CGFloat) -> PillShape {
+    var shape = self
+    shape.inset += amount
+    return shape
+  }
+}
+
+/// The round look shared by `IconButton` and `OverflowMenu`.
 struct IconButtonStyle: ButtonStyle {
   var size: SpacesButtonStyle.Size = .regular
 
@@ -158,7 +203,7 @@ struct IconButtonStyle: ButtonStyle {
   }
 }
 
-/// The square, hover-highlighted box an icon sits in.
+/// The round, hover-highlighted spot an icon sits in.
 struct IconChrome<Label: View>: View {
   var size: SpacesButtonStyle.Size = .regular
   var isPressed = false
@@ -171,9 +216,9 @@ struct IconChrome<Label: View>: View {
 
   var body: some View {
     let hovered = (isHovered || simulatedHover) && isEnabled
-    let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+    let shape = Circle()
     label
-      .font(.system(size: glyphSize, weight: .medium))
+      .font(.system(size: glyphSize, weight: .regular))
       .foregroundStyle(hovered ? Spaces.Color.textPrimary : Spaces.Color.textSecondary)
       .frame(width: side, height: side)
       .background(background(hovered: hovered), in: shape)
@@ -318,7 +363,7 @@ private struct HoverHighlight: ViewModifier {
 }
 
 extension View {
-  /// Puts a soft warm-grey rounded rectangle behind the view while the pointer is over it,
+  /// Puts a soft grey rounded rectangle behind the view while the pointer is over it,
   /// and a slightly stronger one while `isSelected`.
   public func hoverHighlight(radius: CGFloat = Spaces.Radius.control, isSelected: Bool = false) -> some View {
     modifier(HoverHighlight(radius: radius, isSelected: isSelected))

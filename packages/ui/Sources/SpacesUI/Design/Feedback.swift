@@ -29,7 +29,7 @@ public struct EmptyState<Illustration: View, Action: View>: View {
     VStack(spacing: Spaces.Space.l) {
       illustration
         .accessibilityHidden(true)
-      VStack(spacing: 6) {
+      VStack(spacing: Spaces.Space.s) {
         Text(title).spacesText(.cardTitle)
         if let message {
           Text(message)
@@ -105,9 +105,10 @@ public struct ProgressBar: View {
 public enum NoticeTone: Sendable, Equatable {
   case info, success, warning, error
 
+  /// Ink for every tone but `error`, which is red. The symbol tells the tones apart.
   var color: SwiftUI.Color {
     switch self {
-    case .info: Spaces.Color.accent
+    case .info: Spaces.Color.textPrimary
     case .success: Spaces.Color.success
     case .warning: Spaces.Color.warning
     case .error: Spaces.Color.danger
@@ -173,16 +174,16 @@ public struct Banner<Action: View>: View {
       }
       action
     }
-    .padding(.horizontal, Spaces.Space.l)
-    .padding(.vertical, 14)
-    .background(tone.color.opacity(Self.tintOpacity), in: shape)
+    .padding(.horizontal, Spaces.Space.l + Spaces.Space.xs)
+    .padding(.vertical, Spaces.Space.l)
+    .background(fill, in: shape)
     .accessibilityElement(children: .contain)
   }
-}
 
-extension Banner {
-  /// How strongly the tone colours the banner. The fill alone sets it apart; there is no border.
-  fileprivate static var tintOpacity: Double { 0.1 }
+  /// The fill alone sets a banner apart; there is no border. Grey, or a faint red for an error.
+  private var fill: SwiftUI.Color {
+    tone == .error ? Spaces.Color.danger.opacity(0.08) : Spaces.Color.surface
+  }
 }
 
 /// A short message that appears at the bottom for a moment. Show one with `.toast(_:)`.
@@ -209,16 +210,16 @@ struct ToastView: View {
         .spacesText(.captionStrong, color: Spaces.Color.onInverse)
         .lineLimit(2)
     }
-    .padding(.horizontal, Spaces.Space.l)
-    .padding(.vertical, 10)
+    .padding(.horizontal, Spaces.Space.l + Spaces.Space.xs)
+    .padding(.vertical, Spaces.Space.m)
     .background {
-      Capsule().fill(Spaces.Color.inverse).shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+      Capsule().fill(Spaces.Color.inverse).shadow(color: .black.opacity(0.14), radius: 16, y: 6)
     }
     .accessibilityElement(children: .combine)
   }
 
   @ViewBuilder private var icon: some View {
-    if toast.tone == .info {
+    if toast.tone != .error {
       Image(systemName: toast.tone.symbol).foregroundStyle(Spaces.Color.onInverse)
     } else {
       Image(systemName: toast.tone.symbol)
@@ -228,7 +229,7 @@ struct ToastView: View {
   }
 
   @Environment(\.colorScheme) private var scheme
-  /// The capsule is dark in light mode and light in dark mode, so tone colours must flip too.
+  /// The capsule is dark in light mode and light in dark mode, so the red must flip too.
   private var flipped: ColorScheme { scheme == .dark ? .light : .dark }
 }
 

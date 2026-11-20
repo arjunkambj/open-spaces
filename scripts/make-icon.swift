@@ -12,9 +12,9 @@
 //   assets/menubar-template.pdf          one-colour mark for the menu bar (vector)
 //   assets/menubar-template.png, @2x     the same as pixels, at 1x and 2x
 //
-// The mark is a sound wave that is also a lower-case "w", followed by a text
-// cursor: what you say, written where you are typing. It is drawn on the
-// app's pine green, in its paper white, with the cursor in its light green.
+// The mark is the space bar, speaking: a solid capsule, twice as wide as it
+// is tall, with three voice bars cut out of it, short, tall, short. It is
+// drawn in white on a near-black plate. Black and white, like the app.
 //
 // The same mark is drawn in SwiftUI for the app itself, in
 // packages/ui/Sources/SpacesUI/Design/Wordmark.swift. Keep the two alike.
@@ -44,159 +44,84 @@ func color(_ hex: UInt32, alpha: CGFloat = 1) -> CGColor {
   )!
 }
 
-// The app's own colours (packages/ui, Colors.swift): the pine accent `1F6A4D` sits in the
-// middle of the plate, the mark is the paper white `FAFAF9`, the cursor a shade of the light accent `79D2A8`.
-let plateTop = color(0x29795A)
-let plateBottom = color(0x124532)
-let paper = color(0xFAFAF9)
-let cursorGreen = color(0x8ADDB5)
+// The app's own ink (packages/ui, Colors.swift): the plate runs from a soft black at the top
+// to the app's near-black `0D0D0D`, and the mark is plain white.
+let plateTop = color(0x2B2B2B)
+let plateBottom = color(0x0D0D0D)
+let paper = color(0xFFFFFF)
 
 // MARK: - The mark
 
-/// The sizes of the mark, as shares of the width it is drawn for.
+/// The sizes of the mark, as shares of its height.
 struct Mark {
-  /// The thickness of the wave.
-  var stroke: CGFloat
-  /// How far the wave moves sideways from one turn to the next.
+  /// How wide the capsule is.
+  var width: CGFloat = 2
+  /// The thickness of a bar.
+  var bar: CGFloat
+  /// From the middle of one bar to the middle of the next.
   var step: CGFloat
-  /// How far it moves up or down between turns.
-  var rise: CGFloat
-  /// How round the turns of the wave are: the radius of the middle of the line.
-  var corner: CGFloat
-  /// The space between the wave and the cursor.
-  var gap: CGFloat
-  var cursorWidth: CGFloat
-  var cursorHeight: CGFloat
-  /// How far the wave sits below the middle of the cursor, the way a small letter does in a line of text.
-  var drop: CGFloat
+  /// The length of the two outer bars, and of the middle one.
+  var short: CGFloat
+  var tall: CGFloat
 
-  var width: CGFloat { 4 * step + stroke + gap + cursorWidth }
-
-  /// The mark on the icon. Small icons get a heavier mark with plain turns, so it survives at 16 pixels.
+  /// The mark on the icon. Small icons get heavier bars, so they survive at 16 pixels.
   static func icon(pixels: CGFloat) -> Mark {
-    if pixels <= 16 {
-      return Mark(
-        stroke: 0.128,
-        step: 0.125,
-        rise: 0.3,
-        corner: 0,
-        gap: 0.09,
-        cursorWidth: 0.143,
-        cursorHeight: 0.643,
-        drop: 0
-      )
-    }
     if pixels <= 32 {
-      return Mark(
-        stroke: 0.1,
-        step: 0.112,
-        rise: 0.29,
-        corner: 0,
-        gap: 0.08,
-        cursorWidth: 0.094,
-        cursorHeight: 0.54,
-        drop: 0
-      )
+      return Mark(bar: 0.22, step: 0.38, short: 0.34, tall: 0.62)
     }
-    if pixels <= 64 {
-      return Mark(
-        stroke: 0.094,
-        step: 0.112,
-        rise: 0.29,
-        corner: 0.034,
-        gap: 0.082,
-        cursorWidth: 0.09,
-        cursorHeight: 0.5,
-        drop: 0.012
-      )
-    }
-    return Mark(
-      stroke: 0.088,
-      step: 0.114,
-      rise: 0.3,
-      corner: 0.058,
-      gap: 0.084,
-      cursorWidth: 0.078,
-      cursorHeight: 0.5,
-      drop: 0.017
-    )
+    return Mark(bar: 0.16, step: 0.3, short: 0.3, tall: 0.58)
   }
 
-  /// The mark in the menu bar, as shares of its height: lighter, like the system's own menu bar symbols.
-  static let menuBar = Mark(
-    stroke: 1.5 / 16,
-    step: 3 / 16,
-    rise: 7.5 / 16,
-    corner: 0.9 / 16,
-    gap: 2 / 16,
-    cursorWidth: 1.5 / 16,
-    cursorHeight: 13 / 16,
-    drop: 0
-  )
+  /// The mark in the menu bar: the same, with bars a little heavier for its small size.
+  static let menuBar = Mark(bar: 0.2, step: 0.34, short: 0.3, tall: 0.6)
 }
 
-/// Draws the mark centred on `center`. `unit` is the length that the mark's shares are shares of.
-/// With `snap` the mark sits on whole pixels, which keeps it sharp in small icons.
+/// Draws the mark centred on `center`, `height` tall, in `ink`. The bars are cut out of it,
+/// so whatever is behind shows through. With `snap` the bars sit on whole pixels, which
+/// keeps them sharp in small icons.
 func drawMark(
   _ mark: Mark,
   in context: CGContext,
   center: CGPoint,
-  unit: CGFloat,
-  wave: CGColor,
-  cursor: CGColor,
+  height: CGFloat,
+  ink: CGColor,
   snap: Bool = false
 ) {
-  let stroke = mark.stroke * unit
-  var left = center.x - mark.width * unit / 2 + stroke / 2
-  if snap { left = (left - stroke / 2).rounded() + stroke / 2 }
-  let top = center.y + (mark.rise / 2 - mark.drop) * unit
-  let bottom = center.y - (mark.rise / 2 + mark.drop) * unit
-  let step = mark.step * unit
-
-  // Down, up, down, up: two dips. A wave, and a "w".
-  let turns = [
-    CGPoint(x: left, y: top), CGPoint(x: left + step, y: bottom), CGPoint(x: left + 2 * step, y: top),
-    CGPoint(x: left + 3 * step, y: bottom), CGPoint(x: left + 4 * step, y: top),
-  ]
+  let capsule = CGRect(
+    x: center.x - mark.width * height / 2,
+    y: center.y - height / 2,
+    width: mark.width * height,
+    height: height
+  )
   let path = CGMutablePath()
-  path.move(to: turns[0])
-  for index in 1..<(turns.count - 1) {
-    path.addArc(tangent1End: turns[index], tangent2End: turns[index + 1], radius: mark.corner * unit)
+  path.addRoundedRect(in: capsule, cornerWidth: height / 2, cornerHeight: height / 2)
+  for (offset, length) in [(-1, mark.short), (0, mark.tall), (1, mark.short)] {
+    var bar = CGRect(
+      x: center.x + CGFloat(offset) * mark.step * height - mark.bar * height / 2,
+      y: center.y - length * height / 2,
+      width: mark.bar * height,
+      height: length * height
+    )
+    if snap {
+      bar = CGRect(
+        x: bar.minX.rounded(),
+        y: bar.minY.rounded(),
+        width: max(1, bar.width.rounded()),
+        height: bar.height.rounded()
+      )
+    }
+    path.addRoundedRect(in: bar, cornerWidth: bar.width / 2, cornerHeight: bar.width / 2)
   }
-  path.addLine(to: turns[turns.count - 1])
-
   context.saveGState()
   context.addPath(path)
-  context.setStrokeColor(wave)
-  context.setLineWidth(stroke)
-  context.setLineCap(.round)
-  context.setLineJoin(.round)
-  context.strokePath()
-
-  var bar = CGRect(
-    x: left + 4 * step + stroke / 2 + mark.gap * unit,
-    y: center.y - mark.cursorHeight * unit / 2,
-    width: mark.cursorWidth * unit,
-    height: mark.cursorHeight * unit
-  )
-  if snap {
-    bar = CGRect(
-      x: bar.minX.rounded(),
-      y: bar.minY.rounded(),
-      width: max(1, bar.width.rounded()),
-      height: bar.height.rounded()
-    )
-  }
-  let radius = bar.width / 2
-  context.addPath(CGPath(roundedRect: bar, cornerWidth: radius, cornerHeight: radius, transform: nil))
-  context.setFillColor(cursor)
-  context.fillPath()
+  context.setFillColor(ink)
+  context.fillPath(using: .evenOdd)
   context.restoreGState()
 }
 
 // MARK: - The plate
 
-/// The pine green of the plate: lighter at the top, with a soft light from above.
+/// The near-black of the plate: a little lighter at the top, with a soft light from above.
 func drawPlateColour(in context: CGContext, rect: CGRect) {
   let gradient = CGGradient(
     colorsSpace: colorSpace,
@@ -211,7 +136,7 @@ func drawPlateColour(in context: CGContext, rect: CGRect) {
   )
   let light = CGGradient(
     colorsSpace: colorSpace,
-    colors: [color(0xD9FFE9, alpha: 0.09), color(0xD9FFE9, alpha: 0)] as CFArray,
+    colors: [color(0xFFFFFF, alpha: 0.06), color(0xFFFFFF, alpha: 0)] as CFArray,
     locations: [0, 1]
   )!
   let source = CGPoint(x: rect.midX, y: rect.maxY + rect.height * 0.08)
@@ -257,6 +182,9 @@ func drawInnerEdge(
   context.restoreGState()
 }
 
+/// The height of the mark on the plate, as a share of the plate's width.
+let markOnPlate: CGFloat = 0.31
+
 /// The macOS icon: the plate with the system's usual room around it and a soft shadow.
 func drawMacIcon(in context: CGContext, size: CGFloat) {
   // 100 of 1024 on each side, as Apple's icon grid has it. Small icons sit on whole pixels and
@@ -290,8 +218,8 @@ func drawMacIcon(in context: CGContext, size: CGFloat) {
       shape: shape,
       rect: plate,
       width: line,
-      top: color(0xE6FFF2, alpha: 0.34),
-      bottom: color(0xE6FFF2, alpha: 0),
+      top: color(0xFFFFFF, alpha: 0.22),
+      bottom: color(0xFFFFFF, alpha: 0),
       stops: [0, 0.42]
     )
     drawInnerEdge(
@@ -300,18 +228,21 @@ func drawMacIcon(in context: CGContext, size: CGFloat) {
       rect: plate,
       width: line,
       top: color(0x000000, alpha: 0),
-      bottom: color(0x000000, alpha: 0.26),
+      bottom: color(0x000000, alpha: 0.3),
       stops: [0.6, 1]
     )
   }
 
+  // Small icons get a larger mark, so it still reads.
+  let share: CGFloat = size <= 32 ? 0.36 : markOnPlate
+  var height = plate.width * share
+  if size <= 64 { height = height.rounded() }
   drawMark(
     .icon(pixels: size),
     in: context,
     center: CGPoint(x: plate.midX, y: plate.midY),
-    unit: plate.width,
-    wave: paper,
-    cursor: cursorGreen,
+    height: height,
+    ink: paper,
     snap: size <= 64
   )
 }
@@ -325,25 +256,22 @@ func drawIOSIcon(in context: CGContext, size: CGFloat) {
     .icon(pixels: size),
     in: context,
     center: CGPoint(x: square.midX, y: square.midY),
-    unit: size * 0.9,
-    wave: paper,
-    cursor: cursorGreen
+    height: size * markOnPlate * 0.9,
+    ink: paper
   )
 }
 
 /// The menu bar mark: black on clear, 16 points tall. macOS tints it to suit the menu bar.
 let menuBarHeight: CGFloat = 16
-let menuBarWidth: CGFloat = 18
+let menuBarWidth: CGFloat = 22
 
 func drawMenuBarMark(in context: CGContext, scale: CGFloat) {
-  let black = color(0x000000)
   drawMark(
     .menuBar,
     in: context,
     center: CGPoint(x: menuBarWidth * scale / 2, y: menuBarHeight * scale / 2),
-    unit: menuBarHeight * scale,
-    wave: black,
-    cursor: black
+    height: 10 * scale,
+    ink: color(0x000000)
   )
 }
 

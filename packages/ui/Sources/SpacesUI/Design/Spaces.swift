@@ -31,7 +31,7 @@ public enum Spaces {
     }
   }
 
-  /// Gaps and paddings, in points.
+  /// Gaps and paddings, in points. Everything sits on a 4-point grid.
   public enum Space {
     public static let xxs: CGFloat = 2
     public static let xs: CGFloat = 4
@@ -43,16 +43,17 @@ public enum Spaces {
     public static let xxxl: CGFloat = 48
   }
 
-  /// Corner radii, in points.
+  /// Corner radii, in points. Buttons, the switch and the segmented control are capsules,
+  /// whatever their height; they need no radius.
   public enum Radius {
     /// Key caps, badges.
     public static let small: CGFloat = 6
-    /// Buttons, fields, menus.
+    /// Fields, select boxes, menus and rows.
     public static let control: CGFloat = 10
-    /// Cards and rows.
-    public static let card: CGFloat = 14
+    /// Cards and banners.
+    public static let card: CGFloat = 16
     /// The hub's content panel and dialogs.
-    public static let panel: CGFloat = 20
+    public static let panel: CGFloat = 24
   }
 
   /// Line widths, in points.

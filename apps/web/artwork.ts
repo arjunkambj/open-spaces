@@ -15,9 +15,9 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 const appIcon = resolve(root, "../../assets/icon-1024.png");
 const source = (picture: Picture, scheme: string) => resolve(root, `src/images/${picture.name}-${scheme}.png`);
 
-const paper = "#f5f5f4"; // stone-100
-const ink = "#1c1917"; // stone-900
-const quiet = "#57534e"; // stone-600
+const paper = "#ffffff"; // the app's panel white
+const ink = "#0d0d0d"; // the app's ink
+const quiet = "#5d5d5d"; // the app's secondary grey
 
 /** The app icon as a square PNG. With `background`, the clear corners are filled in. */
 function iconPng(size: number, background?: string): Promise<Buffer> {

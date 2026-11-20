@@ -53,7 +53,7 @@ public struct RootScreen: View {
       // The same picture as the launch screen, so nothing flashes while the library loads.
       ZStack {
         Spaces.Color.panel.ignoresSafeArea()
-        SpacesGlyph(size: 44)
+        SpacesGlyph(size: 32)
       }
     } else if !session.model.settings.isOnboarded {
       OnboardingFlow(practice: AnyView(KeyboardSetupStep()))

@@ -5,7 +5,7 @@ export function Brand() {
   return (
     <a href="/" className="flex items-center gap-2">
       <img src="/brand.png" alt="" width={32} height={32} className="size-8" />
-      <span className="font-rounded text-[17px] font-semibold tracking-tight">{site.name}</span>
+      <span className="text-[17px] font-semibold tracking-tight">{site.name}</span>
     </a>
   );
 }

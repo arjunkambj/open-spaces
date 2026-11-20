@@ -35,29 +35,31 @@ extension Spaces.TextStyle {
     var lineSpacing: CGFloat = 0
   }
 
+  /// Sizes in points. Headings are semibold, never bold; body text is regular and every
+  /// line gets air (about 20 points of line for 14-point text on a Mac, 22 for 17 on iPhone).
   func metrics(_ idiom: Spaces.Idiom) -> Metrics {
     let phone = idiom == .phone
     switch self {
     case .pageTitle:
-      return Metrics(size: phone ? 32 : 26, weight: phone ? .bold : .semibold, tracking: -0.5)
+      return Metrics(size: phone ? 28 : 24, weight: .semibold, tracking: phone ? -0.4 : -0.3)
     case .hero:
-      return Metrics(size: phone ? 30 : 32, weight: phone ? .bold : .semibold, tracking: -0.7)
+      return Metrics(size: phone ? 30 : 32, weight: .semibold, tracking: phone ? -0.5 : -0.6)
     case .cardTitle:
-      return Metrics(size: phone ? 18 : 17, weight: .semibold, tracking: -0.2)
+      return Metrics(size: phone ? 18 : 16, weight: .semibold, tracking: phone ? -0.2 : -0.1)
     case .body:
-      return Metrics(size: phone ? 17 : 15, weight: .regular, lineSpacing: 3)
+      return Metrics(size: phone ? 17 : 14, weight: .regular, lineSpacing: phone ? 5 : 4)
     case .bodyStrong:
-      return Metrics(size: phone ? 17 : 15, weight: .medium, lineSpacing: 3)
+      return Metrics(size: phone ? 17 : 14, weight: .medium, lineSpacing: phone ? 5 : 4)
     case .caption:
-      return Metrics(size: phone ? 14 : 13, weight: .regular, lineSpacing: 2)
+      return Metrics(size: phone ? 14 : 12, weight: .regular, lineSpacing: phone ? 3 : 4)
     case .captionStrong:
-      return Metrics(size: phone ? 14 : 13, weight: .medium)
+      return Metrics(size: phone ? 14 : 12, weight: .medium)
     case .sectionLabel:
-      return Metrics(size: phone ? 14 : 13, weight: .medium)
+      return Metrics(size: phone ? 14 : 12, weight: .medium)
     case .mono:
-      return Metrics(size: phone ? 14 : 13, weight: .regular, design: .monospaced)
+      return Metrics(size: phone ? 14 : 12.5, weight: .regular, design: .monospaced)
     case .keyCap:
-      return Metrics(size: phone ? 14 : 13, weight: .medium)
+      return Metrics(size: phone ? 14 : 12, weight: .medium)
     }
   }
 

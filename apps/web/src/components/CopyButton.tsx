@@ -20,7 +20,7 @@ export function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={() => navigator.clipboard.writeText(text).then(() => setCopied(true))}
-      className="rounded-md px-2 py-1 font-sans text-xs font-medium text-stone-300 ring-1 ring-white/15 transition-colors duration-150 hover:bg-white/10 hover:text-white"
+      className="rounded-md px-2 py-1 font-sans text-xs font-medium text-neutral-300 ring-1 ring-white/15 transition-colors duration-150 hover:bg-white/10 hover:text-white"
     >
       <span aria-live="polite">{copied ? copy.done : copy.button}</span>
     </button>

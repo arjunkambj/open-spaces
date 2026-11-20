@@ -38,7 +38,7 @@ public struct PageSection<Content: View, Trailing: View>: View {
   }
 
   public var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: Spaces.Space.s) {
       HStack(spacing: Spaces.Space.s) {
         SectionLabel(title)
         Spacer(minLength: 0)
@@ -67,7 +67,7 @@ public struct Hairline: View {
 public enum CardStyle: Sendable {
   /// No box at all: rows sit on the page with hairlines between them. For lists of content.
   case plain
-  /// A warm-grey fill, no border. For groups of settings and things that are live.
+  /// A light grey fill, no border. For groups of settings and things that are live.
   case filled
   /// A hairline border, no fill. For one thing set apart on a page.
   case outlined
@@ -129,14 +129,18 @@ extension View {
   }
 }
 
-/// A rounded container for a group of content: a warm-grey fill, or just an outline.
+/// A rounded container for a group of content: a light grey fill, or just an outline.
 public struct Card<Content: View>: View {
   private let style: CardStyle
   private let padding: CGFloat
   private let content: Content
 
   /// - padding: space inside the card. Use `0` when the card holds rows, which bring their own.
-  public init(_ style: CardStyle = .filled, padding: CGFloat = 20, @ViewBuilder content: () -> Content) {
+  public init(
+    _ style: CardStyle = .filled,
+    padding: CGFloat = Spaces.Space.xl,
+    @ViewBuilder content: () -> Content
+  ) {
     self.style = style
     self.padding = padding
     self.content = content()

@@ -49,7 +49,7 @@ public struct SpacesTextField: View {
       .focused($isFocused)
       .focusEffectDisabled()
       .padding(.horizontal, Spaces.Space.m)
-      .frame(minHeight: idiom == .phone ? 48 : 38)
+      .frame(minHeight: idiom == .phone ? 48 : 36)
       .fieldBox(isFocused: isFocused, hasError: error != nil)
       .accessibilityLabel(label ?? placeholder)
       .onAppear {
@@ -129,7 +129,7 @@ private struct FieldFrame<Field: View>: View {
   @ViewBuilder let field: Field
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: Spaces.Space.s) {
       if let label {
         Text(label).spacesText(.captionStrong)
       }
@@ -143,7 +143,7 @@ private struct FieldFrame<Field: View>: View {
   }
 }
 
-/// The white box, border and focus look shared by every field.
+/// The box, border and focus look shared by every field.
 private struct FieldBox: ViewModifier {
   let isFocused: Bool
   let hasError: Bool
@@ -220,7 +220,7 @@ public struct SearchField: View {
 
   private var field: some View {
     let phone = idiom == .phone
-    let shape = RoundedRectangle(cornerRadius: Spaces.Radius.control, style: .continuous)
+    let shape = PillShape()
     return HStack(spacing: Spaces.Space.s) {
       Image(systemName: "magnifyingglass")
         .font(.system(size: phone ? 16 : 13, weight: .medium))
@@ -243,12 +243,12 @@ public struct SearchField: View {
         .accessibilityLabel("Clear search")
       }
     }
-    .padding(.horizontal, phone ? Spaces.Space.m : 10)
+    .padding(.horizontal, Spaces.Space.m)
     .frame(width: phone ? nil : 220, height: phone ? 44 : 32)
     .background(phone ? Spaces.Color.surface : Spaces.Color.raised, in: shape)
     .overlay {
       shape.strokeBorder(
-        isFocused ? Spaces.Color.textPrimary : Spaces.Color.borderStrong,
+        isFocused ? Spaces.Color.textPrimary : phone ? .clear : Spaces.Color.borderStrong,
         lineWidth: Spaces.Stroke.hairline
       )
     }

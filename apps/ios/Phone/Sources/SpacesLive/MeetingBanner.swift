@@ -50,7 +50,7 @@ public struct RecordingMark: View {
   }
 
   public var body: some View {
-    SpacesGlyph(size: size * 0.45, tint: .white)
+    SpacesGlyph(size: size * 0.26, tint: .white)
       .frame(width: size, height: size)
       .background(Spaces.Color.recording, in: Circle())
       .accessibilityLabel("Spaces is recording")

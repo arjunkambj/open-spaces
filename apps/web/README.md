@@ -167,7 +167,7 @@ src/fonts/           the serif typeface
 src/images/          pictures of the app
 ```
 
-The look follows the app: the warm "stone" greys, the app's pine green as the one accent, few boxes. See [`packages/ui/COMPONENTS.md`](../../packages/ui/COMPONENTS.md). The only motion is CSS: the pill's bars, and the words at the top arriving once. People who ask their system for less motion see the finished state at once.
+The look follows the app: black and white with neutral greys, no accent colour, few boxes. See [`packages/ui/COMPONENTS.md`](../../packages/ui/COMPONENTS.md). The only motion is CSS: the pill's bars, and the words at the top arriving once. People who ask their system for less motion see the finished state at once.
 
 ## Licence
 

@@ -124,8 +124,8 @@ private struct FoundationsGallery: View {
         HStack(spacing: Spaces.Space.l) {
           radius("small 6", Spaces.Radius.small)
           radius("control 10", Spaces.Radius.control)
-          radius("card 14", Spaces.Radius.card)
-          radius("panel 20", Spaces.Radius.panel)
+          radius("card 16", Spaces.Radius.card)
+          radius("panel 24", Spaces.Radius.panel)
         }
       }
       GalleryGroup(title: "Space") {
@@ -390,11 +390,11 @@ private struct SettingsGroups: View {
           KeyCapRow(["fn"])
           Button("Change") {}.buttonStyle(.spaces(.tertiary, size: .small))
         }
-        Hairline().padding(.horizontal, 20)
+        Hairline().padding(.horizontal, Spaces.Space.xl)
         SettingRow("Microphone", description: "Built-in microphone") {
           Button("Change") {}.buttonStyle(.spaces())
         }
-        Hairline().padding(.horizontal, 20)
+        Hairline().padding(.horizontal, Spaces.Space.xl)
         SettingRow("Theme") {
           Dropdown("Theme", selection: $theme, options: SampleTheme.allCases) { $0.rawValue }
         }
@@ -403,7 +403,7 @@ private struct SettingsGroups: View {
     PageSection("App") {
       Card(padding: 0) {
         ToggleRow("Open at login", isOn: $launch)
-        Hairline().padding(.horizontal, 20)
+        Hairline().padding(.horizontal, Spaces.Space.xl)
         ToggleRow(
           "Sounds",
           description: "Play a soft sound when dictation starts and stops.",
@@ -689,9 +689,9 @@ private struct PhoneControlsGallery: View {
       )
       Card(padding: 0) {
         ToggleRow("Sounds", description: "Play a soft sound when dictation starts.", isOn: $on)
-        Hairline().padding(.horizontal, 20)
+        Hairline().padding(.horizontal, Spaces.Space.xl)
         ToggleRow("Keep audio", isOn: $off)
-        Hairline().padding(.horizontal, 20)
+        Hairline().padding(.horizontal, Spaces.Space.xl)
         SettingRow("Theme") {
           Dropdown("Theme", selection: $theme, options: SampleTheme.allCases) { $0.rawValue }
         }

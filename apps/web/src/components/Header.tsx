@@ -11,7 +11,7 @@ export function Header() {
           <a
             key={item.href}
             href={item.href}
-            className={`text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white ${
+            className={`text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white ${
               index < nav.length - 1 ? "hidden md:block" : ""
             }`}
           >

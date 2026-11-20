@@ -35,7 +35,7 @@ public struct DialogCard<Content: View, Footer: View>: View {
     let phone = idiom == .phone
     VStack(alignment: .leading, spacing: 0) {
       HStack(alignment: .top, spacing: Spaces.Space.m) {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spaces.Space.s) {
           Text(title)
             .spacesText(.cardTitle)
             .accessibilityAddTraits(.isHeader)
@@ -54,7 +54,7 @@ public struct DialogCard<Content: View, Footer: View>: View {
             .padding(.trailing, -6)
         }
       }
-      .padding(.bottom, Spaces.Space.l)
+      .padding(.bottom, Spaces.Space.xl)
 
       VStack(alignment: .leading, spacing: Spaces.Space.l) { content }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -65,7 +65,7 @@ public struct DialogCard<Content: View, Footer: View>: View {
           .padding(.top, Spaces.Space.xl)
       }
     }
-    .padding(phone ? 20 : Spaces.Space.xl)
+    .padding(phone ? Spaces.Space.xl : Spaces.Space.xxl)
     .frame(maxWidth: phone ? .infinity : width, alignment: .topLeading)
     .modalSurface()
   }
@@ -82,7 +82,7 @@ private struct ModalSurface: ViewModifier {
       let shape = RoundedRectangle(cornerRadius: Spaces.Radius.panel, style: .continuous)
       content
         .background {
-          shape.fill(Spaces.Color.raised).shadow(color: .black.opacity(0.22), radius: 30, y: 12)
+          shape.fill(Spaces.Color.raised).shadow(color: .black.opacity(0.16), radius: 32, y: 12)
         }
         .clipShape(shape)
         .overlay { shape.strokeBorder(Spaces.Color.border, lineWidth: Spaces.Stroke.hairline) }
@@ -173,9 +173,13 @@ private struct ModalModifier<ModalContent: View>: ViewModifier {
           }
           .padding(.bottom, Spaces.Space.l)
           .background {
-            UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28, style: .continuous)
-              .fill(Spaces.Color.panel)
-              .ignoresSafeArea(edges: .bottom)
+            UnevenRoundedRectangle(
+              topLeadingRadius: Spaces.Radius.panel,
+              topTrailingRadius: Spaces.Radius.panel,
+              style: .continuous
+            )
+            .fill(Spaces.Color.panel)
+            .ignoresSafeArea(edges: .bottom)
           }
       }
     }

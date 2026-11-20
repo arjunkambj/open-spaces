@@ -5,7 +5,7 @@ import SwiftUI
 /// Sizes the settings and onboarding screens share with the kit's setting rows.
 enum SetupMetrics {
   /// The side inset of a `SettingRow`, so our own rows and dividers line up with it.
-  static let rowInset: CGFloat = 20
+  static let rowInset = Spaces.Space.xl
   /// The width of a text field that sits at the end of a row on a Mac.
   static let rowFieldWidth: CGFloat = 240
   /// The widest a block of reading text gets.
