@@ -749,7 +749,11 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     var facts = ["**Date:** \(dateFormat.string(from: startedAt))"]
     if duration > 0 { facts.append("**Length:** \(max(1, Meeting.wholeSeconds(duration + 30) / 60)) min") }
     if !tags.isEmpty { facts.append("**Tags:** \(tags.joined(separator: ", "))") }
-    if !attendees.isEmpty { facts.append("**Attendees:** \(attendees.joined(separator: ", "))") }
+    if !attendees.isEmpty {
+      // Names come from calendar invites: one line each, so a name can never add lines here.
+      let names = attendees.map { $0.split(whereSeparator: \.isNewline).joined(separator: " ") }
+      facts.append("**Attendees:** \(names.joined(separator: ", "))")
+    }
     lines.append(facts.joined(separator: "  \n"))
     func section(_ heading: String, _ body: [String]) {
       guard !body.isEmpty else { return }
