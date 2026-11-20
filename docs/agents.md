@@ -21,7 +21,8 @@ tool where `spaces` is, and it can then use everything listed on this page.
 - **Export.** Get a meeting as one Markdown document, or save it to a new `.md` file.
 - **Record.** Start and stop a meeting recording in the running app, and check whether one is running.
 - **Dictation history.** Read and search what you dictated.
-- **Dictionary and snippets.** Teach Spaces how to spell a name, and add or remove voice snippets.
+- **Dictionary and snippets.** Teach Spaces how to spell a name, and add or remove voice snippets. A
+  snippet can also be a saved command: say its phrase in command mode and its text is the instruction.
 - **Read a few settings.** Your name, language and model choices. Never the API key.
 
 ## Where the program is
@@ -378,8 +379,8 @@ narrow on purpose:
 **Titles and tags are one line.** Line breaks and invisible control characters in a title, a tag, an owner
 or an action item are turned into spaces. A title can never add a line of its own to an exported file.
 
-**Text the app types later is checked.** A snippet is typed into whatever app you are dictating into, and
-a dictionary word changes what you dictate. So:
+**Text the app types later is checked.** A snippet is typed into whatever app you are dictating into (or,
+in command mode, sent as the instruction), and a dictionary word changes what you dictate. So:
 
 - A dictionary word, and the form it replaces, is one line of at most 80 characters.
 - A snippet's trigger is one line of at most 60 characters, and either two or more words or one word of at

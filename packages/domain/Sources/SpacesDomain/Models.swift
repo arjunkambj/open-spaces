@@ -310,7 +310,8 @@ public enum ShortcutAction: String, Codable, Sendable, CaseIterable, Hashable {
     switch self {
     case .pushToTalk: "Hold to dictate. Release to insert the text."
     case .handsFree: "Press once to start dictating. Press again to stop."
-    case .commandMode: "Select text, hold, and say how to change it."
+    case .commandMode:
+      "Select text, hold, and say how to change it. A snippet can hold a command you use often."
     case .pasteLast: "Insert your most recent dictation again."
     case .toggleMeeting: "Record a meeting from anywhere."
     }

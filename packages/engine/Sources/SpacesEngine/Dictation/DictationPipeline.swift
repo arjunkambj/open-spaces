@@ -4,9 +4,10 @@ import SpacesDomain
 /// Turns one recording into the text to insert.
 ///
 /// Transcribes, applies the dictionary, then either tidies the words
-/// (dictation) or carries out the spoken instruction (command mode). It reads
-/// from the library but changes nothing: looking at the target, inserting and
-/// saving are the engine's job.
+/// (dictation) or carries out the spoken instruction (command mode). In command
+/// mode, a snippet's trigger said on its own stands for the snippet's text. It
+/// reads from the library but changes nothing: looking at the target, inserting
+/// and saving are the engine's job.
 struct DictationPipeline: Sendable {
   let library: any Library
   let transcriber: any Transcriber
@@ -104,7 +105,7 @@ struct DictationPipeline: Sendable {
       // and certainly not to OpenAI instead.
       _ = try settings.apiServer()
       let words = try await library.words()
-      let snippets = mode == .dictation ? try await library.snippets() : []
+      let snippets = try await library.snippets()
       let spellings = Self.unique(words.map(\.text))
 
       let asked = ContinuousClock.now
@@ -143,7 +144,14 @@ struct DictationPipeline: Sendable {
       case .command:
         let began = ContinuousClock.now
         defer { draft.cleanUpMs = Self.milliseconds(since: began) }
-        draft.text = try await commanded(heard, selection: selection, settings: settings, setting: setting)
+        // A snippet's trigger said on its own is a saved command: its text is the instruction.
+        let instruction = DictationText.expansions(from: snippets).whole(heard) ?? heard
+        draft.text = try await commanded(
+          instruction,
+          selection: selection,
+          settings: settings,
+          setting: setting
+        )
       }
       try Task.checkCancellation()
       return .written(draft)

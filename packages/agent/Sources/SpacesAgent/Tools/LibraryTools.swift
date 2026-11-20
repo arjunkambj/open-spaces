@@ -108,8 +108,10 @@ extension Catalogue {
         "Adds a voice shortcut: from then on, whenever the user says the trigger while dictating, the app "
         + "types the expansion instead, into whatever app they are using at that moment (a chat, an "
         + "email, a terminal). So only add a snippet the user asked for, with exactly the text they "
-        + "asked for. Good for links, addresses and text the user repeats often. The trigger is one "
-        + "line of two or more words, or one word of at least \(Toolbox.shortestTrigger) letters. It "
+        + "asked for. Good for links, addresses and text the user repeats often. In command mode, saying "
+        + "the trigger on its own sends the expansion as the instruction, so a snippet can also hold a "
+        + "command the user gives often. The trigger is one line of two or more words, or one word "
+        + "of at least \(Toolbox.shortestTrigger) letters. It "
         + "fails if a snippet with the same trigger exists; remove that one first.",
       params: [
         .text(

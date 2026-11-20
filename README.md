@@ -31,10 +31,10 @@ Spaces is an independent open-source project. It is not affiliated with Wispr Fl
 
 - **Dictate anywhere.** Hold a key, talk, let go. The text is typed into the app you are using.
 - **Hands-free mode.** Press once to start, press again to stop. Good for long thoughts.
-- **Command mode.** Select some text, hold a key, and say how to change it ("make this shorter").
+- **Command mode.** Select some text, hold a key, and say how to change it ("make this shorter"). Save a command you use often as a snippet, then just say its phrase.
 - **A small pill at the edge of the screen.** It shows when Spaces is listening. Click it to dictate, or drag it to any edge; on a side edge it stands upright.
 - **Personal dictionary.** Teach it names and words it keeps getting wrong.
-- **Snippets.** Say a short phrase ("my calendar link") and get a longer piece of text.
+- **Snippets.** Say a short phrase ("my calendar link") and get a longer piece of text. In command mode, the text is your command instead.
 - **Writing style per kind of app.** Formal in email, casual in chat. You choose.
 - **History.** See what you dictated, search it, and see how many words you have dictated and how fast you speak.
 - **Your words are not lost.** If a dictation fails, its audio is kept and you can try it again from Home. (If you told the app not to keep history, nothing is kept.)
@@ -196,7 +196,7 @@ These are the defaults on macOS. You can change every one of them in Settings.
 | --- | --- | --- |
 | Push to talk | Hold `fn` | Hold to dictate. Release to insert the text. |
 | Hands-free mode | `fn` + `Space` | Press once to start dictating. Press again to stop. |
-| Command mode | Hold `fn` + `⌃ Control` | Select text, hold, and say how to change it. |
+| Command mode | Hold `fn` + `⌃ Control` | Select text, hold, and say how to change it. A snippet can hold a command you use often. |
 | Paste last transcript | `⌃ Control` + `⌘ Command` + `V` | Insert your most recent dictation again. |
 | Start or stop meeting recording | `⌃ Control` + `⌥ Option` + `M` | Record a meeting from anywhere. |
 

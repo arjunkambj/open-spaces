@@ -61,7 +61,7 @@ public struct SnippetsScreen: View {
     .dialog(
       isPresented: $isEditing,
       title: editor.original == nil ? "Add a snippet" : "Edit snippet",
-      subtitle: "Say the phrase while you dictate and the text is typed in its place.",
+      subtitle: editorHint,
       width: Self.dialogWidth
     ) {
       SnippetEditorFields(editor: $editor, snippets: model.snippets, onSubmit: save)
@@ -87,6 +87,12 @@ public struct SnippetsScreen: View {
       Button("Cancel") { isConfirmingDelete = false }.buttonStyle(.spaces()).keyboardShortcut(.defaultAction)
       Button("Delete") { confirmDelete() }.buttonStyle(.spaces(.destructive))
     }
+  }
+
+  /// Only the Mac has command mode, so only the Mac says a snippet can be a command.
+  private var editorHint: String {
+    let typed = "Say the phrase while you dictate and the text is typed in its place."
+    return idiom == .mac ? typed + " Say it in command mode and the text is your command." : typed
   }
 
   private var showsSearch: Bool {
