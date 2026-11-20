@@ -370,6 +370,7 @@ public actor FileLibrary: Library {
       if !tidied {
         tidied = true
         FileAccess.removeStaleTemporaryFiles(in: layout.root)
+        FileAccess.removeStaleTemporaryFiles(in: layout.agentsFolder)
         meetingIndex.removeLeftovers()
       }
       return try body()
