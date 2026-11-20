@@ -1,22 +1,22 @@
 {
-  "name": "@open-wisper/macos",
+  "name": "@open-spaces/macos",
   "version": "0.1.2",
   "private": true,
-  "description": "Open Wisper for macOS.",
+  "description": "Spaces for macOS.",
   "scripts": {
     "build": "../../scripts/swiftw build",
     "lint": "swift format lint --strict --recursive --parallel Package.swift Sources",
     "bundle": "./scripts/bundle",
     "dmg": "./scripts/bundle && ./scripts/dmg",
-    "dev": "./scripts/bundle && open 'build/Open Wisper.app'"
+    "dev": "./scripts/bundle && open 'build/Spaces.app'"
   },
   "dependencies": {
-    "@open-wisper/domain": "workspace:*",
-    "@open-wisper/store": "workspace:*",
-    "@open-wisper/ai": "workspace:*",
-    "@open-wisper/audio": "workspace:*",
-    "@open-wisper/engine": "workspace:*",
-    "@open-wisper/ui": "workspace:*",
-    "@open-wisper/agent": "workspace:*"
+    "@open-spaces/domain": "workspace:*",
+    "@open-spaces/store": "workspace:*",
+    "@open-spaces/ai": "workspace:*",
+    "@open-spaces/audio": "workspace:*",
+    "@open-spaces/engine": "workspace:*",
+    "@open-spaces/ui": "workspace:*",
+    "@open-spaces/agent": "workspace:*"
   }
 }

@@ -3,10 +3,10 @@ name: Release
 # Pushing a tag like v0.1.0 builds the macOS app, signs it, and publishes a GitHub
 # Release with three files:
 #
-#   Open-Wisper-0.1.0.dmg   the disk image; installed apps download this one to update
-#   Open-Wisper.dmg         the same disk image under a name that never changes, so the
+#   Spaces-0.1.0.dmg   the disk image; installed apps download this one to update
+#   Spaces.dmg         the same disk image under a name that never changes, so the
 #                           website's Download button can always point at
-#                           releases/latest/download/Open-Wisper.dmg
+#                           releases/latest/download/Spaces.dmg
 #   appcast.xml             the list of versions the app reads to update itself
 #
 # Apps that are already installed ask for
@@ -66,8 +66,8 @@ jobs:
             echo "::error::The tag is $TAG, but apps/macos/package.json says version $version. Raise the version there, commit, and tag that commit as v$version."
             exit 1
           fi
-          echo "OPEN_WISPER_VERSION=$wanted" >> "$GITHUB_ENV"
-          echo "OPEN_WISPER_SIGNING_DIR=$RUNNER_TEMP/open-wisper-signing" >> "$GITHUB_ENV"
+          echo "SPACES_VERSION=$wanted" >> "$GITHUB_ENV"
+          echo "SPACES_SIGNING_DIR=$RUNNER_TEMP/open-spaces-signing" >> "$GITHUB_ENV"
       - name: Put the signing keys in place
         # The secrets go into files only this job can read, and from there into a keychain
         # of their own. Nothing is printed but the public half of each key.
@@ -81,10 +81,10 @@ jobs:
             exit 1
           fi
           umask 077
-          mkdir -p "$OPEN_WISPER_SIGNING_DIR"
-          printf '%s' "$MAC_SIGNING_P12_BASE64" | base64 --decode > "$OPEN_WISPER_SIGNING_DIR/identity.p12"
-          printf '%s\n' "$MAC_SIGNING_P12_PASSWORD" > "$OPEN_WISPER_SIGNING_DIR/identity.p12.password"
-          printf '%s\n' "$SPARKLE_ED_PRIVATE_KEY" > "$OPEN_WISPER_SIGNING_DIR/update-key"
+          mkdir -p "$SPACES_SIGNING_DIR"
+          printf '%s' "$MAC_SIGNING_P12_BASE64" | base64 --decode > "$SPACES_SIGNING_DIR/identity.p12"
+          printf '%s\n' "$MAC_SIGNING_P12_PASSWORD" > "$SPACES_SIGNING_DIR/identity.p12.password"
+          printf '%s\n' "$SPARKLE_ED_PRIVATE_KEY" > "$SPACES_SIGNING_DIR/update-key"
           scripts/setup-signing
       - name: Build and sign the app
         working-directory: apps/macos
@@ -134,7 +134,7 @@ jobs:
           echo "Build $new is newer than $newest_tag (build $old)."
       - name: Write the release notes
         run: |
-          dmg="Open-Wisper-$OPEN_WISPER_VERSION.dmg"
+          dmg="Spaces-$SPACES_VERSION.dmg"
           sha="$(shasum -a 256 "apps/macos/build/update/$dmg" | cut -d' ' -f1)"
           sed -e "s/{{TAG}}/$TAG/g" -e "s/{{DMG}}/$dmg/g" -e "s/{{SHA256}}/$sha/g" \
             .github/release-notes.md > release-notes.md
@@ -143,11 +143,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          dmg="apps/macos/build/update/Open-Wisper-$OPEN_WISPER_VERSION.dmg"
+          dmg="apps/macos/build/update/Spaces-$SPACES_VERSION.dmg"
           feed="apps/macos/build/update/appcast.xml"
           # A copy with a fixed name, for the website. It is made outside build/update, and
           # after the feed was written and checked: the feed names only the versioned file.
-          fixed="$RUNNER_TEMP/Open-Wisper.dmg"
+          fixed="$RUNNER_TEMP/Spaces.dmg"
           cp "$dmg" "$fixed"
           cmp "$dmg" "$fixed"
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -158,13 +158,13 @@ jobs:
           else
             prerelease=()
             [[ "$TAG" == *-* ]] && prerelease=(--prerelease)
-            gh release create "$TAG" "$dmg" "$fixed" "$feed" --verify-tag --title "Open Wisper $TAG" \
+            gh release create "$TAG" "$dmg" "$fixed" "$feed" --verify-tag --title "Spaces $TAG" \
               --notes-file release-notes.md --generate-notes "${prerelease[@]}"
           fi
       - name: Remove the signing keys
         if: always()
         run: |
-          if [[ -n "${OPEN_WISPER_SIGNING_DIR:-}" ]]; then
-            security delete-keychain "$OPEN_WISPER_SIGNING_DIR/signing.keychain-db" 2>/dev/null || true
-            rm -rf "$OPEN_WISPER_SIGNING_DIR"
+          if [[ -n "${SPACES_SIGNING_DIR:-}" ]]; then
+            security delete-keychain "$SPACES_SIGNING_DIR/signing.keychain-db" 2>/dev/null || true
+            rm -rf "$SPACES_SIGNING_DIR"
           fi

@@ -3,19 +3,19 @@ import PackageDescription
 
 // Microphone and system-audio capture.
 let package = Package(
-  name: "WisperAudio",
+  name: "SpacesAudio",
   platforms: [.macOS("14.4"), .iOS(.v17)],
   products: [
-    .library(name: "WisperAudio", targets: ["WisperAudio"])
+    .library(name: "SpacesAudio", targets: ["SpacesAudio"])
   ],
   dependencies: [
     .package(path: "../domain")
   ],
   targets: [
     .target(
-      name: "WisperAudio",
+      name: "SpacesAudio",
       dependencies: [
-        .product(name: "WisperDomain", package: "domain")
+        .product(name: "SpacesDomain", package: "domain")
       ]
     )
   ]

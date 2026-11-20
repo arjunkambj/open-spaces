@@ -1,6 +1,6 @@
 # Security
 
-Open Wisper handles your voice, your text and your OpenAI API key, so we take security reports seriously.
+Spaces handles your voice, your text and your OpenAI API key, so we take security reports seriously.
 
 ## How to report a problem
 
@@ -8,7 +8,7 @@ Open Wisper handles your voice, your text and your OpenAI API key, so we take se
 
 Report it privately instead:
 
-1. Go to the [Security tab](https://github.com/arjunkambj/open-wisper/security) of this repository.
+1. Go to the [Security tab](https://github.com/arjunkambj/open-spaces/security) of this repository.
 2. Click **Report a vulnerability**.
 3. Tell us what you found, how to make it happen, and what an attacker could do with it.
 
@@ -28,7 +28,7 @@ This is a small volunteer project, so we cannot promise fixed times. We will try
 
 Only the newest release and the `main` branch. The project is young and there are no long-lived older versions.
 
-## How Open Wisper protects your data
+## How Spaces protects your data
 
 Knowing the design helps you judge what counts as a problem.
 
@@ -36,24 +36,24 @@ Knowing the design helps you judge what counts as a problem.
 
 - **It lives only in one private file**, `api-key.json`, on this device. Only your user account can open it. The file is left out of iCloud Backup and Time Machine. It is never written to any other file, a log or an error message.
 - **Why not the Keychain.** The Keychain asked for your password or a yes each time dictation started. A plain private file does not. The trade-off: any program running as you can read that file, the same as your other files, and macOS does not ask you first. That includes an AI agent that can run commands on your Mac.
-- **If you move the data folder** with `OPEN_WISPER_HOME` into a synced folder (iCloud Drive, Dropbox), the key file goes with it. If you zip the folder to share it, leave `api-key.json` out.
+- **If you move the data folder** with `SPACES_HOME` into a synced folder (iCloud Drive, Dropbox), the key file goes with it. If you zip the folder to share it, leave `api-key.json` out.
 - **It belongs to one server.** The key is saved together with the name of the server it is for, and it is sent only to that server. If the server address in your settings changes, by your hand or anyone else's, the key is not sent to the new address.
-- **A wrong server address is an error.** A custom address must start with `http://` or `https://` and name a server. If it does not, nothing is sent anywhere. Open Wisper never quietly sends your audio to OpenAI instead.
+- **A wrong server address is an error.** A custom address must start with `http://` or `https://` and name a server. If it does not, nothing is sent anywhere. Spaces never quietly sends your audio to OpenAI instead.
 
 ### Your data
 
-- **Everything else stays on your device** as plain files in the app's data folder. The folder and its files can be opened by your user account only. They are not encrypted by Open Wisper. Anything that runs as you can read them, the same as your documents.
-- **Your audio and text go only** to OpenAI, or to the compatible server you chose, to be turned into text and notes. There is no Open Wisper server, no account, no analytics and no tracking.
+- **Everything else stays on your device** as plain files in the app's data folder. The folder and its files can be opened by your user account only. They are not encrypted by Spaces. Anything that runs as you can read them, the same as your documents.
+- **Your audio and text go only** to OpenAI, or to the compatible server you chose, to be turned into text and notes. There is no Spaces server, no account, no analytics and no tracking.
 - **The Mac app makes one other kind of request:** about once a day it asks GitHub whether there is a newer version, and it downloads that version when you say yes. The request carries the app's name and version. It carries none of your data and nothing about your Mac. "Updates" below has the details.
-- **On a Mac, text is typed by pasting.** Open Wisper borrows the clipboard for a moment and then puts back what you had there. The text it places is marked so that clipboard-history apps know to skip it.
+- **On a Mac, text is typed by pasting.** Spaces borrows the clipboard for a moment and then puts back what you had there. The text it places is marked so that clipboard-history apps know to skip it.
 - **On an iPhone, your text goes to the clipboard.** That copy stays on the phone (it is not handed to your other Apple devices) and iOS clears it after 10 minutes.
 
 ### Links
 
-Open Wisper answers links that start with `openwisper://`. Any web page, document or app can open such a link, so a link alone is never enough to make the app listen.
+Spaces answers links that start with `openspaces://`. Any web page, document or app can open such a link, so a link alone is never enough to make the app listen.
 
 - A link that only shows something (the main window, a meeting) is always followed.
-- The `wisper` tool, and the Open Wisper keyboard on iPhone, leave a **ticket** in the data folder before they send a link: a long random name that works once, for one minute. Only a program that can already write your Open Wisper data can leave one. A link with a valid ticket is followed at once.
+- The `spaces` tool, and the Spaces keyboard on iPhone, leave a **ticket** in the data folder before they send a link: a long random name that works once, for one minute. Only a program that can already write your Spaces data can leave one. A link with a valid ticket is followed at once.
 - A link with no ticket that asks to **record a meeting** makes the app ask you first. There is one question at a time, and after a "no" it does not ask again for a minute.
 - A link with no ticket that asks to **start dictation** or **stop a recording** is not followed. (On iPhone, a dictation link shows the Dictate screen and waits for you to tap.)
 - On a Mac, a meeting that a link started always plays the start sound, also when sounds are switched off.
@@ -61,7 +61,7 @@ Open Wisper answers links that start with `openwisper://`. Any web page, documen
 
 ### The agent tool
 
-The `wisper` command-line tool, which is also the MCP server, runs on your own Mac and works with the same local files.
+The `spaces` command-line tool, which is also the MCP server, runs on your own Mac and works with the same local files.
 
 - It **can** read your meetings, notes, dictation history, dictionary and snippets, change a meeting's title, notes, tags and action items, delete a meeting, add and remove dictionary words and snippets, and ask the app to start or stop a meeting recording.
 - It **cannot** read your API key (it has no code that opens the key file), change your settings or your server address, start dictation, type into another app, run a command, or use the network.
@@ -87,11 +87,11 @@ An app you built yourself, with your own certificate or none, does not look for 
 
 - The API key ending up anywhere other than its own file or the server it was saved for.
 - Audio or text being sent to any place other than the server you set.
-- A web page, a document or a link making Open Wisper start dictation, record a meeting without asking you, or stop a recording.
+- A web page, a document or a link making Spaces start dictation, record a meeting without asking you, or stop a recording.
 - The agent tool reading the API key, changing settings, replacing a file, or writing a file it should have refused.
 - The app installing an update that was not signed with the project's update key, or an older version than the one it had.
 - A signing key showing up anywhere it should not be: in the source code, in a build log, or in a release.
-- Another user account on the same Mac being able to read your Open Wisper data.
+- Another user account on the same Mac being able to read your Spaces data.
 
 ## Not security problems
 

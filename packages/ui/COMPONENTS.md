@@ -1,25 +1,25 @@
-# WisperUI components
+# SpacesUI components
 
-The one page to read before building a screen. Everything here is `public` in the module `WisperUI` and works on macOS 14.4+ and iOS 17+.
+The one page to read before building a screen. Everything here is `public` in the module `SpacesUI` and works on macOS 14.4+ and iOS 17+.
 
 The look: a quiet tool on warm paper. The greys are the "stone" scale (a warm grey; the steps are listed in `Design/Colors.swift`): a stone-100 window, a slightly lighter stone-50 page, and as few boxes as possible: lists sit right on the page with hairlines between their rows, and only groups of settings and things that are live get a soft warm-grey fill. One type voice, the system sans (SF), with size, weight and space doing the work that colour and borders would. Near-black primary buttons. One accent colour, a deep pine green, used sparingly. Dark mode is warm near-black.
 
 ## Rules
 
-- **No literals in screens.** No `Color(...)`, `.font(.system(...))`, raw paddings or corner radii. Use `Wisper.Color`, `.wisperText`, `Wisper.Space`, `Wisper.Radius`. If a token is missing, add it to the kit, not to the screen.
+- **No literals in screens.** No `Color(...)`, `.font(.system(...))`, raw paddings or corner radii. Use `Spaces.Color`, `.spacesText`, `Spaces.Space`, `Spaces.Radius`. If a token is missing, add it to the kit, not to the screen.
 - **Start every screen with `Page`.** It gives the title, the width, the scrolling and the paddings on both platforms.
 - **Build from the kit.** A list is a `CardList` of `ListRow`s. A settings group is a `Card(padding: 0)` of `SettingRow`s and `ToggleRow`s. An empty list is an `EmptyState`. A form in a popup is a `.dialog`.
 - **A box needs a reason.** Never a fill and a border together. Content lists are plain (no box). A fill groups settings or marks something live. A border is for things you type or choose in, and for the one item set apart on a page.
 - **Nothing that sells.** No banners that introduce a feature, no numbers shown off, no tips that must be dismissed. Say how a thing works in the empty state, or in one quiet line under the title.
 - **One primary button per screen or dialog.** Everything else is secondary, tertiary or ghost.
 - **Accent is rare.** Links, a badge, a progress bar, the live waveform. Never large fills.
-- **Never read the platform with `#if os(...)` for layout.** Read `@Environment(\.wisperIdiom)` (`.mac` or `.phone`). The snapshot tool sets it, which is how iPhone layouts are drawn on a Mac. Use `#if os(...)` only for APIs that do not exist on the other platform.
+- **Never read the platform with `#if os(...)` for layout.** Read `@Environment(\.spacesIdiom)` (`.mac` or `.phone`). The snapshot tool sets it, which is how iPhone layouts are drawn on a Mac. Use `#if os(...)` only for APIs that do not exist on the other platform.
 - **Every control needs a VoiceOver name.** The kit asks for one where it cannot guess it (`IconButton(label:)`, `Dropdown("…")`).
 - **Text is plain English.** Short sentences, no jargon.
 
 ## Tokens
 
-### Colours: `Wisper.Color.<name>`
+### Colours: `Spaces.Color.<name>`
 
 Each is a SwiftUI `Color` that follows light and dark mode by itself.
 
@@ -40,13 +40,13 @@ Each is a SwiftUI `Color` that follows light and dark mode by itself.
 | `scrim` | The dim layer behind a dialog |
 
 ```swift
-Text("Saved").foregroundStyle(Wisper.Color.success)
-RoundedRectangle(cornerRadius: Wisper.Radius.card).fill(Wisper.Color.surface)
+Text("Saved").foregroundStyle(Spaces.Color.success)
+RoundedRectangle(cornerRadius: Spaces.Radius.card).fill(Spaces.Color.surface)
 ```
 
-### Text: `.wisperText(_ style:, color:)`
+### Text: `.spacesText(_ style:, color:)`
 
-Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. (The name "Open Wisper" in `Wordmark` is the one place rounded letters are used, to go with the rounded line of the mark.) Sizes follow the idiom and Dynamic Type.
+Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. (The name "Spaces" in `Wordmark` is the one place rounded letters are used, to go with the rounded line of the mark.) Sizes follow the idiom and Dynamic Type.
 
 | Style | Mac / iPhone | Use |
 | --- | --- | --- |
@@ -60,30 +60,30 @@ Sets font, letter spacing and colour. Every style is the system sans; only `.mon
 | `.keyCap` | 13 / 14 medium | Inside key caps |
 
 ```swift
-Text("Hold fn and speak.").wisperText(.body)
-Text("9:41 am").wisperText(.caption, color: Wisper.Color.textTertiary)
+Text("Hold fn and speak.").spacesText(.body)
+Text("9:41 am").spacesText(.caption, color: Spaces.Color.textTertiary)
 ```
 
 ### Space, radius, stroke, motion
 
 ```swift
-Wisper.Space.xxs / xs / s / m / l / xl / xxl / xxxl   // 2 4 8 12 16 24 32 48
-Wisper.Radius.small / control / card / panel           // 6 10 14 20
-Wisper.Stroke.hairline / focus                         // 1 1.5
-Wisper.Motion.quick / smooth / spring                  // hover; in-screen moves; dialogs and the pill
+Spaces.Space.xxs / xs / s / m / l / xl / xxl / xxxl   // 2 4 8 12 16 24 32 48
+Spaces.Radius.small / control / card / panel           // 6 10 14 20
+Spaces.Stroke.hairline / focus                         // 1 1.5
+Spaces.Motion.quick / smooth / spring                  // hover; in-screen moves; dialogs and the pill
 ```
 
-`Wisper.Motion` presets turn into a short fade when Reduce Motion is on. `Wisper.Motion.reduceMotion` tells you if it is.
+`Spaces.Motion` presets turn into a short fade when Reduce Motion is on. `Spaces.Motion.reduceMotion` tells you if it is.
 
 ```swift
-VStack(spacing: Wisper.Space.l) { ... }
-withAnimation(Wisper.Motion.spring) { isOpen = true }
+VStack(spacing: Spaces.Space.l) { ... }
+withAnimation(Spaces.Motion.spring) { isOpen = true }
 ```
 
 ### Idiom
 
 ```swift
-@Environment(\.wisperIdiom) private var idiom   // .mac or .phone
+@Environment(\.spacesIdiom) private var idiom   // .mac or .phone
 ```
 
 ## Components
@@ -96,8 +96,8 @@ Page(title: String, subtitle: String? = nil, width: PageWidth = .regular,   // .
   .onBack { }                    // optional back button
   .titleAccessory { anyView }    // a line under the title that needs more than text, e.g. key caps
 
-Page(title: "Dictionary", subtitle: "Words Open Wisper should know.") {
-  Button("Add word") { adding = true }.buttonStyle(.wisper(.primary))
+Page(title: "Dictionary", subtitle: "Words Spaces should know.") {
+  Button("Add word") { adding = true }.buttonStyle(.spaces(.primary))
 } content: {
   CardList(model.words) { word in ListRow(word.text) }
 }
@@ -121,7 +121,7 @@ Hairline()
 PageSection("Today") {
   CardList(dictations) { dictation in
     ListRow(dictation.text) {
-      Text(time(dictation)).wisperText(.caption, color: Wisper.Color.textTertiary)
+      Text(time(dictation)).spacesText(.caption, color: Spaces.Color.textTertiary)
     } hoverActions: {
       IconButton("doc.on.doc", label: "Copy") { copy(dictation) }
       OverflowMenu { Button("Delete", role: .destructive) { delete(dictation) } }
@@ -147,18 +147,18 @@ A row you draw yourself ends with `.rowChrome(isHighlighted:)` (after its vertic
 ### Buttons
 
 ```swift
-.buttonStyle(.wisper(_ kind: = .secondary, size: = .regular, fullWidth: = false))
+.buttonStyle(.spaces(_ kind: = .secondary, size: = .regular, fullWidth: = false))
 // kind: .primary .secondary .tertiary .ghost .destructive     size: .regular .small
 IconButton(_ systemName: String, label: String, size: = .regular) { }
 OverflowMenu(label: String = "More") { Button(...) ... }      // the "…" button
 NavItem(_ title: String, systemImage: String, isSelected: Bool, badge: String? = nil) { }
-.hoverHighlight(radius: = Wisper.Radius.control, isSelected: = false)
+.hoverHighlight(radius: = Spaces.Radius.control, isSelected: = false)
 ```
 
 ```swift
-Button("Add word") { save() }.buttonStyle(.wisper(.primary))
-Button { start() } label: { Label("Start a meeting", systemImage: "record.circle") }.buttonStyle(.wisper())
-Button("Continue") { next() }.buttonStyle(.wisper(.primary, fullWidth: true))   // bottom of an iPhone screen
+Button("Add word") { save() }.buttonStyle(.spaces(.primary))
+Button { start() } label: { Label("Start a meeting", systemImage: "record.circle") }.buttonStyle(.spaces())
+Button("Continue") { next() }.buttonStyle(.spaces(.primary, fullWidth: true))   // bottom of an iPhone screen
 ```
 
 `NavItem` is the entry of the hub sidebar and of the settings navigation. `hoverHighlight` gives any custom clickable thing the same hover and selected look.
@@ -168,7 +168,7 @@ Button("Continue") { next() }.buttonStyle(.wisper(.primary, fullWidth: true))   
 ```swift
 SettingRow(_ title: String, description: String? = nil) { control }
 ToggleRow(_ title: String, description: String? = nil, isOn: Binding<Bool>)
-.toggleStyle(.wisper)
+.toggleStyle(.spaces)
 Dropdown(_ label: String, selection: Binding<Value>, options: [Value]) { value in title }
 ```
 
@@ -202,14 +202,14 @@ Underline tabs go at the top of a page. Segmented tabs are for a choice inside a
 ### Fields
 
 ```swift
-WisperTextField(_ label: String? = nil, text:, placeholder: = "", error: String? = nil, isSecure: = false,
+SpacesTextField(_ label: String? = nil, text:, placeholder: = "", error: String? = nil, isSecure: = false,
                 focusOnAppear: = false)
-WisperTextEditor(_ label: String? = nil, text:, placeholder: = "", error: String? = nil, height: = 96)
+SpacesTextEditor(_ label: String? = nil, text:, placeholder: = "", error: String? = nil, height: = 96)
 SearchField(text:, placeholder: = "Search")
 ```
 
 ```swift
-WisperTextField("OpenAI API key", text: $key, placeholder: "sk-...", error: keyError, isSecure: true)
+SpacesTextField("OpenAI API key", text: $key, placeholder: "sk-...", error: keyError, isSecure: true)
   .onSubmit { save() }
 ```
 
@@ -222,7 +222,7 @@ KeyCap(_ label: String)
 KeyCapRow(_ labels: [String])      // KeyCapRow(["fn", "Space"])
 ```
 
-The row takes labels, not key codes; the Mac app turns a `KeyCombo` into labels. (It is called `KeyCapRow` because `KeyCombo` is a model in `WisperDomain`.)
+The row takes labels, not key codes; the Mac app turns a `KeyCombo` into labels. (It is called `KeyCapRow` because `KeyCombo` is a model in `SpacesDomain`.)
 
 ### Empty states, stats, progress, notices
 
@@ -238,11 +238,11 @@ Toast(_ message: String, tone: = .success)   and   .toast(_ toast: Binding<Toast
 EmptyState("No snippets yet", message: "Save text you type often.") {
   SymbolTile("text.quote")
 } action: {
-  Button("Add snippet") { adding = true }.buttonStyle(.wisper(.tertiary))
+  Button("Add snippet") { adding = true }.buttonStyle(.spaces(.tertiary))
 }
 
 Banner(.warning, title: "No API key yet", message: "Add your OpenAI key to start dictating.") {
-  Button("Add key") { openKey() }.buttonStyle(.wisper(.tertiary, size: .small))
+  Button("Add key") { openKey() }.buttonStyle(.spaces(.tertiary, size: .small))
 }
 
 @State private var toast: Toast?
@@ -263,10 +263,10 @@ DialogCard(title:, subtitle:, width:, onClose:, content:, footer:)   // only for
 
 ```swift
 .dialog(isPresented: $adding, title: "Add a word", subtitle: "It will be spelled this way from now on.") {
-  WisperTextField(text: $word, placeholder: "Word or name", focusOnAppear: true)
+  SpacesTextField(text: $word, placeholder: "Word or name", focusOnAppear: true)
 } footer: {
-  Button("Cancel") { adding = false }.buttonStyle(.wisper())
-  Button("Add word") { save() }.buttonStyle(.wisper(.primary)).keyboardShortcut(.defaultAction)
+  Button("Cancel") { adding = false }.buttonStyle(.spaces())
+  Button("Add word") { save() }.buttonStyle(.spaces(.primary)).keyboardShortcut(.defaultAction)
     .disabled(word.isEmpty)
 }
 ```
@@ -291,17 +291,17 @@ RecordButton(_ mode: RecordButton.Mode, diameter: = 80) { }   // .idle, .recordi
 ```
 
 ```swift
-Waveform(level: Double(model.dictation.level), tint: Wisper.Color.accent, height: 40)
+Waveform(level: Double(model.dictation.level), tint: Spaces.Color.accent, height: 40)
 RecordButton(isRecording ? .recording(level: level) : .idle, diameter: 96) { toggle() }
 ```
 
-Give `Waveform` the newest level each time it changes; it smooths the motion itself. On a dark pill use `tint: Wisper.Color.onInverse`. With `axis: .vertical` the bars lie on their side, one under the other, for a tall thin place (the pill at the side of a screen); `height` is then how wide the row is.
+Give `Waveform` the newest level each time it changes; it smooths the motion itself. On a dark pill use `tint: Spaces.Color.onInverse`. With `axis: .vertical` the bars lie on their side, one under the other, for a tall thin place (the pill at the side of a screen); `height` is then how wide the row is.
 
 ### Brand
 
 ```swift
-Wordmark(size: = 20)                         // mark + "Open Wisper"
-WisperGlyph(size: = 20, tint: = textPrimary) // the mark alone
+Wordmark(size: = 20)                         // mark + "Spaces"
+SpacesGlyph(size: = 20, tint: = textPrimary) // the mark alone
 ```
 
 ## Recipes
@@ -339,8 +339,8 @@ Run and look:
 
 ```bash
 cd packages/ui
-../../scripts/swiftw run --scratch-path .build-<yours> wisper-snapshots <dir> --only <name>
-../../scripts/swiftw run --scratch-path .build-<yours> wisper-snapshots <dir> --list
+../../scripts/swiftw run --scratch-path .build-<yours> spaces-snapshots <dir> --only <name>
+../../scripts/swiftw run --scratch-path .build-<yours> spaces-snapshots <dir> --list
 ```
 
 Files are `<dir>/<name>-light.png` and `<dir>/<name>-dark.png`. `--only` takes part of a name (`--only home`). The component gallery is `--only kit-`; `kit-hub` and `kit-settings-sheet` show the kit put together. The tool shows no window and does not take focus.

@@ -58,7 +58,7 @@ for (const source of scriptSrc.trim().split(/\s+/).filter(Boolean)) {
 const version = /Version (\d+\.\d+\.\d+[^\s<]*)/.exec(html)?.[1];
 if (!version) fail("the page does not show a version");
 if (!html.includes("Where your words go")) fail("the prerendered page does not hold the page's text");
-if (!html.includes('href="https://github.com/arjunkambj/open-wisper/releases/latest/download/Open-Wisper.dmg"')) {
+if (!html.includes('href="https://github.com/arjunkambj/open-spaces/releases/latest/download/Spaces.dmg"')) {
   fail("the prerendered page has no Download link");
 }
 for (const [, attributes, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {

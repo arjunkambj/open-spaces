@@ -2,11 +2,11 @@
 # it is not a program of its own.
 #
 # In order:
-#   1. OPEN_WISPER_SIGN_IDENTITY, when set: the name or fingerprint of a certificate in your
+#   1. SPACES_SIGN_IDENTITY, when set: the name or fingerprint of a certificate in your
 #      keychains ("Developer ID Application: ..." to hand the app to other people), or "-"
-#      for no certificate. OPEN_WISPER_SIGN_KEYCHAIN may name the keychain to look in.
-#   2. The certificate that scripts/setup-signing made, in ~/.config/open-wisper/signing
-#      (or OPEN_WISPER_SIGNING_DIR). It has a keychain of its own, so signing asks for
+#      for no certificate. SPACES_SIGN_KEYCHAIN may name the keychain to look in.
+#   2. The certificate that scripts/setup-signing made, in ~/.config/open-spaces/signing
+#      (or SPACES_SIGNING_DIR). It has a keychain of its own, so signing asks for
 #      nothing and your own keychain is left alone.
 #   3. No certificate ("ad hoc"), with a warning: the build runs, but macOS forgets its
 #      permissions after the next build, and it does not look for updates.
@@ -17,7 +17,7 @@
 #   sign <codesign options and a path>   signs with the hardened runtime
 #   signing_dir    the folder with the keys (it may not exist)
 
-signing_dir="${OPEN_WISPER_SIGNING_DIR:-$HOME/.config/open-wisper/signing}"
+signing_dir="${SPACES_SIGNING_DIR:-$HOME/.config/open-spaces/signing}"
 sign_kind=adhoc
 sign_identity="-"
 sign_options=()
@@ -25,7 +25,7 @@ sign_options=()
 load_signing() {
   local keychain="$signing_dir/signing.keychain-db"
   local password="$signing_dir/signing.keychain.password"
-  local given="${OPEN_WISPER_SIGN_IDENTITY:-}"
+  local given="${SPACES_SIGN_IDENTITY:-}"
   sign_options=(--timestamp=none)
 
   if [[ "$given" == "-" ]]; then
@@ -42,8 +42,8 @@ load_signing() {
       sign_kind=developer-id
       sign_options=(--timestamp)
     fi
-    if [[ -n "${OPEN_WISPER_SIGN_KEYCHAIN:-}" ]]; then
-      sign_options+=(--keychain "$OPEN_WISPER_SIGN_KEYCHAIN")
+    if [[ -n "${SPACES_SIGN_KEYCHAIN:-}" ]]; then
+      sign_options+=(--keychain "$SPACES_SIGN_KEYCHAIN")
     fi
   elif [[ -f "$keychain" && -s "$password" && -s "$signing_dir/certificate.sha1" ]]; then
     sign_kind=own
@@ -71,7 +71,7 @@ sign() {
 # One line for the build log saying how the app is signed.
 describe_signing() {
   case "$sign_kind" in
-    own) echo "your Open Wisper certificate ($sign_identity): permissions carry over from build to build" ;;
+    own) echo "your Spaces certificate ($sign_identity): permissions carry over from build to build" ;;
     developer-id) echo "$sign_identity" ;;
     given) echo "$sign_identity (no time stamp, so no network is needed)" ;;
     adhoc) echo "no certificate (ad hoc)" ;;

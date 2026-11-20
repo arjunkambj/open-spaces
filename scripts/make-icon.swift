@@ -1,4 +1,4 @@
-// make-icon: draws the Open Wisper icon and writes every size it is needed in.
+// make-icon: draws the Spaces icon and writes every size it is needed in.
 //
 //   swift scripts/make-icon.swift
 //
@@ -17,7 +17,7 @@
 // app's pine green, in its paper white, with the cursor in its light green.
 //
 // The same mark is drawn in SwiftUI for the app itself, in
-// packages/ui/Sources/WisperUI/Design/Wordmark.swift. Keep the two alike.
+// packages/ui/Sources/SpacesUI/Design/Wordmark.swift. Keep the two alike.
 //
 // macOS 26 and later redraw an icon that comes as a plain `.icns`: they cut
 // the mark out of the plate and put it on their own dark, clear or tinted

@@ -1,13 +1,13 @@
 import AppIntents
-import WisperPhone
+import SpacesPhone
 
-// What Open Wisper offers to Shortcuts, Siri, Spotlight and the Action button.
+// What Spaces offers to Shortcuts, Siri, Spotlight and the Action button.
 // Each intent is one call into `PhoneSession`; nothing is decided here.
 
 /// Opens the app on the Dictate tab, already listening.
 struct StartDictationIntent: AppIntent {
   static let title: LocalizedStringResource = "Start Dictation"
-  static let description = IntentDescription("Opens Open Wisper and starts listening.")
+  static let description = IntentDescription("Opens Spaces and starts listening.")
   // iOS only lets the app that is on screen start the microphone.
   static let openAppWhenRun = true
 
@@ -21,10 +21,10 @@ struct StartDictationIntent: AppIntent {
 /// Opens the app and starts recording a meeting.
 struct StartMeetingIntent: AppIntent {
   static let title: LocalizedStringResource = "Start Meeting Recording"
-  static let description = IntentDescription("Opens Open Wisper and starts recording a meeting.")
+  static let description = IntentDescription("Opens Spaces and starts recording a meeting.")
   static let openAppWhenRun = true
 
-  @Parameter(title: "Title", description: "A name for the meeting. Leave empty and Open Wisper names it.")
+  @Parameter(title: "Title", description: "A name for the meeting. Leave empty and Spaces names it.")
   var meetingTitle: String?
 
   @MainActor
@@ -38,7 +38,7 @@ struct StartMeetingIntent: AppIntent {
 struct StopMeetingIntent: AppIntent {
   static let title: LocalizedStringResource = "Stop Meeting Recording"
   static let description = IntentDescription(
-    "Stops the meeting Open Wisper is recording and writes its notes."
+    "Stops the meeting Spaces is recording and writes its notes."
   )
 
   @MainActor
@@ -64,7 +64,7 @@ struct CopyLastDictationIntent: AppIntent {
 }
 
 /// The shortcuts that exist from the moment the app is installed, with what to say to Siri.
-struct OpenWisperShortcuts: AppShortcutsProvider {
+struct SpacesShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(
       intent: StartDictationIntent(),

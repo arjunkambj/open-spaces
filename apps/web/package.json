@@ -1,9 +1,9 @@
 {
-  "name": "@open-wisper/web",
+  "name": "@open-spaces/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The Open Wisper website: one page, prerendered to static files and served from Cloudflare.",
+  "description": "The Spaces website: one page, prerendered to static files and served from Cloudflare.",
   "scripts": {
     "dev": "vite dev --host 127.0.0.1 --port 4321 --strictPort",
     "build": "vite build && node scripts/finish.mjs",

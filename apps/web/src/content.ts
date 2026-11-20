@@ -2,13 +2,13 @@
 // src/components. Keep it plain English: short sentences, everyday words, and only claims
 // that are true of the app as it ships (the root README is the reference).
 
-const repo = "https://github.com/arjunkambj/open-wisper";
+const repo = "https://github.com/arjunkambj/open-spaces";
 
 export const links = {
   site: "https://whisper.0xhoney.com/",
   repo,
   /** A file with a fixed name that every release carries, so this address never changes. */
-  download: `${repo}/releases/latest/download/Open-Wisper.dmg`,
+  download: `${repo}/releases/latest/download/Spaces.dmg`,
   releases: `${repo}/releases`,
   install: `${repo}#install`,
   buildIphone: `${repo}#iphone`,
@@ -19,11 +19,11 @@ export const links = {
 } as const;
 
 export const site = {
-  name: "Open Wisper",
-  title: "Open Wisper: voice dictation and meeting notes for Mac",
+  name: "Spaces",
+  title: "Spaces: voice dictation and meeting notes for Mac",
   description:
-    "Hold a key, speak, and clean text appears in the app you are typing in. Open Wisper is a free, open-source Mac app that also records meetings and writes the notes.",
-  socialImageAlt: "The Open Wisper window on a Mac, showing a list of dictated sentences.",
+    "Hold a key, speak, and clean text appears in the app you are typing in. Spaces is a free, open-source Mac app that also records meetings and writes the notes.",
+  socialImageAlt: "The Spaces window on a Mac, showing a list of dictated sentences.",
 } as const;
 
 export const nav = [
@@ -49,7 +49,7 @@ export interface SpokenWord {
 
 export const hero = {
   headline: "Talk instead of typing.",
-  lead: "Hold fn, speak, and let go. Open Wisper types clean text into whatever app you are using. It also records your meetings and writes the notes.",
+  lead: "Hold fn, speak, and let go. Spaces types clean text into whatever app you are using. It also records your meetings and writes the notes.",
   status: "Free and open source. An early version.",
   // The same sentence is in the Home picture below, so the two match.
   saidLabel: "You say",
@@ -69,9 +69,9 @@ export const hero = {
   ] satisfies SpokenWord[],
   typedLabel: "It types, in Mail",
   typed: "Could we move the review to Thursday at 3 pm?",
-  pillLabel: "The Open Wisper pill while it listens: a small dark capsule with moving bars.",
+  pillLabel: "The Spaces pill while it listens: a small dark capsule with moving bars.",
   pictureAlt:
-    "The Open Wisper window. A list of dictated sentences, each with the time and the app it was typed into.",
+    "The Spaces window. A list of dictated sentences, each with the time and the app it was typed into.",
   pictureCaption: "Home keeps what you said, and where it went.",
 } as const;
 
@@ -108,15 +108,15 @@ export const meetings = {
   ],
   crash: "If the app closes in the middle, the audio is kept and the meeting is finished the next time you open it.",
   pictureAlt:
-    "A meeting in Open Wisper: a summary, key points, decisions and action items, with a box to ask questions.",
+    "A meeting in Spaces: a summary, key points, decisions and action items, with a box to ask questions.",
 } as const;
 
 export const agents = {
   title: "Your AI agent can read the notes too.",
-  lead: "Open Wisper comes with a small tool called wisper. With it, an agent such as Claude Code, Cursor or Codex can read your meetings and notes and add to them. It speaks MCP, a common way for AI tools to use other programs.",
+  lead: "Spaces comes with a small tool called spaces. With it, an agent such as Claude Code, Cursor or Codex can read your meetings and notes and add to them. It speaks MCP, a common way for AI tools to use other programs.",
   setupLabel: "Set it up once. This is the line for Claude Code:",
   // Copied from docs/agents.md. Keep the two the same.
-  command: 'claude mcp add --scope user open-wisper -- "/Applications/Open Wisper.app/Contents/MacOS/wisper" mcp',
+  command: 'claude mcp add --scope user open-spaces -- "/Applications/Spaces.app/Contents/MacOS/spaces" mcp',
   otherTools: "The lines for Claude Desktop, Cursor and Codex are in the guide, and in the app under Settings → Agents.",
   examplesLabel: "Then ask",
   // Each tool name is a real one from the tables in docs/agents.md.
@@ -126,7 +126,7 @@ export const agents = {
     { ask: "Start recording a meeting called Design review.", tool: "recording_start" },
   ],
   limits:
-    "The tool works only with the files in your Open Wisper folder. It makes no network calls, cannot read your API key, and cannot type into another app.",
+    "The tool works only with the files in your Spaces folder. It makes no network calls, cannot read your API key, and cannot type into another app.",
   caution: "What an agent reads goes to that agent's own AI provider. Connect only tools you trust with your meetings.",
   guideLink: "Read the agent guide",
 } as const;
@@ -170,7 +170,7 @@ export const closing = {
   title: "Try it on your next email.",
   lead: "You need a Mac and your own OpenAI API key.",
   openSource:
-    "Open Wisper is open source under the MIT licence. It is an early version, so some things will be rough. Bug reports, ideas and fixes are welcome.",
+    "Spaces is open source under the MIT licence. It is an early version, so some things will be rough. Bug reports, ideas and fixes are welcome.",
   links: [
     { label: "See the code", href: links.repo },
     { label: "How to contribute", href: links.contributing },
@@ -187,7 +187,7 @@ export const footer = {
     { label: "MIT licence", href: links.licence },
   ],
   independent:
-    "Open Wisper is an independent project. It is not connected to OpenAI or to any other dictation app.",
+    "Spaces is an independent project. It is not connected to OpenAI or to any other dictation app.",
   pictures: "All pictures show made-up sample data.",
 } as const;
 

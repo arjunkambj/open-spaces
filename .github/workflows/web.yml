@@ -54,9 +54,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile --filter @open-wisper/web
+      - run: pnpm install --frozen-lockfile --filter @open-spaces/web
       - name: Check the types
-        run: pnpm --filter @open-wisper/web run lint
+        run: pnpm --filter @open-spaces/web run lint
       - name: Build the site
         run: pnpm web:build
       - uses: actions/upload-artifact@v7
@@ -97,7 +97,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile --filter @open-wisper/web
+      - run: pnpm install --frozen-lockfile --filter @open-spaces/web
         if: steps.secrets.outputs.present == 'true'
       - uses: actions/download-artifact@v8
         if: steps.secrets.outputs.present == 'true'

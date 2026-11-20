@@ -3,7 +3,7 @@
 /*
   The look follows the app (packages/ui): warm "stone" greys and one accent used sparingly
   (the app's pine green). Two voices on the page: what you say is set in monospace, and what
-  Open Wisper writes is set in a book serif (Newsreader, served from this site; its licence is
+  Spaces writes is set in a book serif (Newsreader, served from this site; its licence is
   public/fonts/newsreader-OFL.txt). Everything else is the system font. Dark mode follows the system.
 */
 
@@ -58,7 +58,7 @@
     @apply mx-auto w-full max-w-[76rem] px-4 sm:px-8;
   }
 
-  /* Headings in the serif: what Open Wisper writes. */
+  /* Headings in the serif: what Spaces writes. */
   .display {
     @apply font-serif font-normal tracking-[-0.022em] text-balance;
     font-optical-sizing: auto;

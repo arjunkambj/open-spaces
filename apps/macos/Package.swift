@@ -2,14 +2,14 @@
 import PackageDescription
 
 // The macOS app. Built with SwiftPM so it needs only the Command Line Tools;
-// `scripts/bundle` wraps the result into "Open Wisper.app".
+// `scripts/bundle` wraps the result into "Spaces.app".
 let package = Package(
-  name: "OpenWisperMac",
+  name: "SpacesMac",
   platforms: [.macOS("14.4")],
   products: [
-    .executable(name: "OpenWisper", targets: ["OpenWisper"]),
-    .library(name: "WisperMac", targets: ["WisperMac"]),
-    .library(name: "WisperMacUI", targets: ["WisperMacUI"]),
+    .executable(name: "Spaces", targets: ["Spaces"]),
+    .library(name: "SpacesMac", targets: ["SpacesMac"]),
+    .library(name: "SpacesMacUI", targets: ["SpacesMacUI"]),
   ],
   dependencies: [
     .package(path: "../../packages/domain"),
@@ -27,31 +27,31 @@ let package = Package(
   targets: [
     // macOS system glue: global shortcuts, typing into other apps, permissions.
     .target(
-      name: "WisperMac",
-      dependencies: [.product(name: "WisperDomain", package: "domain")]
+      name: "SpacesMac",
+      dependencies: [.product(name: "SpacesDomain", package: "domain")]
     ),
     // Every macOS screen: hub, settings, onboarding, the floating pill.
     .target(
-      name: "WisperMacUI",
+      name: "SpacesMacUI",
       dependencies: [
-        "WisperMac",
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperEngine", package: "engine"),
-        .product(name: "WisperUI", package: "ui"),
+        "SpacesMac",
+        .product(name: "SpacesDomain", package: "domain"),
+        .product(name: "SpacesEngine", package: "engine"),
+        .product(name: "SpacesUI", package: "ui"),
       ]
     ),
     // The app itself: windows, menu bar item and the wiring of real adapters.
     .executableTarget(
-      name: "OpenWisper",
+      name: "Spaces",
       dependencies: [
-        "WisperMac",
-        "WisperMacUI",
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperStore", package: "store"),
-        .product(name: "WisperAI", package: "ai"),
-        .product(name: "WisperAudio", package: "audio"),
-        .product(name: "WisperEngine", package: "engine"),
-        .product(name: "WisperUI", package: "ui"),
+        "SpacesMac",
+        "SpacesMacUI",
+        .product(name: "SpacesDomain", package: "domain"),
+        .product(name: "SpacesStore", package: "store"),
+        .product(name: "SpacesAI", package: "ai"),
+        .product(name: "SpacesAudio", package: "audio"),
+        .product(name: "SpacesEngine", package: "engine"),
+        .product(name: "SpacesUI", package: "ui"),
         .product(name: "Sparkle", package: "Sparkle"),
       ]
     ),

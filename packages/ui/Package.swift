@@ -3,12 +3,12 @@ import PackageDescription
 
 // Design system: tokens and SwiftUI components.
 let package = Package(
-  name: "WisperUI",
+  name: "SpacesUI",
   platforms: [.macOS("14.4"), .iOS(.v17)],
   products: [
-    .library(name: "WisperUI", targets: ["WisperUI"]),
+    .library(name: "SpacesUI", targets: ["SpacesUI"]),
     // macOS-only tool that renders every snapshot case to PNG files.
-    .executable(name: "wisper-snapshots", targets: ["wisper-snapshots"]),
+    .executable(name: "spaces-snapshots", targets: ["spaces-snapshots"]),
   ],
   dependencies: [
     .package(path: "../domain"),
@@ -16,18 +16,18 @@ let package = Package(
   ],
   targets: [
     .target(
-      name: "WisperUI",
+      name: "SpacesUI",
       dependencies: [
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperEngine", package: "engine"),
+        .product(name: "SpacesDomain", package: "domain"),
+        .product(name: "SpacesEngine", package: "engine"),
       ]
     ),
     .executableTarget(
-      name: "wisper-snapshots",
+      name: "spaces-snapshots",
       dependencies: [
-        "WisperUI",
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperEngine", package: "engine"),
+        "SpacesUI",
+        .product(name: "SpacesDomain", package: "domain"),
+        .product(name: "SpacesEngine", package: "engine"),
       ]
     ),
   ]

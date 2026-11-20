@@ -118,10 +118,10 @@ jobs:
         working-directory: apps/macos
         run: ./scripts/bundle
       - name: Check and zip the bundle
-        run: scripts/package-mac-app Open-Wisper-macOS.zip
+        run: scripts/package-mac-app Spaces-macOS.zip
       - uses: actions/upload-artifact@v7
         with:
-          path: Open-Wisper-macOS.zip
+          path: Spaces-macOS.zip
           archive: false
           if-no-files-found: error
           retention-days: 14

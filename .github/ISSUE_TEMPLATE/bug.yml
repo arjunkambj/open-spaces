@@ -8,7 +8,7 @@ body:
         Thanks for taking the time. Short and specific is best.
 
         **Never paste your OpenAI API key, and remove private text from transcripts and logs before you share them.**
-        Found a security problem? Do not post it here. See [SECURITY.md](https://github.com/arjunkambj/open-wisper/blob/main/SECURITY.md).
+        Found a security problem? Do not post it here. See [SECURITY.md](https://github.com/arjunkambj/open-spaces/blob/main/SECURITY.md).
   - type: textarea
     id: what-happened
     attributes:
@@ -41,7 +41,7 @@ body:
         - macOS app
         - iOS app
         - iOS keyboard
-        - "`wisper` command-line tool or MCP server"
+        - "`spaces` command-line tool or MCP server"
         - Building from source
     validations:
       required: true
@@ -49,8 +49,8 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: Your macOS or iOS version, and the Open Wisper version or commit.
-      placeholder: macOS 26.5, Open Wisper 0.1.0 (commit 3f8ff44)
+      description: Your macOS or iOS version, and the Spaces version or commit.
+      placeholder: macOS 26.5, Spaces 0.1.0 (commit 3f8ff44)
     validations:
       required: true
   - type: input

@@ -1,4 +1,4 @@
-# Open Wisper for iPhone
+# Spaces for iPhone
 
 The iPhone app and its keyboard. Tap one big button, speak, and the text is on your
 clipboard. It also records meetings and writes the notes. Everything stays on the phone;
@@ -7,16 +7,16 @@ the only thing that leaves is audio and text sent to OpenAI with your own key.
 ## What is in this folder
 
 ```
-project.yml   the Xcode project, as text. XcodeGen turns it into OpenWisper.xcodeproj
+project.yml   the Xcode project, as text. XcodeGen turns it into Spaces.xcodeproj
               and Generated/ (the targets' Info.plist files). Neither is kept in git
 App/          the app target: entry point, Shortcuts actions, icon, launch screen
 Keyboard/     the keyboard extension target: one small class
 Widgets/      the widget extension target: the Lock Screen notice for a recording
 Shared/       code compiled into both the app and the widget extension: the Stop button's action
 Phone/        a Swift package with nearly all of the code:
-                WisperPhone     the Dictate and Library screens, the tabs, links, wiring
-                WisperKeyboard  everything the keyboard does
-                WisperLive      the notice a recording puts on the Lock Screen
+                SpacesPhone     the Dictate and Library screens, the tabs, links, wiring
+                SpacesKeyboard  everything the keyboard does
+                SpacesLive      the notice a recording puts on the Lock Screen
 scripts/      screenshots: pictures of the app from a simulator
 ```
 
@@ -31,8 +31,8 @@ You need a Mac with Xcode 26 or newer and [XcodeGen](https://github.com/yonaskol
 
 ```bash
 pnpm install                      # once, in the repo root
-pnpm ios:generate                 # makes apps/ios/OpenWisper.xcodeproj
-open apps/ios/OpenWisper.xcodeproj
+pnpm ios:generate                 # makes apps/ios/Spaces.xcodeproj
+open apps/ios/Spaces.xcodeproj
 ```
 
 Pick an iPhone simulator and press Run. In a simulator there is nothing more to set up.
@@ -52,28 +52,28 @@ every pull request.
 Start the app with `--demo` and it runs on made-up data kept in memory. Nothing is recorded,
 sent or saved. Add `--scene <name>` to open in one state: `dictate-recording`,
 `dictate-result`, `dictate-failed`, `meetings`, `meeting`, `keyboard`, `first-run` and more (the list
-is `DemoScene` in `Phone/Sources/WisperPhone/DemoScene.swift`). In Xcode, add these under
+is `DemoScene` in `Phone/Sources/SpacesPhone/DemoScene.swift`). In Xcode, add these under
 Product > Scheme > Edit Scheme > Arguments.
 
 ## Put it on your own iPhone
 
 Signing is not set up in the project, because it is yours to choose.
 
-1. In Xcode, select the **OpenWisper** project, then each of the targets **OpenWisper**,
-   **OpenWisperKeyboard** and **OpenWisperWidgets**. Under Signing & Capabilities, pick
+1. In Xcode, select the **Spaces** project, then each of the targets **Spaces**,
+   **SpacesKeyboard** and **SpacesWidgets**. Under Signing & Capabilities, pick
    your team.
-2. Change the bundle IDs. `dev.openwisper.ios` belongs to this project, so Apple will not
+2. Change the bundle IDs. `dev.openspaces.ios` belongs to this project, so Apple will not
    let another team use it. In `project.yml`, change the `PRODUCT_BUNDLE_IDENTIFIER` lines
-   of the three targets you just signed (`dev.openwisper.ios`, `dev.openwisper.ios.keyboard`
-   and `dev.openwisper.ios.widgets`) to something of your own, such as
-   `com.yourname.wisper`, `com.yourname.wisper.keyboard` and `com.yourname.wisper.widgets`.
+   of the three targets you just signed (`dev.openspaces.ios`, `dev.openspaces.ios.keyboard`
+   and `dev.openspaces.ios.widgets`) to something of your own, such as
+   `com.yourname.spaces`, `com.yourname.spaces.keyboard` and `com.yourname.spaces.widgets`.
    The two extensions' IDs must start with the app's ID.
 3. Change the App Group, in three places that must match:
-   - `App/OpenWisper.entitlements`
-   - `Keyboard/OpenWisperKeyboard.entitlements`
-   - `groupID` in `Phone/Sources/WisperKeyboard/SharedFolder.swift`
+   - `App/Spaces.entitlements`
+   - `Keyboard/SpacesKeyboard.entitlements`
+   - `groupID` in `Phone/Sources/SpacesKeyboard/SharedFolder.swift`
 
-   Use a name of your own that starts with `group.`, such as `group.com.yourname.wisper`.
+   Use a name of your own that starts with `group.`, such as `group.com.yourname.spaces`.
 4. Run `pnpm ios:generate` and build to your phone.
 
 These changes are for your own copy. Keep them out of a pull request.
@@ -81,7 +81,7 @@ These changes are for your own copy. Keep them out of a pull request.
 ### Why the App Group matters
 
 The app and the keyboard are two separate programs. iOS lets them share exactly one folder,
-called an App Group, and only when both are signed with it. Open Wisper keeps its library
+called an App Group, and only when both are signed with it. Spaces keeps its library
 there so the keyboard can read your latest dictation and your snippets.
 
 If the App Group is missing or the names do not match, the app still works: it keeps its
@@ -107,14 +107,14 @@ need it and cannot read it.
 - **Shortcuts and Siri.** Four actions: Start Dictation, Start Meeting Recording, Stop
   Meeting Recording, Copy Last Dictation. They show up in the Shortcuts app by themselves,
   so you can put one on the Action button, the Lock Screen or the Home Screen.
-- **Links.** `openwisper://meetings/<id>` opens a meeting. Links that would turn the
+- **Links.** `openspaces://meetings/<id>` opens a meeting. Links that would turn the
   microphone on are not obeyed blindly, because any app or web page can open a link:
-  - `openwisper://meetings/start?title=Standup` asks you first. Say no and it stays quiet
+  - `openspaces://meetings/start?title=Standup` asks you first. Say no and it stays quiet
     for a minute.
-  - `openwisper://dictation/toggle` only shows the Dictate screen. You tap the button.
-  - `openwisper://meetings/stop` does nothing.
+  - `openspaces://dictation/toggle` only shows the Dictate screen. You tap the button.
+  - `openspaces://meetings/stop` does nothing.
 
-  The Open Wisper keyboard is the exception. Its Dictate key adds a one-time ticket to the
+  The Spaces keyboard is the exception. Its Dictate key adds a one-time ticket to the
   link (a small file in the shared folder, good for one minute), so the app knows the
   request is its own and starts listening at once. Shortcuts actions and the Stop button
   on the Lock Screen do not use links at all.
@@ -123,9 +123,9 @@ need it and cannot read it.
 
 These are limits of iOS, not things left unfinished.
 
-- **It cannot type into other apps.** On a Mac, Open Wisper puts the text where your cursor
+- **It cannot type into other apps.** On a Mac, Spaces puts the text where your cursor
   is. An iPhone app is not allowed to. So the text goes to the clipboard, and you paste it,
-  or tap **Insert latest** on the Open Wisper keyboard.
+  or tap **Insert latest** on the Spaces keyboard.
 - **A meeting records only your microphone.** iOS does not let an app record the sound of
   other apps, so the other side of a call is picked up only as far as your microphone
   hears it. Put the phone on the table, or the call on speaker.
@@ -134,7 +134,7 @@ These are limits of iOS, not things left unfinished.
 
 ## The keyboard, and its limits
 
-iOS does not let a keyboard use the microphone. So the Open Wisper keyboard does not listen
+iOS does not let a keyboard use the microphone. So the Spaces keyboard does not listen
 itself. It is a small companion:
 
 - **Dictate** opens the app, already listening. Speak, then go back to where you were
@@ -148,7 +148,7 @@ itself. It is a small companion:
 It is not a keyboard for typing letters. Switch to it when you want to dictate or paste,
 and back to your normal keyboard with the globe key.
 
-To turn it on: Settings > General > Keyboard > Keyboards > Add New Keyboard > Open Wisper,
+To turn it on: Settings > General > Keyboard > Keyboards > Add New Keyboard > Spaces,
 then tap it in the list and turn on **Allow Full Access**. The app walks you through this
 in its first-run setup and under Library > Keyboard.
 
@@ -164,10 +164,10 @@ keyboard to find. Paste from the clipboard instead.
 ```bash
 cd apps/ios/Phone
 ../../../scripts/swiftw build     # builds on a Mac, no Xcode needed
-../../../scripts/swiftw run wisper-phone-snapshots /tmp/phone   # draws the screens to PNG files
+../../../scripts/swiftw run spaces-phone-snapshots /tmp/phone   # draws the screens to PNG files
 ```
 
-`wisper-phone-snapshots` draws the phone's own screens and the keyboard on a phone-sized
+`spaces-phone-snapshots` draws the phone's own screens and the keyboard on a phone-sized
 canvas, in light and dark, without a simulator. Look at the pictures after every change to
 a screen. `scripts/screenshots` (in this folder) does the same with the real app in a
 simulator; run `pnpm ios:build` first. CI takes those pictures only when asked, because
@@ -181,5 +181,5 @@ compiled into the app and the widget extension both. Such files go in `Shared/`.
 Code that needs UIKit sits behind `#if canImport(UIKit)` or `#if os(iOS)` and is compiled
 only by Xcode. Keep those parts small, because only CI checks them.
 
-The keyboard runs with very little memory. `WisperKeyboard` must not depend on the audio or
+The keyboard runs with very little memory. `SpacesKeyboard` must not depend on the audio or
 AI packages, and must not call `UIApplication.shared`.

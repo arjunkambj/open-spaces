@@ -9,7 +9,7 @@
     ".swift-format"
   ],
   "globalEnv": [
-    "WISPER_TOOLCHAIN",
+    "SPACES_TOOLCHAIN",
     "DEVELOPER_DIR",
     "SDKROOT",
     "TOOLCHAINS"
@@ -41,7 +41,7 @@
       ],
       "outputs": []
     },
-    "@open-wisper/web#build": {
+    "@open-spaces/web#build": {
       "dependsOn": [
         "^build"
       ],
@@ -55,7 +55,7 @@
         "dist/**"
       ]
     },
-    "@open-wisper/ios#build": {
+    "@open-spaces/ios#build": {
       "dependsOn": [
         "^build"
       ],

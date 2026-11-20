@@ -181,46 +181,46 @@ importers:
 
   apps/ios:
     dependencies:
-      '@open-wisper/ai':
+      '@open-spaces/ai':
         specifier: workspace:*
         version: link:../../packages/ai
-      '@open-wisper/audio':
+      '@open-spaces/audio':
         specifier: workspace:*
         version: link:../../packages/audio
-      '@open-wisper/domain':
+      '@open-spaces/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@open-wisper/engine':
+      '@open-spaces/engine':
         specifier: workspace:*
         version: link:../../packages/engine
-      '@open-wisper/store':
+      '@open-spaces/store':
         specifier: workspace:*
         version: link:../../packages/store
-      '@open-wisper/ui':
+      '@open-spaces/ui':
         specifier: workspace:*
         version: link:../../packages/ui
 
   apps/macos:
     dependencies:
-      '@open-wisper/agent':
+      '@open-spaces/agent':
         specifier: workspace:*
         version: link:../../packages/agent
-      '@open-wisper/ai':
+      '@open-spaces/ai':
         specifier: workspace:*
         version: link:../../packages/ai
-      '@open-wisper/audio':
+      '@open-spaces/audio':
         specifier: workspace:*
         version: link:../../packages/audio
-      '@open-wisper/domain':
+      '@open-spaces/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@open-wisper/engine':
+      '@open-spaces/engine':
         specifier: workspace:*
         version: link:../../packages/engine
-      '@open-wisper/store':
+      '@open-spaces/store':
         specifier: workspace:*
         version: link:../../packages/store
-      '@open-wisper/ui':
+      '@open-spaces/ui':
         specifier: workspace:*
         version: link:../../packages/ui
 
@@ -272,22 +272,22 @@ importers:
 
   packages/agent:
     dependencies:
-      '@open-wisper/domain':
+      '@open-spaces/domain':
         specifier: workspace:*
         version: link:../domain
-      '@open-wisper/store':
+      '@open-spaces/store':
         specifier: workspace:*
         version: link:../store
 
   packages/ai:
     dependencies:
-      '@open-wisper/domain':
+      '@open-spaces/domain':
         specifier: workspace:*
         version: link:../domain
 
   packages/audio:
     dependencies:
-      '@open-wisper/domain':
+      '@open-spaces/domain':
         specifier: workspace:*
         version: link:../domain
 
@@ -295,22 +295,22 @@ importers:
 
   packages/engine:
     dependencies:
-      '@open-wisper/domain':
+      '@open-spaces/domain':
         specifier: workspace:*
         version: link:../domain
 
   packages/store:
     dependencies:
-      '@open-wisper/domain':
+      '@open-spaces/domain':
         specifier: workspace:*
         version: link:../domain
 
   packages/ui:
     dependencies:
-      '@open-wisper/domain':
+      '@open-spaces/domain':
         specifier: workspace:*
         version: link:../domain
-      '@open-wisper/engine':
+      '@open-spaces/engine':
         specifier: workspace:*
         version: link:../engine
 

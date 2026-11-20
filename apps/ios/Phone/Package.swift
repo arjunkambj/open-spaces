@@ -6,14 +6,14 @@ import PackageDescription
 // snapshot tool runs without Xcode. The Xcode targets in `../App`, `../Keyboard` and
 // `../Widgets` are thin shells around these libraries.
 let package = Package(
-  name: "WisperPhone",
+  name: "SpacesPhone",
   platforms: [.macOS("14.4"), .iOS(.v17)],
   products: [
-    .library(name: "WisperPhone", targets: ["WisperPhone"]),
-    .library(name: "WisperKeyboard", targets: ["WisperKeyboard"]),
-    .library(name: "WisperLive", targets: ["WisperLive"]),
+    .library(name: "SpacesPhone", targets: ["SpacesPhone"]),
+    .library(name: "SpacesKeyboard", targets: ["SpacesKeyboard"]),
+    .library(name: "SpacesLive", targets: ["SpacesLive"]),
     // macOS-only tool that draws the phone's own screens to PNG files.
-    .executable(name: "wisper-phone-snapshots", targets: ["wisper-phone-snapshots"]),
+    .executable(name: "spaces-phone-snapshots", targets: ["spaces-phone-snapshots"]),
   ],
   dependencies: [
     .package(path: "../../../packages/domain"),
@@ -26,41 +26,41 @@ let package = Package(
   targets: [
     // The keyboard extension. It must stay small: no audio, no network.
     .target(
-      name: "WisperKeyboard",
+      name: "SpacesKeyboard",
       dependencies: [
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperStore", package: "store"),
-        .product(name: "WisperUI", package: "ui"),
+        .product(name: "SpacesDomain", package: "domain"),
+        .product(name: "SpacesStore", package: "store"),
+        .product(name: "SpacesUI", package: "ui"),
       ]
     ),
     // The Live Activity: a recording shown on the Lock Screen and in the Dynamic Island.
     .target(
-      name: "WisperLive",
+      name: "SpacesLive",
       dependencies: [
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperUI", package: "ui"),
+        .product(name: "SpacesDomain", package: "domain"),
+        .product(name: "SpacesUI", package: "ui"),
       ]
     ),
     // The app: the wiring of real adapters, the tab shell and the Dictate screen.
     .target(
-      name: "WisperPhone",
+      name: "SpacesPhone",
       dependencies: [
-        "WisperKeyboard",
-        "WisperLive",
-        .product(name: "WisperDomain", package: "domain"),
-        .product(name: "WisperStore", package: "store"),
-        .product(name: "WisperAI", package: "ai"),
-        .product(name: "WisperAudio", package: "audio"),
-        .product(name: "WisperEngine", package: "engine"),
-        .product(name: "WisperUI", package: "ui"),
+        "SpacesKeyboard",
+        "SpacesLive",
+        .product(name: "SpacesDomain", package: "domain"),
+        .product(name: "SpacesStore", package: "store"),
+        .product(name: "SpacesAI", package: "ai"),
+        .product(name: "SpacesAudio", package: "audio"),
+        .product(name: "SpacesEngine", package: "engine"),
+        .product(name: "SpacesUI", package: "ui"),
       ]
     ),
     .executableTarget(
-      name: "wisper-phone-snapshots",
+      name: "spaces-phone-snapshots",
       dependencies: [
-        "WisperPhone",
-        "WisperKeyboard",
-        .product(name: "WisperUI", package: "ui"),
+        "SpacesPhone",
+        "SpacesKeyboard",
+        .product(name: "SpacesUI", package: "ui"),
       ]
     ),
   ]

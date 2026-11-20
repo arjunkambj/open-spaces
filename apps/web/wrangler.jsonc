@@ -3,7 +3,7 @@
   // There is no Worker code, so nothing runs per visit. (The build also leaves dist/server, the
   // code that prerendered the pages; it is not deployed.)
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "open-wisper-web",
+  "name": "open-spaces-web",
   "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./dist/client",

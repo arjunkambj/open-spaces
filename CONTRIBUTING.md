@@ -1,4 +1,4 @@
-# Contributing to Open Wisper
+# Contributing to Spaces
 
 Thanks for wanting to help. This page tells you how to set up, how the code is shaped, and how to send a change.
 
@@ -6,7 +6,7 @@ By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Ways to help
 
-- **Report a bug** or **suggest a feature**: [open an issue](https://github.com/arjunkambj/open-wisper/issues/new/choose).
+- **Report a bug** or **suggest a feature**: [open an issue](https://github.com/arjunkambj/open-spaces/issues/new/choose).
 - **Fix or build something**: for anything bigger than a small fix, open an issue first so we can agree on the idea before you spend time on it.
 - **Security problems** are reported privately. See [SECURITY.md](SECURITY.md).
 
@@ -15,13 +15,13 @@ By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 You need a Mac with macOS 14.4 or newer, Apple's Command Line Tools (`xcode-select --install`) or Xcode, Node.js 22 or newer, and pnpm 12.
 
 ```bash
-git clone https://github.com/arjunkambj/open-wisper.git
-cd open-wisper
+git clone https://github.com/arjunkambj/open-spaces.git
+cd open-spaces
 pnpm install
 pnpm mac        # build and open the macOS app
 ```
 
-The first build takes a few minutes. The app lands in `apps/macos/build/Open Wisper.app`.
+The first build takes a few minutes. The app lands in `apps/macos/build/Spaces.app`.
 
 macOS ties the permissions you give (Microphone, Accessibility, System Audio Recording) to the signature of the app. Without a signing certificate every build has a different one, so after a rebuild the permissions stop working until you remove the app from each list and add it again. To stop that, run this once:
 
@@ -29,15 +29,15 @@ macOS ties the permissions you give (Microphone, Accessibility, System Audio Rec
 scripts/setup-signing
 ```
 
-It makes a free certificate of your own, asks for nothing, and keeps it in `~/.config/open-wisper/signing`, outside the project. Every build after that is signed with it. You can build without it too; the build script then warns you.
+It makes a free certificate of your own, asks for nothing, and keeps it in `~/.config/open-spaces/signing`, outside the project. Every build after that is signed with it. You can build without it too; the build script then warns you.
 
 To look at the app without touching your real data, microphone or key, start it on made-up data:
 
 ```bash
-"apps/macos/build/Open Wisper.app/Contents/MacOS/OpenWisper" --demo
+"apps/macos/build/Spaces.app/Contents/MacOS/Spaces" --demo
 ```
 
-The iPhone app also needs full Xcode and XcodeGen (`brew install xcodegen`). Run `pnpm ios:generate`, then open `apps/ios/OpenWisper.xcodeproj` with Xcode. [apps/ios/README.md](apps/ios/README.md) has the rest. Without Xcode you can still work on everything else, and on most of the iPhone code too: it lives in a package, `apps/ios/Phone`, that builds on any Mac. Our CI builds the iPhone app itself on every pull request.
+The iPhone app also needs full Xcode and XcodeGen (`brew install xcodegen`). Run `pnpm ios:generate`, then open `apps/ios/Spaces.xcodeproj` with Xcode. [apps/ios/README.md](apps/ios/README.md) has the rest. Without Xcode you can still work on everything else, and on most of the iPhone code too: it lives in a package, `apps/ios/Phone`, that builds on any Mac. Our CI builds the iPhone app itself on every pull request.
 
 You do not need an OpenAI key to work on the code. Demo mode and the screen pictures run on made-up data.
 
@@ -61,7 +61,7 @@ cd packages/engine
 
 # Draw the screens to PNG files, without opening a window:
 cd packages/ui
-../../scripts/swiftw run wisper-snapshots /tmp/screens
+../../scripts/swiftw run spaces-snapshots /tmp/screens
 ```
 
 Use `scripts/swiftw` in place of `swift` to build and run. It makes the build work on a Mac that has only the Command Line Tools.
@@ -82,7 +82,7 @@ Use `scripts/swiftw` in place of `swift` to build and run. It makes the build wo
 
 - Swift 6. Two-space indent, lines up to 110 characters. `pnpm format` does it for you, and `pnpm lint` must pass.
 - CI builds with Xcode 26.6 (Swift 6.3), which can be older than the Swift on your Mac. If something builds for you and fails on CI, that is the first thing to check.
-- Screens use SwiftUI. Colours, fonts and spacing come from `WisperUI`; do not type them into a screen.
+- Screens use SwiftUI. Colours, fonts and spacing come from `SpacesUI`; do not type them into a screen.
 - Text that people read is plain English: short sentences, everyday words.
 - Support light and dark mode, and give every control a VoiceOver label.
 
@@ -99,7 +99,7 @@ packages/ai       talking to OpenAI
 packages/audio    recording the microphone and system audio
 packages/engine   the dictation and meeting logic
 packages/ui       shared colours, fonts and screens
-packages/agent    the `wisper` tool and the MCP server
+packages/agent    the `spaces` tool and the MCP server
 apps/macos        the macOS app
 apps/ios          the iPhone app, its keyboard and its Lock Screen notice
 apps/ios/Phone    most of the iPhone app's code, as a package that also builds on a Mac
@@ -107,11 +107,11 @@ apps/ios/Phone    most of the iPhone app's code, as a package that also builds o
 
 A few things to know:
 
-- The contracts between parts are Swift protocols in `packages/domain/Sources/WisperDomain/Seams.swift`. Each one has a real version (for example, one that calls OpenAI) and an in-memory version, in `Fakes.swift`, that demo mode and the screen pictures run on.
+- The contracts between parts are Swift protocols in `packages/domain/Sources/SpacesDomain/Seams.swift`. Each one has a real version (for example, one that calls OpenAI) and an in-memory version, in `Fakes.swift`, that demo mode and the screen pictures run on.
 - `DictationEngine` and `MeetingEngine` each run a whole job, from recording to saved text, behind a few methods.
 - Screens talk to one object, `AppModel`. A screen never calls OpenAI or reads a file itself.
 - `domain` depends on nothing. The other packages depend on `domain`. Only the apps connect the real parts together.
-- Two docs must match the code. If you change what is saved to disk, update [docs/data-format.md](docs/data-format.md). If you change a `wisper` tool, paste the output of `wisper tools --markdown` into the tables in [docs/agents.md](docs/agents.md), between the two markers.
+- Two docs must match the code. If you change what is saved to disk, update [docs/data-format.md](docs/data-format.md). If you change a `spaces` tool, paste the output of `spaces tools --markdown` into the tables in [docs/agents.md](docs/agents.md), between the two markers.
 
 ## Adding a feature
 
@@ -120,7 +120,7 @@ A few things to know:
 3. **Need to reach the outside world** (network, files, microphone, another app)? Go through one of the existing contracts. Add a new contract only if you will write two versions of it: the real one and the in-memory one.
 4. **Take what you need as arguments.** Do not create your own network client or file store inside a module. Return results rather than changing things out of sight.
 5. **Use the front door.** Callers use a module's public methods. If one has to reach inside a module, the module has the wrong shape.
-6. **Add the screen last**, using `AppModel` and the `WisperUI` pieces.
+6. **Add the screen last**, using `AppModel` and the `SpacesUI` pieces.
 7. **Ask the deletion question** about each new type: if you deleted it, would the code get simpler (it was only passing things along) or would its work spread into every caller (it earns its place)?
 
 ## Sending your change
@@ -145,7 +145,7 @@ CI can also take pictures of the iPhone app in a simulator. That takes about eig
 
 ## Making a release
 
-A release is a GitHub Release with three files: the disk image (`Open-Wisper-<version>.dmg`), a copy of it under the fixed name `Open-Wisper.dmg` (what the website's download button points at), and `appcast.xml`, the small file installed apps read to find out there is a new version. Publishing a release is what hands the update to everyone who has the app.
+A release is a GitHub Release with three files: the disk image (`Spaces-<version>.dmg`), a copy of it under the fixed name `Spaces.dmg` (what the website's download button points at), and `appcast.xml`, the small file installed apps read to find out there is a new version. Publishing a release is what hands the update to everyone who has the app.
 
 Only a maintainer with push access can do this.
 
@@ -179,10 +179,10 @@ Good to know:
 
 Two keys make a release, and both were made once with `scripts/setup-signing`:
 
-- **A code-signing certificate**, "Open Wisper Self-Signed". Every build is signed with it, so macOS sees each version as the same app and keeps its permissions.
+- **A code-signing certificate**, "Spaces Self-Signed". Every build is signed with it, so macOS sees each version as the same app and keeps its permissions.
 - **An update signing key.** Its public half is in `apps/macos/Resources/Info.plist` (`SUPublicEDKey`). An installed app takes an update only when it was signed with the private half.
 
-They live in `~/.config/open-wisper/signing` on the maintainer's Mac, and as three encrypted secrets of the GitHub repository (`MAC_SIGNING_P12_BASE64`, `MAC_SIGNING_P12_PASSWORD`, `SPARKLE_ED_PRIVATE_KEY`), which `scripts/setup-signing --github` saves. They are never in the project.
+They live in `~/.config/open-spaces/signing` on the maintainer's Mac, and as three encrypted secrets of the GitHub repository (`MAC_SIGNING_P12_BASE64`, `MAC_SIGNING_P12_PASSWORD`, `SPARKLE_ED_PRIVATE_KEY`), which `scripts/setup-signing --github` saves. They are never in the project.
 
 **Keep a backup** of `identity.p12`, `identity.p12.password` and `update-key` from that folder, somewhere safe and private. If they are lost, installed apps can no longer be updated: people would have to download the app again by hand, and allow its permissions again.
 
@@ -195,4 +195,4 @@ A fork cannot use the project's keys, and must not: its users would get updates 
 
 ## Licence
 
-Open Wisper is under the [MIT licence](LICENSE). By sending a change you agree that it is your own work and that it can be shared under that licence.
+Spaces is under the [MIT licence](LICENSE). By sending a change you agree that it is your own work and that it can be shared under that licence.

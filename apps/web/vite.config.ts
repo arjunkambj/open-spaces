@@ -10,7 +10,7 @@ import { latestRelease } from "./src/release.ts";
 export default defineConfig(async () => {
   const { version } = await latestRelease();
   return {
-    define: { __OPEN_WISPER_VERSION__: JSON.stringify(version) },
+    define: { __SPACES_VERSION__: JSON.stringify(version) },
     plugins: [
       tanstackStart({
         prerender: { enabled: true, crawlLinks: false, autoSubfolderIndex: false, failOnError: true },

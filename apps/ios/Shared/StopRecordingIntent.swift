@@ -1,5 +1,5 @@
 import AppIntents
-import WisperLive
+import SpacesLive
 
 /// Stops the meeting that is being recorded. It is the Stop button on the Lock Screen and
 /// in the Dynamic Island.

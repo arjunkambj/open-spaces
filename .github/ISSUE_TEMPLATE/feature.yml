@@ -1,11 +1,11 @@
 name: Feature request
-description: Suggest something Open Wisper should do.
+description: Suggest something Spaces should do.
 labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        Open Wisper keeps everything on your device: no account, no server of ours, no tracking.
+        Spaces keeps everything on your device: no account, no server of ours, no tracking.
         Ideas that need any of those will not fit.
   - type: textarea
     id: problem
@@ -35,7 +35,7 @@ body:
         - macOS app
         - iOS app
         - iOS keyboard
-        - "`wisper` command-line tool or MCP server"
+        - "`spaces` command-line tool or MCP server"
   - type: checkboxes
     id: help
     attributes:

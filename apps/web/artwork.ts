@@ -118,7 +118,7 @@ export function artwork(): Plugin {
   };
 
   return {
-    name: "open-wisper:artwork",
+    name: "open-spaces:artwork",
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         const path = (request.url ?? "").split("?")[0]?.slice(1) ?? "";

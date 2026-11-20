@@ -3,7 +3,7 @@
 #
 #   apps/macos/scripts/appcast [--url-prefix <address>] [--notes <file.md>]
 #
-#   -> apps/macos/build/update/Open-Wisper-<version>.dmg   the disk image, unchanged
+#   -> apps/macos/build/update/Spaces-<version>.dmg   the disk image, unchanged
 #      apps/macos/build/update/appcast.xml                 the list of versions ("the feed")
 #
 # Run apps/macos/scripts/bundle and apps/macos/scripts/dmg first. Both files in
@@ -17,7 +17,7 @@
 # HOW AN UPDATE IS TRUSTED
 #
 # The feed holds a signature of the disk image, made with the private half of the update
-# signing key (in ~/.config/open-wisper/signing, from scripts/setup-signing). The feed is
+# signing key (in ~/.config/open-spaces/signing, from scripts/setup-signing). The feed is
 # signed too. The app holds the public half (SUPublicEDKey in Info.plist) and refuses a
 # feed or a download whose signature does not match. So this script refuses to sign
 # with a key the app does not trust: such an update could never be installed.
@@ -57,7 +57,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 out="$here/build"
-app="$out/Open Wisper.app"
+app="$out/Spaces.app"
 [[ -d "$app" ]] || fail "there is no $app. Run apps/macos/scripts/bundle first."
 # The project's page on GitHub, read from the address the app asks for updates, so a
 # fork only has to change Info.plist.
@@ -69,7 +69,7 @@ repository="${feed_address%/releases/latest/download/appcast.xml}"
   fail "SUFeedURL in Info.plist is not a GitHub 'releases/latest/download/appcast.xml' address: $feed_address"
 version="$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")"
 build_number="$(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist")"
-dmg="$out/Open-Wisper-$version.dmg"
+dmg="$out/Spaces-$version.dmg"
 [[ -f "$dmg" ]] || fail "there is no $dmg. Run apps/macos/scripts/dmg first."
 [[ -z "$notes" || -f "$notes" ]] || fail "cannot find the notes file $notes."
 [[ -n "$url_prefix" ]] || url_prefix="$repository/releases/download/v$version/"
@@ -77,7 +77,7 @@ dmg="$out/Open-Wisper-$version.dmg"
 
 # Sparkle's tools sit in the folder the Mac app was built in.
 scratch=".build"
-read -r -a swift_flags <<<"${OPEN_WISPER_SWIFT_FLAGS:-}"
+read -r -a swift_flags <<<"${SPACES_SWIFT_FLAGS:-}"
 for ((i = 0; i < ${#swift_flags[@]}; i++)); do
   if [[ "${swift_flags[i]}" == --scratch-path && $((i + 1)) -lt ${#swift_flags[@]} ]]; then
     scratch="${swift_flags[i + 1]}"
@@ -107,14 +107,14 @@ options=(--ed-key-file "$update_key" --download-url-prefix "$url_prefix" --link 
   --full-release-notes-url "$repository/releases" -o "$update/appcast.xml")
 if [[ -n "$notes" ]]; then
   # Notes named like the disk image are picked up and put into the feed itself.
-  cp "$notes" "$update/Open-Wisper-$version.md"
+  cp "$notes" "$update/Spaces-$version.md"
   options+=(--embed-release-notes)
 fi
 
-echo "==> Signing Open Wisper $version (build $build_number) and writing the feed"
+echo "==> Signing Spaces $version (build $build_number) and writing the feed"
 # The tool opens the disk image to read the app's version, in a way Finder does not show.
 "$tools/generate_appcast" "${options[@]}" "$update" 2>&1 | grep -v "hdiutil: WARNING" || true
-rm -f "$update/Open-Wisper-$version.md"
+rm -f "$update/Spaces-$version.md"
 [[ -s "$update/appcast.xml" ]] || fail "the feed was not written."
 
 # --- Check it the way the app will -------------------------------------------------------
@@ -122,16 +122,16 @@ rm -f "$update/Open-Wisper-$version.md"
 echo "==> Checking"
 feed="$update/appcast.xml"
 grep -q "<sparkle:version>$build_number</sparkle:version>" "$feed" || fail "the feed does not list build $build_number."
-grep -q "url=\"${url_prefix}Open-Wisper-$version.dmg\"" "$feed" || fail "the feed does not point at ${url_prefix}Open-Wisper-$version.dmg."
+grep -q "url=\"${url_prefix}Spaces-$version.dmg\"" "$feed" || fail "the feed does not point at ${url_prefix}Spaces-$version.dmg."
 signature="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$feed" | head -1)"
 [[ -n "$signature" ]] || fail "the feed holds no signature for the disk image."
 # With the key from the app, and with Apple's code rather than Sparkle's.
-swift "$root/scripts/ed25519.swift" verify "$trusted" "$signature" "$update/Open-Wisper-$version.dmg" ||
+swift "$root/scripts/ed25519.swift" verify "$trusted" "$signature" "$update/Spaces-$version.dmg" ||
   fail "the signature in the feed does not match the disk image."
 "$tools/sign_update" --verify --ed-key-file "$update_key" "$feed" >/dev/null ||
   fail "the signature of the feed itself does not hold."
-cmp -s "$dmg" "$update/Open-Wisper-$version.dmg" || fail "the disk image changed while it was being signed."
+cmp -s "$dmg" "$update/Spaces-$version.dmg" || fail "the disk image changed while it was being signed."
 
 echo "==> Done: $update"
-echo "    Open-Wisper-$version.dmg   SHA-256 $(shasum -a 256 "$update/Open-Wisper-$version.dmg" | cut -d' ' -f1)"
+echo "    Spaces-$version.dmg   SHA-256 $(shasum -a 256 "$update/Spaces-$version.dmg" | cut -d' ' -f1)"
 echo "    appcast.xml              build $build_number, downloads from $url_prefix"

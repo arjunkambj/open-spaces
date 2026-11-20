@@ -1,17 +1,17 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// Models and seams shared by every Open Wisper module.
+// Models and seams shared by every Spaces module.
 let package = Package(
-  name: "WisperDomain",
+  name: "SpacesDomain",
   platforms: [.macOS("14.4"), .iOS(.v17)],
   products: [
-    .library(name: "WisperDomain", targets: ["WisperDomain"])
+    .library(name: "SpacesDomain", targets: ["SpacesDomain"])
   ],
   dependencies: [],
   targets: [
     .target(
-      name: "WisperDomain",
+      name: "SpacesDomain",
       dependencies: []
     )
   ]

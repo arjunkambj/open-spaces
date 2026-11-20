@@ -1,6 +1,6 @@
-# The Open Wisper website
+# The Spaces website
 
-One page that says what Open Wisper is and lets people download it: <https://whisper.0xhoney.com>.
+One page that says what Spaces is and lets people download it: <https://whisper.0xhoney.com>.
 
 It is built with [TanStack Start](https://tanstack.com/start) (React) and [Tailwind CSS](https://tailwindcss.com), and **prerendered**: while the site is built, the page is rendered once to plain HTML. Cloudflare serves those files as they are ([Workers static assets](https://developers.cloudflare.com/workers/static-assets/)); no code of ours runs when someone visits.
 
@@ -20,23 +20,23 @@ To see the finished site the way Cloudflare serves it, with the real response he
 
 ```bash
 pnpm web:build
-pnpm --filter @open-wisper/web run preview       # http://127.0.0.1:8788
+pnpm --filter @open-spaces/web run preview       # http://127.0.0.1:8788
 ```
 
 Two checks:
 
 ```bash
-pnpm --filter @open-wisper/web run lint          # the types, in every file (tsc --noEmit)
-pnpm --filter @open-wisper/web run check:site    # the live site: links, files, headers, version
+pnpm --filter @open-spaces/web run lint          # the types, in every file (tsc --noEmit)
+pnpm --filter @open-spaces/web run check:site    # the live site: links, files, headers, version
 ```
 
-`check:site` takes another address too, such as the preview: `pnpm --filter @open-wisper/web run check:site http://127.0.0.1:8788`.
+`check:site` takes another address too, such as the preview: `pnpm --filter @open-spaces/web run check:site http://127.0.0.1:8788`.
 
 ## Change the words
 
 Every word on the page is in one file: [`src/content.ts`](src/content.ts). Edit the text there and run `pnpm web` to see it.
 
-The page has one idea: what you say, and what lands. The top shows a spoken line in monospace, with the "um" and "uh" struck out, and the clean sentence it becomes, set large in a book serif. That sentence is also a row in the Home picture below it, so keep the two the same. Words that people say are set in monospace; words Open Wisper writes, and the headings, are set in the serif.
+The page has one idea: what you say, and what lands. The top shows a spoken line in monospace, with the "um" and "uh" struck out, and the clean sentence it becomes, set large in a book serif. That sentence is also a row in the Home picture below it, so keep the two the same. Words that people say are set in monospace; words Spaces writes, and the headings, are set in the serif.
 
 Keep it plain English: short sentences, everyday words. Say only what is true of the app as it ships. The root [README](../../README.md) is the reference for that.
 
@@ -55,8 +55,8 @@ The line for connecting an AI agent, and the tool names in the Agents section, a
 To make fresh pictures of the app, with no window opened (see "Commands" in [AGENTS.md](../../AGENTS.md)):
 
 ```bash
-"apps/macos/build/Open Wisper.app/Contents/MacOS/OpenWisper" --snapshots <folder>   # the Mac window
-cd packages/ui && ../../scripts/swiftw run wisper-snapshots <folder>                # shared screens
+"apps/macos/build/Spaces.app/Contents/MacOS/Spaces" --snapshots <folder>   # the Mac window
+cd packages/ui && ../../scripts/swiftw run spaces-snapshots <folder>                # shared screens
 ```
 
 Copy the light and the dark picture over the files above. Both must have the same size. All pictures show made-up sample data; keep it that way.
@@ -72,10 +72,10 @@ The headings and the typed sentence use [Newsreader](https://github.com/producti
 The button goes to
 
 ```
-https://github.com/arjunkambj/open-wisper/releases/latest/download/Open-Wisper.dmg
+https://github.com/arjunkambj/open-spaces/releases/latest/download/Spaces.dmg
 ```
 
-GitHub sends that address on to the newest release. The Release workflow attaches the disk image twice: as `Open-Wisper-<version>.dmg` (the one installed apps update from) and as `Open-Wisper.dmg`, so this address never changes.
+GitHub sends that address on to the newest release. The Release workflow attaches the disk image twice: as `Spaces-<version>.dmg` (the one installed apps update from) and as `Spaces.dmg`, so this address never changes.
 
 The version next to the button is looked up **while the site is built** ([`src/release.ts`](src/release.ts), called once from [`vite.config.ts`](vite.config.ts)) and written into the HTML and the page's script alike. A visitor's browser asks GitHub nothing.
 
@@ -86,7 +86,7 @@ The page only changes when the site is built again. That is why a new release de
 
 ## How it gets to Cloudflare
 
-The site is one Cloudflare Worker named `open-wisper-web`. It has no code: it only serves the files in `dist/client`. [`wrangler.jsonc`](wrangler.jsonc) describes it. (The build also leaves `dist/server`, the code that rendered the pages while building. It is not deployed.)
+The site is one Cloudflare Worker named `open-spaces-web`. It has no code: it only serves the files in `dist/client`. [`wrangler.jsonc`](wrangler.jsonc) describes it. (The build also leaves `dist/server`, the code that rendered the pages while building. It is not deployed.)
 
 ### How the page is built
 
@@ -110,15 +110,15 @@ pnpm web:deploy     # builds, then runs `wrangler deploy`
 
 Wrangler (Cloudflare's command-line tool, installed with `pnpm install`) must be allowed into **the Cloudflare account that holds the `0xhoney.com` domain**. A Worker can only be given an address on a domain of its own account. No account ID is kept in this repository. Either:
 
-- keep a token and the account ID in a private file outside the repository, and load it for the one command. The maintainer's Mac has `~/.config/open-wisper/cloudflare.env`, two lines (`CLOUDFLARE_API_TOKEN=...` and `CLOUDFLARE_ACCOUNT_ID=...`), readable only by its owner:
+- keep a token and the account ID in a private file outside the repository, and load it for the one command. The maintainer's Mac has `~/.config/open-spaces/cloudflare.env`, two lines (`CLOUDFLARE_API_TOKEN=...` and `CLOUDFLARE_ACCOUNT_ID=...`), readable only by its owner:
 
   ```bash
-  (set -a; source ~/.config/open-wisper/cloudflare.env; pnpm web:deploy)
+  (set -a; source ~/.config/open-spaces/cloudflare.env; pnpm web:deploy)
   ```
 
-- or sign in once with `pnpm --filter @open-wisper/web exec wrangler login` (it opens a browser; choose that account). If the sign-in reaches more than one account, also set `CLOUDFLARE_ACCOUNT_ID`.
+- or sign in once with `pnpm --filter @open-spaces/web exec wrangler login` (it opens a browser; choose that account). If the sign-in reaches more than one account, also set `CLOUDFLARE_ACCOUNT_ID`.
 
-Then check the result: `pnpm --filter @open-wisper/web run check:site`.
+Then check the result: `pnpm --filter @open-spaces/web run check:site`.
 
 ### Deploy from GitHub
 

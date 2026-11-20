@@ -3,19 +3,19 @@ import PackageDescription
 
 // Dictation and meeting engines.
 let package = Package(
-  name: "WisperEngine",
+  name: "SpacesEngine",
   platforms: [.macOS("14.4"), .iOS(.v17)],
   products: [
-    .library(name: "WisperEngine", targets: ["WisperEngine"])
+    .library(name: "SpacesEngine", targets: ["SpacesEngine"])
   ],
   dependencies: [
     .package(path: "../domain")
   ],
   targets: [
     .target(
-      name: "WisperEngine",
+      name: "SpacesEngine",
       dependencies: [
-        .product(name: "WisperDomain", package: "domain")
+        .product(name: "SpacesDomain", package: "domain")
       ]
     )
   ]

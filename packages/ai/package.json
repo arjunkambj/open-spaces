@@ -1,5 +1,5 @@
 {
-  "name": "@open-wisper/ai",
+  "name": "@open-spaces/ai",
   "version": "0.1.0",
   "private": true,
   "description": "OpenAI adapters: transcription and language model.",
@@ -8,6 +8,6 @@
     "lint": "swift format lint --strict --recursive --parallel Package.swift Sources"
   },
   "dependencies": {
-    "@open-wisper/domain": "workspace:*"
+    "@open-spaces/domain": "workspace:*"
   }
 }
