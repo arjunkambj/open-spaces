@@ -159,7 +159,8 @@ enum MeetingsSnapshots {
         languageModel: FakeLanguageModel(text: ""),
         target: FakeTextTarget(),
         permissions: FakePermissions(statuses: [.microphone: microphone, .systemAudio: .granted]),
-        checkAPIKey: { _ in }
+        checkAPIKey: { _ in },
+        checkClaudeKey: { _ in }
       )
     )
   }

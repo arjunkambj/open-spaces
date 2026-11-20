@@ -37,3 +37,6 @@ ios-logs/
 *.local
 *.p12
 *.keychain-db
+
+# Agent work folders
+.claude/worktrees/

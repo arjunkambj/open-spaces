@@ -172,24 +172,22 @@ public actor InMemoryLibrary: Library {
 }
 
 public actor InMemorySecretStore: SecretStore {
-  private var key: String?
-  private var host: String
+  private var keys: [String: String] = [:]
 
   /// - Parameters:
   ///   - apiKey: the key that is already saved, if any.
   ///   - host: the server that key was saved for. OpenAI itself unless said otherwise.
   public init(apiKey: String? = nil, host: String = APIServer.openAIHost) {
-    key = (apiKey?.isEmpty ?? true) ? nil : apiKey
-    self.host = host
+    if let apiKey, !apiKey.isEmpty { keys[host.lowercased()] = apiKey }
   }
 
   public func apiKey(for host: String) -> String? {
-    APIServer.sameHost(host, self.host) ? key : nil
+    keys[host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()]
   }
 
   public func setAPIKey(_ key: String?, host: String) {
-    self.key = (key?.isEmpty ?? true) ? nil : key
-    self.host = host
+    keys[host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()] =
+      (key?.isEmpty ?? true) ? nil : key
   }
 }
 

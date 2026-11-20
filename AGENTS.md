@@ -4,11 +4,11 @@ Spaces is an open-source voice dictation and meeting-notes app for macOS and iOS
 
 ## Rules that never bend
 
-- **Everything is stored on the device.** Files under the data folder, the API key in its own private file (`api-key.json`), not the Keychain. No cloud, no analytics, no telemetry, no sign-up. The only network calls go to the OpenAI-compatible server the user configured, plus the Mac app's check for a new version on GitHub (about once a day; it sends no user data).
+- **Everything is stored on the device.** Files under the data folder, the API keys in their own private file (`api-key.json`), not the Keychain. No cloud, no analytics, no telemetry, no sign-up, no database. The only network calls go to the OpenAI-compatible server the user configured, to Anthropic when the text model is a Claude model, plus the Mac app's check for a new version on GitHub (about once a day; it sends no user data).
 - **One branch, one environment.** `main` is the base branch. There is no staging or dev environment. Work on a branch, open a PR into `main`.
 - **Original work only.** The layout and flows are inspired by popular dictation apps, but never copy another product's code, images, icons, sounds, name or wording.
 - **No third-party Swift dependencies** without a strong reason. Apple frameworks and the standard library cover what we need. The one exception is Sparkle, the updater in the Mac app, imported in a single file (`AppUpdater.swift`).
-- The API key never goes into a file, a log or an error message.
+- An API key never goes into any file but `api-key.json`, a log or an error message.
 - **No tests, no legacy, no fallbacks.** No test suites. No code kept for old callers or old data: change the callers instead. No second path in case the first one fails: fail plainly, with a clear `SpacesError`.
 
 ## Layout
@@ -20,7 +20,7 @@ apps/ios/Phone    SpacesPhone, SpacesKeyboard, SpacesLive   nearly all iOS code;
 apps/web          the website whisper.0xhoney.com (TanStack Start + Tailwind, prerendered; on Cloudflare)
 packages/domain   SpacesDomain   models, the seams (protocols), in-memory fakes, APIServer, LinkTicket
 packages/store    SpacesStore    FileLibrary, FileSecretStore
-packages/ai       SpacesAI       OpenAI adapters
+packages/ai       SpacesAI       OpenAI and Anthropic adapters, ModelRouter
 packages/audio    SpacesAudio    microphone + system-audio capture
 packages/engine   SpacesEngine   DictationEngine, MeetingEngine, AppModel
 packages/ui       SpacesUI       design tokens + SwiftUI components (both platforms)
@@ -36,7 +36,7 @@ Dependencies point one way: `domain` knows nothing; `store`, `ai`, `audio`, `eng
 ## Contracts every change keeps
 
 - **Server address.** Resolve it with `Settings.apiServer()` (`APIServer`). An address that is set but unusable throws `SpacesError.invalidServerAddress`: send nothing, and never fall back to OpenAI.
-- **API key.** One key, owned by one host. Read it with `SecretStore.apiKey(for: server.host)` and save it with `setAPIKey(_:host:)`, so a key is only ever sent to the server it was saved for.
+- **API keys.** One key per host. Read it with `SecretStore.apiKey(for: server.host)` and save it with `setAPIKey(_:host:)`, so a key is only ever sent to the server it was saved for. Claude models (`Settings.isClaude`) always go to `APIServer.anthropic` with the key saved for `api.anthropic.com`; the custom server address never applies to them. Speech to text is OpenAI only.
 - **Links.** A link that starts listening or stops a recording (`SpacesLink.needsTrust`) is followed only with a redeemed `LinkTicket` or the user's yes. A sender of ours (the `spaces` tool, the iOS keyboard) attaches one with `LinkTicket.issue`. Without a ticket: starting a meeting asks first, dictation and stop links are ignored.
 - **Nothing said is lost.** A failed dictation keeps its audio and a history entry to retry. A meeting's audio stays on disk until all of it is transcribed, and `recoverUnfinished` rebuilds from it after a crash.
 - **Agent export.** `meetings export` writes only a new `.md` file. Keep the rules in `docs/agents.md` ("Safety") true.

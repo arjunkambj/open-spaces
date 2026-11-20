@@ -4,7 +4,8 @@ Spaces keeps everything on your device, in one folder of plain files. There is n
 database and no server. You can open the files, back them up, or change them with your own
 tools.
 
-Your OpenAI API key is kept apart from everything else, in its own file, `api-key.json`.
+Your API keys (OpenAI, and Anthropic if you use Claude) are kept apart from everything else, in
+one file, `api-key.json`.
 Only your user account can open it, and the key is never written to any other file. On macOS
 that file is in this folder. On iOS it is in the app's own storage, outside the folder the
 app shares with its keyboard, so the keyboard cannot read it.
@@ -35,7 +36,7 @@ the app and the tool must be given the same value to see the same data.
 ```
 <folder>/
   settings.json                    your settings
-  api-key.json                     your API key (macOS only, see below)
+  api-key.json                     your API keys (macOS only, see below)
   dictionary.json                  words to spell your way
   snippets.json                    voice shortcuts
   dictations.json                  dictation history
@@ -148,13 +149,15 @@ The examples below were written by the app itself, from made-up data.
 ### api-key.json
 
 ```json
-{"host": "api.openai.com", "key": "sk-..."}
+{"keys": {"api.openai.com": "sk-...", "api.anthropic.com": "sk-ant-..."}}
 ```
 
-- `host` is the server the key was saved for. The key is sent to that server only. If the
-  server address in `settings.json` names another host, the key is not used.
+- `keys` holds one key per server, under the host it was saved for. Each key is sent to its
+  own server only. If the server address in `settings.json` names another host, no key is
+  sent there until you save one for it.
+- `api.anthropic.com` is the Anthropic key, used only when `textModel` is a Claude model.
 - The file is readable by your user account only (mode 0600) and is left out of backups.
-  Removing the key in Settings deletes the file.
+  Removing the last key in Settings deletes the file.
 - If you copy, zip or share the data folder, leave this file out.
 - On iOS this file is in the app's own `Application Support` folder, not in the shared
   folder.

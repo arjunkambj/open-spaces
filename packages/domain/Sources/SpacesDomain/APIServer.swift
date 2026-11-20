@@ -31,6 +31,16 @@ public struct APIServer: Sendable, Hashable {
   /// OpenAI's own API, `https://api.openai.com/v1`.
   public static let openAI = APIServer(root: URL(string: "https://api.openai.com/v1")!, host: openAIHost)
 
+  /// The host of Anthropic's API, where requests for Claude models go.
+  public static let anthropicHost = "api.anthropic.com"
+
+  /// Anthropic's API, `https://api.anthropic.com/v1`. Claude models are always asked here: the
+  /// custom server address is for OpenAI-compatible servers only.
+  public static let anthropic = APIServer(
+    root: URL(string: "https://api.anthropic.com/v1")!,
+    host: anthropicHost
+  )
+
   /// Whether this is OpenAI itself rather than a server the person set.
   public var isOpenAI: Bool { host == APIServer.openAIHost }
 
@@ -107,7 +117,7 @@ extension SpacesError {
     case .invalidResponse(let detail):
       return "\(host) sent a reply that could not be read: \(detail)"
     case .invalidServerAddress, .replyTooLong, .noSpeech, .permissionDenied, .captureFailed,
-      .notFound, .storage:
+      .notFound, .storage, .anthropic:
       return errorDescription ?? "Something went wrong."
     }
   }

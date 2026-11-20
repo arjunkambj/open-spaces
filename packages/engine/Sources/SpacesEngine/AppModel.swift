@@ -57,6 +57,8 @@ public final class AppModel {
     public var host: HostActions
     /// Asks the server the settings name whether a key works. Throws `SpacesError` when it does not.
     public var checkAPIKey: @Sendable (String) async throws -> Void
+    /// Asks Anthropic whether a key works, for Claude models. Throws `SpacesError` when it does not.
+    public var checkClaudeKey: @Sendable (String) async throws -> Void
 
     public init(
       library: any Library,
@@ -68,7 +70,8 @@ public final class AppModel {
       target: any TextTarget,
       permissions: any Permissions,
       host: HostActions = HostActions(),
-      checkAPIKey: @escaping @Sendable (String) async throws -> Void
+      checkAPIKey: @escaping @Sendable (String) async throws -> Void,
+      checkClaudeKey: @escaping @Sendable (String) async throws -> Void
     ) {
       self.library = library
       self.secrets = secrets
@@ -80,6 +83,7 @@ public final class AppModel {
       self.permissions = permissions
       self.host = host
       self.checkAPIKey = checkAPIKey
+      self.checkClaudeKey = checkClaudeKey
     }
   }
 
@@ -92,6 +96,7 @@ public final class AppModel {
   public let dictation: DictationEngine
   public let meetings: MeetingEngine
   private let checkAPIKey: @Sendable (String) async throws -> Void
+  private let checkClaudeKey: @Sendable (String) async throws -> Void
 
   // Live copy of the library
   public private(set) var settings = Settings()
@@ -102,6 +107,8 @@ public final class AppModel {
   /// Whether a key is saved for the server the settings name right now. A key saved for
   /// another server does not count: it is never sent to this one.
   public private(set) var hasAPIKey = false
+  /// Whether a key for Anthropic is saved, so Claude models can be used.
+  public private(set) var hasClaudeKey = false
   /// False until the first `load()` has finished.
   public private(set) var isLoaded = false
   /// The most recent error from `run`, for screens to show. Set to `nil` to dismiss.
@@ -128,6 +135,7 @@ public final class AppModel {
     permissions = dependencies.permissions
     host = dependencies.host
     checkAPIKey = dependencies.checkAPIKey
+    checkClaudeKey = dependencies.checkClaudeKey
     let checked = AddressChecked(
       library: dependencies.library,
       transcriber: dependencies.transcriber,
@@ -247,11 +255,29 @@ public final class AppModel {
     await refreshKeyState()
   }
 
-  /// Removes the saved key, whatever server it was saved for. Throws `SpacesError` when the
+  /// Removes the key saved for the server the settings name. Throws `SpacesError` when the
   /// key could not be removed.
   public func removeAPIKey() async throws {
-    try await secrets.setAPIKey(nil, host: APIServer.openAIHost)
-    hasAPIKey = false
+    await settingsWrite?.value
+    let server = try await library.settings().apiServer()
+    try await secrets.setAPIKey(nil, host: server.host)
+    await refreshKeyState()
+  }
+
+  /// Checks a key with Anthropic and stores it, for Anthropic, when it works. Claude models
+  /// use it. Throws `SpacesError` when it does not work.
+  public func saveClaudeKey(_ key: String) async throws {
+    let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { throw SpacesError.anthropic(.missingAPIKey) }
+    try await checkClaudeKey(trimmed)
+    try await secrets.setAPIKey(trimmed, host: APIServer.anthropicHost)
+    await refreshKeyState()
+  }
+
+  /// Removes the Anthropic key. Throws `SpacesError` when it could not be removed.
+  public func removeClaudeKey() async throws {
+    try await secrets.setAPIKey(nil, host: APIServer.anthropicHost)
+    await refreshKeyState()
   }
 
   /// Marks onboarding as finished.
@@ -292,8 +318,9 @@ public final class AppModel {
     if stored.apiBaseURL != server { await refreshKeyState() }
   }
 
-  /// Works out `hasAPIKey` for the server the settings name now.
+  /// Works out `hasAPIKey` for the server the settings name now, and `hasClaudeKey`.
   private func refreshKeyState() async {
+    hasClaudeKey = ((try? await secrets.apiKey(for: APIServer.anthropicHost)) ?? nil) != nil
     let address = settings.apiBaseURL
     var saved = false
     if let server = try? APIServer(address: address) {
@@ -318,7 +345,8 @@ public final class AppModel {
 /// The OpenAI adapter refuses such an address too, when it is handed the address as text.
 /// This holds whatever the app wired in, for dictation and for meetings: a mistyped address
 /// is an error (`SpacesError.invalidServerAddress`), and never a reason to send audio to
-/// OpenAI instead. Settings that cannot be read send nothing either.
+/// OpenAI instead. Settings that cannot be read send nothing either. A prompt for a Claude
+/// model goes to Anthropic, not to that server, so the address does not hold it up.
 struct AddressChecked: Transcriber, LanguageModel {
   let library: any Library
   let transcriber: any Transcriber
@@ -330,7 +358,8 @@ struct AddressChecked: Transcriber, LanguageModel {
   }
 
   func complete(_ request: CompletionRequest) async throws -> String {
-    _ = try await library.settings().apiServer()
+    let settings = try await library.settings()
+    if !Settings.isClaude(request.model) { _ = try settings.apiServer() }
     return try await languageModel.complete(request)
   }
 
@@ -362,6 +391,9 @@ extension AppModel {
         host: HostActions(agentToolPath: "/Applications/Spaces.app/Contents/MacOS/spaces"),
         checkAPIKey: { key in
           if !key.hasPrefix("sk-") { throw SpacesError.invalidAPIKey }
+        },
+        checkClaudeKey: { key in
+          if !key.hasPrefix("sk-ant-") { throw SpacesError.anthropic(.invalidAPIKey) }
         }
       )
     )

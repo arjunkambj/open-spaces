@@ -30,6 +30,7 @@ enum Composition {
       // through as typed: an unusable one is an error, never a quiet switch to OpenAI.
       address: { try await library.settings().apiBaseURL }
     )
+    let anthropic = Anthropic(secrets: secrets)
     let monitor = ShortcutMonitor()
     let tool = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/spaces").path
     let target = MacTextTarget()
@@ -46,7 +47,8 @@ enum Composition {
         transcriber: openAI.transcriber,
         // Used only when the transcription model in Settings is a live one; otherwise the file is uploaded.
         liveTranscriber: openAI.liveTranscriber,
-        languageModel: openAI.languageModel,
+        // Claude models go to Anthropic, the rest to the OpenAI server.
+        languageModel: ModelRouter(openAI: openAI.languageModel, anthropic: anthropic.languageModel),
         target: target,
         permissions: MacPermissions(),
         host: HostActions(
@@ -62,7 +64,8 @@ enum Composition {
           // which also catches a change made by an agent.
           checkForUpdates: checkForUpdates
         ),
-        checkAPIKey: { try await openAI.check(key: $0) }
+        checkAPIKey: { try await openAI.check(key: $0) },
+        checkClaudeKey: { try await anthropic.check(key: $0) }
       )
     )
     let controls = MacControls(

@@ -186,7 +186,7 @@ struct OpenAISettings: View {
   var body: some View {
     // The stored address: the key state (`hasAPIKey`) is about the server it names.
     let server = ServerAddress(model.settings.apiBaseURL ?? "")
-    PageSection("Your key") {
+    PageSection("OpenAI") {
       Card(padding: 0) {
         HStack(alignment: .center, spacing: Spaces.Space.l) {
           VStack(alignment: .leading, spacing: Spaces.Space.xs) {
@@ -231,6 +231,45 @@ struct OpenAISettings: View {
         if idiom == .phone { SetupLink("Get a key", url: SetupLinks.openAIKeys) }
       }
     }
+    PageSection("Claude") {
+      Card(padding: 0) {
+        VStack(alignment: .leading, spacing: Spaces.Space.xs) {
+          HStack(spacing: Spaces.Space.s) {
+            Text(ClaudeKeyField.label).spacesText(.bodyStrong)
+            Badge(
+              model.hasClaudeKey ? "Connected" : "Not connected",
+              tone: model.hasClaudeKey ? .success : model.settings.usesClaude ? .warning : .neutral
+            )
+          }
+          Text(ClaudeCopy.keyStatus(hasKey: model.hasClaudeKey, usesClaude: model.settings.usesClaude))
+            .spacesText(.caption)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .padding(.horizontal, SetupMetrics.rowInset)
+        .padding(.top, Spaces.Space.l)
+        HStack(spacing: Spaces.Space.s) {
+          Button(model.hasClaudeKey ? "Change key" : "Add key") { dialog = .claudeKey }
+            .buttonStyle(.spaces(model.hasClaudeKey ? .secondary : .primary, size: .small))
+          if model.hasClaudeKey {
+            Button("Remove key") { dialog = .removeClaudeKey }
+              .buttonStyle(.spaces(.ghost, size: .small))
+          }
+          Spacer(minLength: Spaces.Space.s)
+          if idiom == .mac { SetupLink("Get a key", url: SetupLinks.anthropicKeys) }
+        }
+        .padding(.horizontal, SetupMetrics.rowInset)
+        .padding(.top, Spaces.Space.m)
+        .padding(.bottom, Spaces.Space.l)
+      }
+      SetupParagraph(
+        "Optional. Pick a Claude model as the text model below to have Claude tidy your words and "
+          + "write meeting notes. OpenAI still turns your voice into text. You pay Anthropic directly.",
+        style: .caption
+      )
+      if idiom == .phone { SetupLink("Get a key", url: SetupLinks.anthropicKeys) }
+    }
     PageSection("Models") {
       Card(padding: 0) {
         ModelPicker(
@@ -245,7 +284,9 @@ struct OpenAISettings: View {
         SettingsDivider()
         ModelPicker(
           title: "Text model",
-          description: "Tidies dictations, follows spoken commands and writes meeting notes.",
+          description:
+            "Tidies dictations, follows spoken commands and writes meeting notes. "
+            + "Claude models use your Anthropic key.",
           suggested: SpacesDomain.Settings.suggestedTextModels,
           current: model.settings.textModel,
           isTyping: $typingTextModel
@@ -314,6 +355,16 @@ enum OpenAICopy {
     }
     return "The key is checked with \(customHost) first, then saved on this device only. "
       + "It is sent to that server, not to OpenAI."
+  }
+}
+
+enum ClaudeCopy {
+  static func keyStatus(hasKey: Bool, usesClaude: Bool) -> String {
+    switch (hasKey, usesClaude) {
+    case (true, _): "Saved on this device only. It is sent only to Anthropic."
+    case (false, true): "Your text model is a Claude model. Add your Anthropic key to use it."
+    case (false, false): "Add a key to use Claude models. It is saved on this device only."
+    }
   }
 }
 

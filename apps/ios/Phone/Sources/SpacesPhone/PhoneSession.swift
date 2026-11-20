@@ -311,6 +311,7 @@ public final class PhoneSession {
       // The address goes through as typed: an unusable one is an error, never a quiet switch to OpenAI.
       address: { try await library.settings().apiBaseURL }
     )
+    let anthropic = Anthropic(secrets: secrets)
     return AppModel(
       AppModel.Dependencies(
         library: library,
@@ -318,11 +319,13 @@ public final class PhoneSession {
         capture: SystemAudioCapture(),
         transcriber: openAI.transcriber,
         liveTranscriber: openAI.liveTranscriber,
-        languageModel: openAI.languageModel,
+        // Claude models go to Anthropic, the rest to the OpenAI server.
+        languageModel: ModelRouter(openAI: openAI.languageModel, anthropic: anthropic.languageModel),
         target: ClipboardTextTarget(clipboard: device.clipboard),
         permissions: PhonePermissions(),
         host: HostActions(),
-        checkAPIKey: { key in try await openAI.check(key: key) }
+        checkAPIKey: { key in try await openAI.check(key: key) },
+        checkClaudeKey: { key in try await anthropic.check(key: key) }
       )
     )
   }

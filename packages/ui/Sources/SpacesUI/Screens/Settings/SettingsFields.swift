@@ -140,6 +140,54 @@ struct APIKeyDialog: View {
   }
 }
 
+/// The dialog an Anthropic key is pasted into. The key is checked with Anthropic before it is stored.
+struct ClaudeKeyDialog: View {
+  let onClose: () -> Void
+
+  @Environment(AppModel.self) private var model
+  @State private var key = ""
+  @State private var error: String?
+  @State private var isChecking = false
+
+  var body: some View {
+    DialogCard(
+      title: model.hasClaudeKey ? "Change your Anthropic key" : "Add your Anthropic key",
+      subtitle: "The key is checked with Anthropic first, then saved on this device only.",
+      onClose: onClose
+    ) {
+      APIKeyField(ClaudeKeyField.label, text: $key, error: error, focusOnAppear: true)
+        .onSubmit(save)
+        .disabled(isChecking)
+      SetupLink("Get a key from Anthropic", url: SetupLinks.anthropicKeys)
+    } footer: {
+      Button("Cancel", action: onClose).buttonStyle(.spaces())
+      Button(isChecking ? "Checking…" : "Save key", action: save)
+        .buttonStyle(.spaces(.primary))
+        .keyboardShortcut(.defaultAction)
+        .disabled(isChecking || APIKeyEntry.isEmpty(key))
+    }
+    .onChange(of: key) { _, _ in error = nil }
+  }
+
+  private func save() {
+    guard !isChecking, !APIKeyEntry.isEmpty(key) else { return }
+    isChecking = true
+    Task {
+      do {
+        try await model.saveClaudeKey(key)
+        onClose()
+      } catch {
+        self.error = APIKeyEntry.message(for: error)
+      }
+      isChecking = false
+    }
+  }
+}
+
+enum ClaudeKeyField {
+  static let label = "Anthropic API key"
+}
+
 /// Small rules shared by every place a key is typed.
 enum APIKeyEntry {
   static func isEmpty(_ key: String) -> Bool {
@@ -149,7 +197,8 @@ enum APIKeyEntry {
   /// What to show under the field when a key could not be saved.
   static func message(for error: any Error) -> String {
     switch error {
-    case SpacesError.missingAPIKey: "Paste your key first."
+    case SpacesError.missingAPIKey, SpacesError.anthropic(.missingAPIKey): "Paste your key first."
+    case SpacesError.anthropic(.invalidAPIKey): "This key was not accepted. Check that you copied all of it."
     // The standard message points to Settings, which is where the person already is.
     case SpacesError.invalidAPIKey: "This key was not accepted. Check that you copied all of it."
     default: error.localizedDescription

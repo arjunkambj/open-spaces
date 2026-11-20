@@ -98,16 +98,18 @@ Meetings work the same way: the audio is turned into text piece by piece while y
 
 Out of the box, Spaces asks for the model `gpt-live-transcribe` to turn speech into text while you talk, and `gpt-6-luna` to tidy it and write notes. Meetings and retries send the recorded file to `gpt-transcribe`. You can pick other models in Settings: with `gpt-transcribe`, dictation costs about a quarter as much to transcribe but the text comes a second or so later.
 
-**What leaves your device.** Your audio and the text made from it. To get spelling and style right, a few more things go along: your name, your dictionary words, and the name of the app you are typing into. Command mode also sends the text you selected. Meeting notes and questions send that meeting's title, transcript and notes. All of it goes only to OpenAI, or to the server you chose instead.
+**Claude, if you like.** Add an Anthropic API key under Settings › AI keys and pick a Claude model (such as `claude-opus-5-5`) as the text model. Claude then tidies your words, follows commands and writes meeting notes. OpenAI still turns your voice into text, because Anthropic does not offer that. You pay Anthropic directly for what Claude does.
+
+**What leaves your device.** Your audio and the text made from it. To get spelling and style right, a few more things go along: your name, your dictionary words, and the name of the app you are typing into. Command mode also sends the text you selected. Meeting notes and questions send that meeting's title, transcript and notes. All of it goes only to OpenAI, or to the server you chose instead. If you picked a Claude model, the text work (not your audio) goes to Anthropic.
 
 The Mac app makes one other kind of request: about once a day it asks GitHub whether there is a newer version (see [Updates](#updates)). That request carries the app's name and version, and none of your data.
 
 - **No account.** There is nothing to sign up for.
 - **No server of ours.** We do not run one. We never see your audio, your text or your key.
 - **No tracking.** No analytics and no usage reports.
-- **Your data stays with you.** History, meetings, dictionary and settings are plain files on your device. Your API key is kept in a private file on your device that only your user account can open.
+- **Your data stays with you.** History, meetings, dictionary and settings are plain files on your device. Your API keys are kept in a private file on your device that only your user account can open.
 
-What you send to OpenAI is covered by OpenAI's own data rules, and you pay OpenAI for what you use.
+What you send to OpenAI or Anthropic is covered by their own data rules, and you pay them for what you use.
 
 ### Using your own server
 
@@ -236,7 +238,7 @@ On macOS, everything is in one folder:
 ~/Library/Application Support/Spaces
 ```
 
-The files are JSON, Markdown and audio. You can read them, back them up, or delete them yourself. Your API key is in that folder too, in `api-key.json`, which only your user account can open and which backups leave out. If you share or copy the folder, leave that file out.
+The files are JSON, Markdown and audio. You can read them, back them up, or delete them yourself. Your API keys are in that folder too, in `api-key.json`, which only your user account can open and which backups leave out. If you share or copy the folder, leave that file out.
 
 On an iPhone, the same files are kept inside the app's own storage, in a folder the app shares with its keyboard.
 

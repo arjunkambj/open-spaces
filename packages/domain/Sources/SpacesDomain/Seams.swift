@@ -8,6 +8,7 @@ import Foundation
 //   Transcriber    -> SpacesAI.OpenAITranscriber       (OpenAI audio API)
 //   LiveTranscriber -> SpacesAI.OpenAILiveTranscriber  (OpenAI realtime API)
 //   LanguageModel  -> SpacesAI.OpenAILanguageModel     (OpenAI chat API)
+//                  -> SpacesAI.AnthropicLanguageModel  (Anthropic messages API, Claude models)
 //   AudioCapture   -> SpacesAudio.SystemAudioCapture   (AVFoundation / Core Audio)
 //   TextTarget     -> SpacesMac.MacTextTarget          (the app you are typing in)
 //   Permissions    -> SpacesMac.MacPermissions         (system permission prompts)
@@ -89,19 +90,18 @@ extension Library {
 
 // MARK: - Secrets
 
-/// Holds the user's API key. Never written into the library files themselves.
+/// Holds the user's API keys. Never written into the library files themselves.
 ///
-/// There is one key, and it belongs to one server: the host it was saved for
-/// (see `APIServer.host`). It is handed out only for that host, so a change to
-/// the server address in the settings file can never send the key somewhere
-/// its owner did not choose.
+/// Each key belongs to one server: the host it was saved for (see `APIServer.host`), such as
+/// the OpenAI server for speech and Anthropic for Claude. A key is handed out only for its own
+/// host, so a change to the server address in the settings file can never send a key
+/// somewhere its owner did not choose.
 public protocol SecretStore: Sendable {
-  /// The saved key, when it was saved for `host`. `nil` when there is no key
-  /// or it belongs to another server. Host names are compared without regard
-  /// to case.
+  /// The key saved for `host`. `nil` when none is saved for that server. Host names are
+  /// compared without regard to case.
   func apiKey(for host: String) async throws -> String?
-  /// Saves `key` as the key for `host`, replacing any key saved before.
-  /// Pass `nil` (or an empty key) to remove the saved key, whatever its host.
+  /// Saves `key` as the key for `host`, replacing the key saved for that host before. Keys
+  /// of other hosts stay. Pass `nil` (or an empty key) to remove the key of `host`.
   func setAPIKey(_ key: String?, host: String) async throws
 }
 
@@ -378,7 +378,7 @@ public enum Permission: String, Sendable, CaseIterable, Hashable {
 
 /// The errors Spaces shows to people. Every seam throws these.
 ///
-/// `errorDescription` words them for OpenAI. When the person uses a server
+/// `errorDescription` words them for OpenAI (or for Anthropic, inside `.anthropic`). When the person uses a server
 /// of their own, show `message(server:)` instead, which names that server.
 public enum SpacesError: Error, Sendable, Equatable, LocalizedError {
   case missingAPIKey
@@ -398,6 +398,8 @@ public enum SpacesError: Error, Sendable, Equatable, LocalizedError {
   case invalidServerAddress
   /// The language model answered a command with far more text than could be meant.
   case replyTooLong
+  /// A request to Anthropic, for a Claude model, failed with this error. Worded for Anthropic.
+  indirect case anthropic(SpacesError)
 
   public var errorDescription: String? {
     switch self {
@@ -417,6 +419,21 @@ public enum SpacesError: Error, Sendable, Equatable, LocalizedError {
     case .invalidResponse(let detail): "OpenAI sent a reply that could not be read: \(detail)"
     case .invalidServerAddress: "The custom server address in Settings is not a valid web address."
     case .replyTooLong: "The reply was far longer than expected, so it was not typed. Try the command again."
+    case .anthropic(let error): SpacesError.anthropicMessage(error)
+    }
+  }
+
+  private static func anthropicMessage(_ error: SpacesError) -> String? {
+    switch error {
+    case .missingAPIKey: "Add your Anthropic API key in Settings to use a Claude model."
+    case .invalidAPIKey: "Anthropic did not accept your API key. Check it in Settings."
+    case .rateLimited: "Anthropic is limiting requests for your key right now. Try again in a moment."
+    case .network(SpacesError.noAnswerDetail):
+      "Anthropic did not answer in time, even on a second try. Try again in a moment."
+    case .network(let detail): "Could not reach Anthropic. Check your internet connection. (\(detail))"
+    case .server(let status, let message): "Anthropic returned an error (\(status)): \(message)"
+    case .invalidResponse(let detail): "Anthropic sent a reply that could not be read: \(detail)"
+    default: error.errorDescription
     }
   }
 }

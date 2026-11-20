@@ -1,6 +1,6 @@
 # Security
 
-Spaces handles your voice, your text and your OpenAI API key, so we take security reports seriously.
+Spaces handles your voice, your text and your API keys (OpenAI, and Anthropic if you use Claude), so we take security reports seriously.
 
 ## How to report a problem
 
@@ -34,7 +34,7 @@ Knowing the design helps you judge what counts as a problem.
 
 ### Your API key
 
-- **It lives only in one private file**, `api-key.json`, on this device. Only your user account can open it. The file is left out of iCloud Backup and Time Machine. It is never written to any other file, a log or an error message.
+- **It lives only in one private file**, `api-key.json`, together with your Anthropic key if you added one, on this device. Only your user account can open it. The file is left out of iCloud Backup and Time Machine. It is never written to any other file, a log or an error message.
 - **Why not the Keychain.** The Keychain asked for your password or a yes each time dictation started. A plain private file does not. The trade-off: any program running as you can read that file, the same as your other files, and macOS does not ask you first. That includes an AI agent that can run commands on your Mac.
 - **If you move the data folder** with `SPACES_HOME` into a synced folder (iCloud Drive, Dropbox), the key file goes with it. If you zip the folder to share it, leave `api-key.json` out.
 - **It belongs to one server.** The key is saved together with the name of the server it is for, and it is sent only to that server. If the server address in your settings changes, by your hand or anyone else's, the key is not sent to the new address.
@@ -43,7 +43,7 @@ Knowing the design helps you judge what counts as a problem.
 ### Your data
 
 - **Everything else stays on your device** as plain files in the app's data folder. The folder and its files can be opened by your user account only. They are not encrypted by Spaces. Anything that runs as you can read them, the same as your documents.
-- **Your audio and text go only** to OpenAI, or to the compatible server you chose, to be turned into text and notes. There is no Spaces server, no account, no analytics and no tracking.
+- **Your audio and text go only** to OpenAI, or to the compatible server you chose, to be turned into text and notes. If you pick a Claude model, the text (never the audio) goes to Anthropic instead, with the key you saved for Anthropic. There is no Spaces server, no account, no analytics and no tracking.
 - **The Mac app makes one other kind of request:** about once a day it asks GitHub whether there is a newer version, and it downloads that version when you say yes. The request carries the app's name and version. It carries none of your data and nothing about your Mac. "Updates" below has the details.
 - **On a Mac, text is typed by pasting.** Spaces borrows the clipboard for a moment and then puts back what you had there. The text it places is marked so that clipboard-history apps know to skip it.
 - **On an iPhone, your text goes to the clipboard.** That copy stays on the phone (it is not handed to your other Apple devices) and iOS clears it after 10 minutes.

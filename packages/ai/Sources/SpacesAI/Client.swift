@@ -3,18 +3,35 @@ import SpacesDomain
 
 /// Sends one request to the user's server and brings back the reply body.
 ///
-/// Everything the two adapters share lives here: where a request goes (the
+/// Everything the adapters share lives here: where a request goes (the
 /// rule itself is `APIServer`), the key, timeouts, retries, turning failures
 /// into `SpacesError`, and leaving out optional settings a server does not accept.
 struct Client: Sendable {
   private let secrets: any SecretStore
   private let address: @Sendable () async throws -> String?
+  private let dialect: Dialect
   private let connections = Connections()
   private let memory = Memory()
 
-  /// - Parameter address: the text of the custom server address, or `nil` for OpenAI itself.
-  init(secrets: any SecretStore, address: @escaping @Sendable () async throws -> String?) {
+  /// How a server wants its key, and whether it can do without one.
+  enum Dialect: Sendable {
+    /// OpenAI and servers that work like it: `Authorization: Bearer`. Only OpenAI itself needs a key.
+    case openAI
+    /// Anthropic: `x-api-key` and the API version. Always needs a key.
+    case anthropic
+  }
+
+  /// The API version sent to Anthropic.
+  static let anthropicVersion = "2026-10-21"
+
+  /// - Parameter address: the text of the server address, or `nil` for OpenAI itself.
+  init(
+    secrets: any SecretStore,
+    dialect: Dialect = .openAI,
+    address: @escaping @Sendable () async throws -> String?
+  ) {
     self.secrets = secrets
+    self.dialect = dialect
     self.address = address
   }
 
@@ -34,6 +51,8 @@ struct Client: Sendable {
     /// The longest the sending itself may stand still, in seconds: no connection yet, or no
     /// more of the body going out.
     var stall: TimeInterval = Client.longestStall
+    /// Extra headers, such as a beta feature the request uses.
+    var headers: [String: String] = [:]
 
     enum Body: Sendable {
       case none
@@ -201,7 +220,7 @@ struct Client: Sendable {
     // A pasted key often carries a stray space or line break.
     let key = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     guard !key.isEmpty else {
-      if server.isOpenAI { throw SpacesError.missingAPIKey }
+      if server.isOpenAI || dialect == .anthropic { throw SpacesError.missingAPIKey }
       return Server(root: server.root, key: nil)
     }
     // Anything else cannot travel in a header, so no server would take it.
@@ -331,7 +350,14 @@ struct Client: Sendable {
     request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
     request.httpShouldHandleCookies = false
     request.setValue("application/json", forHTTPHeaderField: "Accept")
-    if let key = server.key { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+    switch dialect {
+    case .openAI:
+      if let key = server.key { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+    case .anthropic:
+      if let key = server.key { request.setValue(key, forHTTPHeaderField: "x-api-key") }
+      request.setValue(Client.anthropicVersion, forHTTPHeaderField: "anthropic-version")
+    }
+    for (name, value) in call.headers { request.setValue(value, forHTTPHeaderField: name) }
     switch call.body {
     case .none: break
     case .json: request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -511,7 +537,8 @@ private struct Failure {
   }
 }
 
-/// An error answer from the server. OpenAI's look like `{"error": {"message", "type", "param", "code"}}`.
+/// An error answer from the server. OpenAI's look like `{"error": {"message", "type", "param", "code"}}`,
+/// Anthropic's like `{"type": "error", "error": {"type", "message"}}`.
 struct Refusal: Error {
   var status: Int
   /// What the server said, on one line. May repeat the key back: show `asSpacesError` instead.

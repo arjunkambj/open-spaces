@@ -22,7 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case .general: "General"
     case .shortcuts: "Shortcuts"
     case .meetings: "Meetings"
-    case .openAI: "OpenAI"
+    case .openAI: "AI keys"
     case .agents: "Agents"
     case .privacy: "Privacy"
     case .permissions: "Permissions"
@@ -265,6 +265,7 @@ enum AppVersion {
 /// Web pages the settings and onboarding screens link to.
 enum SetupLinks {
   static let openAIKeys = URL(string: "https://platform.openai.com/api-keys")!
+  static let anthropicKeys = URL(string: "https://platform.claude.com/settings/keys")!
   static let agentsGuide = URL(string: "https://github.com/arjunkambj/open-spaces/blob/main/docs/agents.md")!
   static let repository = URL(string: "https://github.com/arjunkambj/open-spaces")!
 }

@@ -72,6 +72,23 @@ public struct SettingsScreen: View {
     .modal(isPresented: isShowing(.apiKey)) {
       APIKeyDialog(preview: preview) { dialog = nil }
     }
+    .modal(isPresented: isShowing(.claudeKey)) {
+      ClaudeKeyDialog { dialog = nil }
+    }
+    .dialog(
+      isPresented: isShowing(.removeClaudeKey),
+      title: "Remove your Anthropic key?",
+      subtitle: "Claude models stop working until you add a key again. OpenAI models keep working."
+    ) {
+      EmptyView()
+    } footer: {
+      Button("Cancel") { dialog = nil }.buttonStyle(.spaces()).keyboardShortcut(.defaultAction)
+      Button("Remove key") {
+        dialog = nil
+        model.run { try await $0.removeClaudeKey() }
+      }
+      .buttonStyle(.spaces(.destructive))
+    }
     .dialog(
       isPresented: isShowing(.removeKey),
       title: "Remove your OpenAI key?",
@@ -239,7 +256,7 @@ public struct SettingsScreen: View {
 
 /// The dialogs the settings screen can show over itself.
 enum SettingsDialog: Hashable, Sendable {
-  case apiKey, removeKey, deleteHistory
+  case apiKey, removeKey, claudeKey, removeClaudeKey, deleteHistory
 }
 
 /// A starting state for the settings screen, for snapshots.

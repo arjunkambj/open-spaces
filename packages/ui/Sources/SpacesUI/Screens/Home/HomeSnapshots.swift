@@ -170,7 +170,8 @@ enum ScreenSamples {
         languageModel: FakeLanguageModel(text: "This is a demo dictation."),
         target: FakeTextTarget(),
         permissions: FakePermissions(),
-        checkAPIKey: { _ in }
+        checkAPIKey: { _ in },
+        checkClaudeKey: { _ in }
       )
     )
   }

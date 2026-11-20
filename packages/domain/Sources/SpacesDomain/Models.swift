@@ -13,7 +13,8 @@ public struct Settings: Codable, Sendable, Equatable {
 
   /// OpenAI transcription model, e.g. `gpt-live-transcribe`.
   public var transcriptionModel: String
-  /// OpenAI chat model used for clean-up, command mode and meeting notes.
+  /// Model used for clean-up, command mode and meeting notes. A Claude model (its name starts
+  /// with `claude-`) is asked at Anthropic with the Anthropic key; any other at the OpenAI server.
   public var textModel: String
   /// ISO 639-1 code of the spoken language, or `nil` to auto-detect.
   public var language: String?
@@ -83,7 +84,18 @@ public struct Settings: Codable, Sendable, Equatable {
   public static let defaultTextModel = "gpt-6-luna"
   /// Models offered in pickers. The fields stay free-text so any model works.
   public static let suggestedTranscriptionModels = ["gpt-live-transcribe", "gpt-transcribe", "whisper-1"]
-  public static let suggestedTextModels = ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.2-sol", "gpt-6.2-astra"]
+  public static let suggestedTextModels = [
+    "gpt-6-luna", "gpt-6.1-terra", "gpt-6.2-sol", "gpt-6.2-astra",
+    "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+  ]
+
+  /// Whether `model` is one of Anthropic's Claude models, which are asked at Anthropic.
+  public static func isClaude(_ model: String) -> Bool {
+    model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("claude-")
+  }
+
+  /// Whether the text model is a Claude model, so text work needs the Anthropic key.
+  public var usesClaude: Bool { Settings.isClaude(textModel) }
 
   public static let defaultStyles: [AppCategory: WritingStyle] = [
     .personalMessages: .casual,

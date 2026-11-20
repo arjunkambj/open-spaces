@@ -228,6 +228,9 @@ enum SetupSnapshotModels {
         host: host,
         checkAPIKey: { key in
           if !key.hasPrefix("sk-") { throw SpacesError.invalidAPIKey }
+        },
+        checkClaudeKey: { key in
+          if !key.hasPrefix("sk-ant-") { throw SpacesError.anthropic(.invalidAPIKey) }
         }
       )
     )

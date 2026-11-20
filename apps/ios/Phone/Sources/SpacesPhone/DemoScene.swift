@@ -112,7 +112,8 @@ enum DemoScene: String, CaseIterable, Sendable {
         languageModel: FakeLanguageModel(text: text),
         target: FakeTextTarget(),
         permissions: FakePermissions(statuses: [.microphone: .granted]),
-        checkAPIKey: { _ in }
+        checkAPIKey: { _ in },
+        checkClaudeKey: { _ in }
       )
     )
   }
