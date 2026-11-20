@@ -51,6 +51,8 @@ enum Composition {
         languageModel: ModelRouter(openAI: openAI.languageModel, anthropic: anthropic.languageModel),
         target: target,
         permissions: MacPermissions(),
+        // Read only while "Offer to record calendar calls" is on and access is allowed.
+        calendar: MacCalendar(),
         host: HostActions(
           agentToolPath: tool,
           dataFolder: root,

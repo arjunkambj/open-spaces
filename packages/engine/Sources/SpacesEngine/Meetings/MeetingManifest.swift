@@ -34,10 +34,24 @@ struct MeetingManifest: Codable, Equatable, Sendable {
     var segments: [TranscriptSegment] = []
   }
 
+  /// A voice told apart on the system track, with a stretch of one chunk in which only that
+  /// voice speaks. Every later system chunk is sent with these, so the same person keeps the
+  /// same name from chunk to chunk.
+  struct Voice: Codable, Equatable, Sendable {
+    /// The name the transcript gives the voice: "Speaker 1".
+    var name: String
+    /// The chunk the sample is in, and where in it, in seconds from the start of that file.
+    var file: String
+    var start: TimeInterval
+    var end: TimeInterval
+  }
+
   var chunks: [Chunk] = []
   /// Set once audio was found that nobody can read: the file that was being written when the
   /// app closed. That part of the meeting is gone, and the meeting has to say so.
   var lostAudio: Bool?
+  /// The voices told apart so far, at most `Voices.mostKnown`. `nil` until the first is found.
+  var voices: [Voice]?
 
   /// The manifest in `directory`, or `nil` when there is none that can be read.
   static func read(from directory: URL) -> MeetingManifest? {

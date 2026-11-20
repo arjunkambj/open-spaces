@@ -78,6 +78,7 @@ enum PermissionCopy {
     case .microphone: "mic"
     case .accessibility: "keyboard"
     case .systemAudio: "speaker.wave.2"
+    case .calendar: "calendar"
     }
   }
 
@@ -87,6 +88,7 @@ enum PermissionCopy {
     case .microphone: "To hear you."
     case .accessibility: "To type the text into the app you are using, and to notice the shortcut."
     case .systemAudio: "To capture the other people in a meeting."
+    case .calendar: "To offer to record a call when it starts."
     }
   }
 
@@ -96,6 +98,7 @@ enum PermissionCopy {
     case .microphone: "Without it, dictation and meeting recording cannot work."
     case .accessibility: "Without it, Spaces cannot type for you or react to the shortcut."
     case .systemAudio: "Without it, meetings record only your own voice."
+    case .calendar: "Without it, Spaces does not know when a call starts."
     }
   }
 

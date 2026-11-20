@@ -41,6 +41,8 @@ struct MeetingsPreset {
   var editsTags = false
   var startFailure: SpacesError?
   var questions: MeetingQuestions?
+  /// Opens the dialog that renames this speaker of the open meeting.
+  var renamesSpeaker: Speaker?
 }
 
 enum MeetingTab: String, CaseIterable, Hashable {

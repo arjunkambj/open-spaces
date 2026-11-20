@@ -38,6 +38,9 @@ import SpacesMac
 /// - While fn is part of a shortcut and macOS also reacts to that key (the
 ///   emoji picker), the controls ask once, after a dictation, whether to switch
 ///   that off (`globeKey`). They never ask again, whatever the answer.
+/// - While calendar meetings are on and nothing is being recorded, a call on the calendar
+///   that has just started gets one question on the pill: record it? Once per call; a "no",
+///   or no answer, is final. The pill never takes the keyboard.
 @MainActor
 @Observable
 public final class MacControls {
@@ -57,6 +60,8 @@ public final class MacControls {
       case globeKey
       /// Open System Settings at Keyboard.
       case keyboardSettings
+      /// Record a meeting for this call on the calendar.
+      case recordMeeting(CalendarEvent)
     }
 
     /// The words on the two buttons of a notice that asks something.
@@ -126,6 +131,12 @@ public final class MacControls {
   private static let questionTime: Duration = .seconds(20)
   /// How long a held key waits for the last dictation before a notice says why nothing is recorded yet.
   private static let busyNoticeDelay: Duration = .milliseconds(600)
+  /// How often the calendar is looked at for a call that has started.
+  private static let calendarCheck: Duration = .seconds(20)
+  /// How long after its start a call is still offered: time to finish a dictation, say.
+  private static let offerWindow: TimeInterval = 5 * 60
+  /// How long the offer to record a call stays up: joining a call can take a minute.
+  private static let offerTime: Duration = .seconds(60)
 
   /// The hold action (push to talk, command mode) whose key is down and whose release ends the recording.
   @ObservationIgnored private var held: ShortcutAction?
@@ -144,6 +155,9 @@ public final class MacControls {
   @ObservationIgnored private var noticeTimer: Task<Void, Never>?
   @ObservationIgnored private var pillTimer: Task<Void, Never>?
   @ObservationIgnored private var upkeep: Task<Void, Never>?
+  @ObservationIgnored private var calendarWatch: Task<Void, Never>?
+  /// The calls on the calendar that were offered, or that started while something was recorded.
+  @ObservationIgnored private var offeredCalls: Set<CalendarEvent.ID> = []
   @ObservationIgnored private var watches: [AnyObject] = []
 
   /// The defaults are what the demo and the still pictures run on: nothing outside the
@@ -198,6 +212,15 @@ public final class MacControls {
         if missing != self.needsAccessibility { self.needsAccessibility = missing }
         // The person may change what macOS does on fn in System Settings at any time.
         if GlobeKey.isUsed(by: self.model.settings.shortcuts) { self.globeKey.refresh() }
+      }
+    }
+    if let calendar = model.calendar {
+      calendarWatch = Task { [weak self] in
+        while !Task.isCancelled {
+          try? await Task.sleep(for: MacControls.calendarCheck)
+          guard let self else { return }
+          await self.offerCall(from: calendar)
+        }
       }
     }
   }
@@ -581,6 +604,58 @@ public final class MacControls {
     }
   }
 
+  /// Asks whether to record the call on the calendar that has just started, if there is one
+  /// that was not offered before, and nothing else is going on.
+  private func offerCall(from calendar: any MeetingCalendar) async {
+    guard model.settings.meetings.offerCalendarMeetings else { return }
+    let now = Date()
+    let fresh = await calendar.calls(at: now).filter { call in
+      !offeredCalls.contains(call.id) && now.timeIntervalSince(call.start) < Self.offerWindow
+    }
+    guard let call = fresh.first else { return }
+    if model.meetings.isRecording {
+      // It is being recorded already, or something else is: either way, not a moment to ask.
+      offeredCalls.formUnion(fresh.map(\.id))
+      return
+    }
+    // A notice or a dictation is on the pill. The next look may find the moment.
+    guard notice == nil, model.dictation.phase == .idle else { return }
+    offeredCalls.formUnion(fresh.map(\.id))
+    show(
+      Notice(
+        message: Self.callOffer(for: call),
+        fix: .recordMeeting(call),
+        isProblem: false,
+        answers: Notice.Answers(yes: "Record", no: "Not now")
+      ),
+      for: Self.offerTime
+    )
+  }
+
+  /// The question that offers to record a call.
+  nonisolated static func callOffer(for call: CalendarEvent) -> String {
+    let title = call.title.split(whereSeparator: \.isNewline).joined(separator: " ")
+    guard !title.isEmpty else { return "A call on your calendar has started. Record it?" }
+    let short = title.count > 60 ? title.prefix(59) + "…" : Substring(title)
+    return "“\(short)” has started. Record it?"
+  }
+
+  /// Starts a meeting recording for a call on the calendar, as the meeting shortcut would.
+  private func record(_ call: CalendarEvent) {
+    guard !model.meetings.isRecording else { return }
+    Task { [weak self, model] in
+      do {
+        try await model.meetings.start(during: call)
+      } catch {
+        self?.show(Notice(message: error.localizedDescription, fix: .hub))
+        self?.play(.error)
+        return
+      }
+      self?.play(.start)
+      self?.showMeetingProblem()
+    }
+  }
+
   private func showMeetingProblem() {
     guard let problem = model.meetings.lastError else { return }
     show(Notice(message: problem, fix: .hub))
@@ -641,6 +716,7 @@ public final class MacControls {
     case .globeKey: fixGlobeKey()
     case .keyboardSettings: GlobeKey.openSettings()
     case .permission(let permission): requestPermission(permission)
+    case .recordMeeting(let call): record(call)
     case nil: break
     }
   }

@@ -12,6 +12,7 @@ import Foundation
 //   AudioCapture   -> SpacesAudio.SystemAudioCapture   (AVFoundation / Core Audio)
 //   TextTarget     -> SpacesMac.MacTextTarget          (the app you are typing in)
 //   Permissions    -> SpacesMac.MacPermissions         (system permission prompts)
+//   MeetingCalendar -> SpacesMac.MacCalendar           (EventKit, the calendars on this Mac)
 
 // MARK: - Library
 
@@ -69,13 +70,20 @@ public protocol Library: Sendable {
   /// Folder where a meeting's audio chunks are written. Created on demand.
   func audioDirectory(forMeeting id: Meeting.ID) async throws -> URL
 
+  /// The AI tools that use Spaces through `spaces mcp`, most recently used first: every
+  /// server that is running, and those that stopped within `AgentSession.keptFor`. A server
+  /// that is gone is reported as stopped, even when it never said so.
+  func agentSessions() async throws -> [AgentSession]
+  /// Inserts or replaces by `id`. Only the `spaces mcp` server that a session describes saves it.
+  func save(_ session: AgentSession) async throws
+
   /// A stream of what changed, from this process or another one. Each call
   /// returns an independent stream; it ends when the caller stops iterating.
   func changes() -> AsyncStream<LibraryChange>
 }
 
 public enum LibraryChange: Sendable, Hashable, CaseIterable {
-  case settings, words, snippets, dictations, meetings
+  case settings, words, snippets, dictations, meetings, agents
 }
 
 extension Library {
@@ -115,12 +123,59 @@ public struct TranscriptionRequest: Sendable {
   public var language: String?
   /// Words the transcriber should prefer (names, jargon).
   public var vocabulary: [String]
+  /// Set to tell the voices in the audio apart: each timed piece of the reply then says who
+  /// spoke it (`Transcript.Segment.speaker`). `model` and `vocabulary` are not used then: the
+  /// transcriber asks its own model that tells voices apart, which takes no word hints. Only
+  /// OpenAI's own server has that model.
+  public var voices: Voices?
 
-  public init(audio: URL, model: String, language: String? = nil, vocabulary: [String] = []) {
+  public init(
+    audio: URL,
+    model: String,
+    language: String? = nil,
+    vocabulary: [String] = [],
+    voices: Voices? = nil
+  ) {
     self.audio = audio
     self.model = model
     self.language = language
     self.vocabulary = vocabulary
+    self.voices = voices
+  }
+}
+
+/// The voices to tell apart in one recording.
+public struct Voices: Sendable, Equatable {
+  /// The most voices `known` may hold.
+  public static let mostKnown = 4
+  /// How long a sample of a voice must be, in seconds.
+  public static let sampleLength: ClosedRange<TimeInterval> = 2...10
+
+  /// Voices heard before, at most `mostKnown`. A piece said in one of them comes back with its
+  /// name. A piece in any other voice comes back with a label the transcriber makes up ("A",
+  /// "B"), which means nothing outside that one reply.
+  public var known: [Sample]
+
+  /// A stretch of audio in which one voice, and only that voice, speaks.
+  public struct Sample: Sendable, Equatable {
+    public var name: String
+    /// An audio file on disk.
+    public var audio: URL
+    /// Where the stretch starts and ends, in seconds from the start of the file. It must be
+    /// `sampleLength` long.
+    public var start: TimeInterval
+    public var end: TimeInterval
+
+    public init(name: String, audio: URL, start: TimeInterval, end: TimeInterval) {
+      self.name = name
+      self.audio = audio
+      self.start = start
+      self.end = end
+    }
+  }
+
+  public init(known: [Sample] = []) {
+    self.known = known
   }
 }
 
@@ -134,11 +189,15 @@ public struct Transcript: Sendable, Equatable {
     public var start: TimeInterval
     public var end: TimeInterval
     public var text: String
+    /// Who spoke, when the request asked for the voices to be told apart: the name of a known
+    /// voice, or a label of the transcriber's own. See `Voices`.
+    public var speaker: String?
 
-    public init(start: TimeInterval, end: TimeInterval, text: String) {
+    public init(start: TimeInterval, end: TimeInterval, text: String, speaker: String? = nil) {
       self.start = start
       self.end = end
       self.text = text
+      self.speaker = speaker
     }
   }
 
@@ -366,12 +425,16 @@ public protocol AudioCapture: Sendable {
 
 public enum Permission: String, Sendable, CaseIterable, Hashable {
   case microphone, accessibility, systemAudio
+  /// Reading the calendars, for `MeetingCalendar`. Asked for only when the person turns on
+  /// calendar meetings, so it is never among `Permissions.needed`.
+  case calendar
 
   public var label: String {
     switch self {
     case .microphone: "Microphone"
     case .accessibility: "Accessibility"
     case .systemAudio: "System audio recording"
+    case .calendar: "Calendar"
     }
   }
 }
@@ -575,7 +638,8 @@ public enum PermissionStatus: String, Sendable {
 /// The system permissions Spaces needs on this platform.
 @MainActor
 public protocol Permissions: AnyObject {
-  /// The permissions that matter on this platform, in the order to ask for them.
+  /// The permissions that matter on this platform, in the order to ask for them. Never
+  /// `.calendar`, which only one setting asks for.
   var needed: [Permission] { get }
   func status(_ permission: Permission) -> PermissionStatus
   /// Shows the system prompt, or opens the right System Settings pane when
@@ -584,6 +648,39 @@ public protocol Permissions: AnyObject {
   /// the user is in System Settings, so poll `status` to see it change.
   @discardableResult
   func request(_ permission: Permission) async -> PermissionStatus
+}
+
+// MARK: - Calendar
+
+/// An event on the person's calendar that looks like a call.
+public struct CalendarEvent: Sendable, Hashable, Identifiable {
+  /// Stable for one occurrence of the event: each meeting of a repeating event has its own.
+  public var id: String
+  public var title: String
+  public var start: Date
+  public var end: Date
+  /// Names of the other people invited (an email address when the calendar has no name).
+  /// Never the person using the app.
+  public var attendees: [String]
+
+  public init(id: String, title: String, start: Date, end: Date, attendees: [String] = []) {
+    self.id = id
+    self.title = title
+    self.start = start
+    self.end = end
+    self.attendees = attendees
+  }
+}
+
+/// The calls on the person's calendars, read on the device.
+///
+///   macOS -> SpacesMac.MacCalendar (EventKit)
+public protocol MeetingCalendar: Sendable {
+  /// The events going on at `date` that look like calls: they carry a Zoom, Google Meet,
+  /// Teams or Webex link, or other people are invited. All-day events, cancelled ones and
+  /// ones the person declined are left out. The one that started last comes first. Empty,
+  /// and never a prompt, while calendar access is not allowed.
+  func calls(at date: Date) async -> [CalendarEvent]
 }
 
 extension SpacesLink {

@@ -54,6 +54,8 @@ public final class AppModel {
     public var languageModel: any LanguageModel
     public var target: any TextTarget
     public var permissions: any Permissions
+    /// The calls on the calendar, for meetings recorded during one. `nil` where there is no calendar.
+    public var calendar: (any MeetingCalendar)?
     public var host: HostActions
     /// Asks the server the settings name whether a key works. Throws `SpacesError` when it does not.
     public var checkAPIKey: @Sendable (String) async throws -> Void
@@ -69,6 +71,7 @@ public final class AppModel {
       languageModel: any LanguageModel,
       target: any TextTarget,
       permissions: any Permissions,
+      calendar: (any MeetingCalendar)? = nil,
       host: HostActions = HostActions(),
       checkAPIKey: @escaping @Sendable (String) async throws -> Void,
       checkClaudeKey: @escaping @Sendable (String) async throws -> Void
@@ -81,6 +84,7 @@ public final class AppModel {
       self.languageModel = languageModel
       self.target = target
       self.permissions = permissions
+      self.calendar = calendar
       self.host = host
       self.checkAPIKey = checkAPIKey
       self.checkClaudeKey = checkClaudeKey
@@ -92,6 +96,8 @@ public final class AppModel {
   public let secrets: any SecretStore
   public let capture: any AudioCapture
   public let permissions: any Permissions
+  /// The calls on the calendar. `nil` where there is no calendar.
+  public let calendar: (any MeetingCalendar)?
   public let host: HostActions
   public let dictation: DictationEngine
   public let meetings: MeetingEngine
@@ -104,6 +110,9 @@ public final class AppModel {
   public private(set) var snippets: [Snippet] = []
   public private(set) var dictations: [Dictation] = []
   public private(set) var meetingList: [Meeting] = []
+  /// The AI tools using Spaces through `spaces mcp`, most recently used first. See
+  /// `Library.agentSessions()`.
+  public private(set) var agentSessions: [AgentSession] = []
   /// Whether a key is saved for the server the settings name right now. A key saved for
   /// another server does not count: it is never sent to this one.
   public private(set) var hasAPIKey = false
@@ -115,6 +124,9 @@ public final class AppModel {
   public var errorMessage: String?
 
   @ObservationIgnored private var observer: Task<Void, Never>?
+  /// Looks again in a while while an agent is connected: a server that is stopped without
+  /// warning leaves no change behind to notice.
+  @ObservationIgnored private var agentCheck: Task<Void, Never>?
   /// The newest settings change made here that is on its way to the library. Changes are
   /// stored one after another, in the order they were made.
   @ObservationIgnored private var settingsWrite: Task<Void, Never>?
@@ -133,6 +145,7 @@ public final class AppModel {
     secrets = dependencies.secrets
     capture = dependencies.capture
     permissions = dependencies.permissions
+    calendar = dependencies.calendar
     host = dependencies.host
     checkAPIKey = dependencies.checkAPIKey
     checkClaudeKey = dependencies.checkClaudeKey
@@ -154,7 +167,8 @@ public final class AppModel {
       library: dependencies.library,
       capture: dependencies.capture,
       transcriber: checked,
-      languageModel: checked
+      languageModel: checked,
+      calendar: dependencies.calendar
     )
   }
 
@@ -300,8 +314,23 @@ public final class AppModel {
         dictations = history.filter { $0.id != dictation.unfinished }
       }
       if changes.contains(.meetings) { meetingList = try await library.meetings() }
+      if changes.contains(.agents) {
+        let sessions = try await library.agentSessions()
+        if sessions != agentSessions { agentSessions = sessions }
+        checkAgentsLater()
+      }
     } catch {
       errorMessage = message(for: error)
+    }
+  }
+
+  private func checkAgentsLater() {
+    agentCheck?.cancel()
+    guard agentSessions.contains(where: \.isConnected) else { return }
+    agentCheck = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(30))
+      guard !Task.isCancelled else { return }
+      await self?.refresh([.agents])
     }
   }
 
@@ -388,6 +417,7 @@ extension AppModel {
         languageModel: FakeLanguageModel(text: "This is a demo dictation."),
         target: FakeTextTarget(),
         permissions: FakePermissions(statuses: permissions),
+        calendar: FakeMeetingCalendar(events: SampleData.calendar()),
         host: HostActions(agentToolPath: "/Applications/Spaces.app/Contents/MacOS/spaces"),
         checkAPIKey: { key in
           if !key.hasPrefix("sk-") { throw SpacesError.invalidAPIKey }

@@ -51,6 +51,8 @@
 	<string>Spaces listens to your microphone while you dictate or record a meeting, and turns what you say into text.</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Spaces records the sound your Mac plays during a meeting, so the notes include what other people said.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Spaces looks at your calendar on this Mac to offer to record a call when it starts, and to give the meeting its name and the names of the people invited. Nothing from your calendar leaves this Mac.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticTermination</key>

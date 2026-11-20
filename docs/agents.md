@@ -9,17 +9,20 @@ tool where `spaces` is, and it can then use everything listed on this page.
 
 ## What an agent can do
 
+- **Sum up a day.** For one day: how much you dictated and where, the meetings you had, their action items,
+  and everything still open.
 - **Read meetings.** List them, read the summary, key points, decisions and action items, and read the
   transcript (all of it, or one part by time or by speaker).
 - **Search.** Find where something was said or noted, across every meeting. It gets back short matching
   lines with the time they were said, not whole meetings.
 - **Work with action items.** List what is still open across all meetings, add items, tick them off,
   change them, remove them.
-- **Add to a meeting.** Add notes, change the title, set tags.
+- **Add to a meeting.** Add notes, change the title, set tags, give a speaker a name.
 - **Export.** Get a meeting as one Markdown document, or save it to a new `.md` file.
 - **Record.** Start and stop a meeting recording in the running app, and check whether one is running.
 - **Dictation history.** Read and search what you dictated.
-- **Dictionary and snippets.** Teach Spaces how to spell a name, and add or remove voice snippets.
+- **Dictionary and snippets.** Teach Spaces how to spell a name, and add or remove voice snippets. A
+  snippet can also be a saved command: say its phrase in command mode and its text is the instruction.
 - **Read a few settings.** Your name, language and model choices. Never the API key.
 
 ## Where the program is
@@ -127,6 +130,17 @@ An agent that can run shell commands does not need MCP at all. Tell it to run `s
 screen lists every command, and each command explains itself with `--help`. Add `--json` to any command to
 get JSON instead of text.
 
+### See that it's connected
+
+Once your AI tool has used Spaces, the Mac app says so on Home, under "Hold fn…": a filled dot and
+"Claude Code is connected" while the tool is running, or "Claude Code · last used 5 minutes ago" for a
+day after it stopped. Click the line to open **Settings › Agents**, which lists each tool, whether it is
+connected and when it was last used. If nothing shows up, ask your tool something about your meetings
+first: Spaces notices a tool when it first talks to `spaces mcp`.
+
+Spaces tells your AI tool that it is your source of truth for meetings, dictations and action items, so
+the tool looks there before it answers a question about them.
+
 ## Things to ask
 
 - "Summarise my last meeting."
@@ -138,18 +152,27 @@ get JSON instead of text.
 - "Draft a follow-up email for my last meeting and save the notes to my Desktop as Markdown."
 - "Start recording a meeting called Design review." Later: "Stop the recording."
 - "Add Kubernetes to my dictionary. It keeps getting written as cooper netties."
+- "What did I do today? Write me a short end-of-day note."
+- "Across all my meetings, what have we said about the launch date? Tell me which meeting each point is
+  from."
+- "Post the notes of my last meeting to Slack #team." Your AI writes the update and posts it with your
+  Slack tool, after you say yes to the draft. Spaces itself sends nothing.
 
 ## Commands for the terminal
 
 ```bash
 spaces --help                                  # everything, on one screen
+spaces day summary                             # today: dictations, meetings, action items
+spaces day summary yesterday                   # the same for another day
 spaces meetings list --since 7d                # meetings from the last 7 days
 spaces meetings get latest                     # notes and action items of the newest meeting
 spaces meetings show 3F2A9C1E                  # the same, for one meeting by the start of its ID
 spaces meetings transcript latest --from 10:00 --to 15:00
 spaces meetings search "pricing"               # short matching lines, with times
+spaces meetings search "pricing" --since 2026-10-01 --until 2026-11-01
 spaces meetings add-note latest "Sam confirmed the migration is done."
 spaces meetings update latest --title "Pricing review" --add-tags pricing,q4
+spaces meetings rename-speaker latest "Speaker 2" Priya
 spaces meetings export latest --path ~/Desktop # saves a Markdown file
 spaces actions list --open --owner Alex        # what is still to do
 spaces actions add latest "Send the proposal" --owner Alex
@@ -186,6 +209,12 @@ ask you before it runs a tool that overwrites or deletes, or that saves a file o
 
 <!-- After changing a tool, run `spaces tools --markdown` and paste what it prints between these two markers. -->
 <!-- tools:start -->
+### Daily summary
+
+| MCP tool | Command | What it does | Effect |
+| --- | --- | --- | --- |
+| `day_summary` | `spaces day summary [date] [--limit N]` | One day at a glance: dictations, meetings and action items. | Reads |
+
 ### Meetings
 
 | MCP tool | Command | What it does | Effect |
@@ -193,9 +222,10 @@ ask you before it runs a tool that overwrites or deletes, or that saves a file o
 | `meetings_list` | `spaces meetings list [--limit N] [--since SINCE] [--until UNTIL] [--status recording\|processing\|ready\|failed] [--tag TAG]` | List meetings, newest first. | Reads |
 | `meetings_get` | `spaces meetings get <meeting> [--include-transcript]` | Show one meeting: its notes, action items and details. | Reads |
 | `meetings_transcript` | `spaces meetings transcript <meeting> [--from FROM] [--to TO] [--speaker SPEAKER] [--offset N] [--limit N]` | Read what was said in a meeting, all of it or one part. | Reads |
-| `meetings_search` | `spaces meetings search <query> [--limit N] [--per-meeting N] [--since SINCE]` | Find where something was said or noted, across all meetings. | Reads |
+| `meetings_search` | `spaces meetings search <query> [--limit N] [--per-meeting N] [--since SINCE] [--until UNTIL]` | Find where something was said or noted, across all meetings. | Reads |
 | `meetings_add_note` | `spaces meetings add-note <meeting> <text>` | Add text to the end of a meeting's notes. | Adds |
 | `meetings_update` | `spaces meetings update <meeting> [--title TITLE] [--notes NOTES] [--tags A,B] [--add-tags A,B] [--remove-tags A,B]` | Change a meeting's title, notes or tags. | Overwrites or deletes |
+| `meetings_rename_speaker` | `spaces meetings rename-speaker <meeting> <speaker> <name>` | Give a speaker in a meeting a name, everywhere in that meeting. | Overwrites or deletes |
 | `meetings_export` | `spaces meetings export <meeting> [--path PATH] [--no-include-transcript]` | Get a meeting as one Markdown document, or save it to a new .md file. | Reads, or saves a new file |
 | `meetings_delete` | `spaces meetings delete <meeting>` | Delete a meeting, its transcript, notes and audio for good. | Overwrites or deletes |
 
@@ -260,13 +290,16 @@ Four commands are only for the terminal: `spaces mcp` (what your AI tool runs), 
 the list. `openspaces://meetings/latest` is always the newest one. Clients that ask for change notices are
 told when a meeting is added or changed.
 
-**Ready-made requests.** Three prompts show up in clients that have a prompt menu:
+**Ready-made requests.** Six prompts show up in clients that have a prompt menu:
 
 | Prompt | What it does |
 | --- | --- |
 | `summarise_meeting` | Summarises a meeting: outcome, decisions, action items. Uses the newest meeting unless you name one. |
 | `open_action_items` | Goes through your open action items and says what to do first. |
 | `follow_up_email` | Drafts a short follow-up email for a meeting. |
+| `daily_summary` | Writes a short end-of-day note from one day (today unless you name another): what you dictated, your meetings, new and open action items. |
+| `ask_meetings` | Answers a question from all your meetings. It searches, reads the best meetings, and says which meeting, date and time each point comes from. If Spaces has nothing, it says so. |
+| `share_meeting` | Turns a meeting's notes into a short update and posts it where your team works (a Slack channel, Notion, Linear, email), using your AI tool's own connections to those apps. It shows you the draft and asks before it posts. Spaces itself sends nothing. |
 
 **Protocol versions.** `spaces mcp` speaks the current MCP revision (`2026-07-28`) and the older ones that
 start with a handshake (`2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`). It reads one JSON message
@@ -323,6 +356,8 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 
 - Read meetings, notes, action items, dictations, dictionary words, snippets and a few settings.
 - Change a meeting's title, notes, tags and action items, and delete a meeting.
+- Give a speaker in a meeting a name. That changes who a transcript line is shown as said by, never
+  what it says.
 - Add and remove dictionary words and snippets.
 - Ask the app to start or stop a meeting recording.
 - Save a meeting as a new Markdown file.
@@ -335,7 +370,7 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 - Start dictation, or type anything into another app.
 - Run a command, read a file outside the Spaces data folder, or use the network.
 - Replace or delete any file outside the Spaces data folder.
-- Create or edit a transcript. Only the app writes those.
+- Create a transcript, or change the words in one. Only the app writes those.
 
 **Recording is authorised by a ticket.** `spaces` proves to the app that a request to start or stop is its
 own by leaving a one-time ticket in the data folder (see "Recording, and the app's links" above). A web page
@@ -359,8 +394,8 @@ narrow on purpose:
 **Titles and tags are one line.** Line breaks and invisible control characters in a title, a tag, an owner
 or an action item are turned into spaces. A title can never add a line of its own to an exported file.
 
-**Text the app types later is checked.** A snippet is typed into whatever app you are dictating into, and
-a dictionary word changes what you dictate. So:
+**Text the app types later is checked.** A snippet is typed into whatever app you are dictating into (or,
+in command mode, sent as the instruction), and a dictionary word changes what you dictate. So:
 
 - A dictionary word, and the form it replaces, is one line of at most 80 characters.
 - A snippet's trigger is one line of at most 60 characters, and either two or more words or one word of at

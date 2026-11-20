@@ -8,6 +8,9 @@ struct MeetingTranscriptTab: View {
   let phase: MeetingPhase
   let matches: [TranscriptMatch]
   let currentMatch: TranscriptMatch?
+  /// Asks for a new name for a speaker, from their name in the transcript. `nil` while the
+  /// transcript is still being written, when no speaker can be renamed.
+  var onRename: ((Speaker) -> Void)?
 
   var body: some View {
     if turns.isEmpty {
@@ -19,7 +22,8 @@ struct MeetingTranscriptTab: View {
           MeetingTurnRow(
             turn: turn,
             matches: matches.filter { $0.turn == turn.id },
-            currentMatch: currentMatch?.turn == turn.id ? currentMatch : nil
+            currentMatch: currentMatch?.turn == turn.id ? currentMatch : nil,
+            onRename: turn.speaker == .me ? nil : onRename
           )
         }
         if phase == .live {
@@ -63,6 +67,8 @@ private struct MeetingTurnRow: View {
   let turn: TranscriptTurn
   let matches: [TranscriptMatch]
   let currentMatch: TranscriptMatch?
+  /// Set when the speaker can be renamed: their name is then a button.
+  let onRename: ((Speaker) -> Void)?
 
   @Environment(\.spacesIdiom) private var idiom
 
@@ -80,15 +86,33 @@ private struct MeetingTurnRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     .accessibilityElement(children: .combine)
+    .accessibilityActions {
+      if let onRename {
+        Button("Rename \(turn.speaker.label)") { onRename(turn.speaker) }
+      }
+    }
   }
 
   @ViewBuilder private var who: some View {
-    let name = Text(turn.speaker.label)
+    let label = Text(turn.speaker.label)
       .spacesText(
         .captionStrong,
         color: turn.speaker == .me ? Spaces.Color.accent : Spaces.Color.textPrimary
       )
       .lineLimit(1)
+    let name = Group {
+      if let onRename {
+        Button {
+          onRename(turn.speaker)
+        } label: {
+          label
+        }
+        .buttonStyle(.plain)
+        .help("Rename this speaker")
+      } else {
+        label
+      }
+    }
     let time = Text(MeetingsLogic.clock(turn.start))
       .monospacedDigit()
       .spacesText(.caption, color: Spaces.Color.textTertiary)

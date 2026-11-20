@@ -2,7 +2,7 @@ import Foundation
 import SpacesDomain
 
 /// The sections of the settings screen, in the order they are listed.
-enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
+public enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
   case general, shortcuts, meetings
   case openAI = "openai"
   case agents, privacy, permissions, about
@@ -15,7 +15,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
   }
 
-  var id: String { rawValue }
+  public var id: String { rawValue }
 
   var title: String {
     switch self {
@@ -251,6 +251,91 @@ enum AgentSetup {
     // A string always has a JSON form.
     let data = try! JSONSerialization.data(withJSONObject: text, options: options)
     return String(decoding: data, as: UTF8.self)
+  }
+}
+
+/// One AI tool that uses Spaces through `spaces mcp`, as Home and Settings › Agents show it.
+/// All the sessions of one tool (Claude Code opens one for each chat) count as one.
+struct AgentStatus: Identifiable, Equatable {
+  /// The tool's name for people, such as "Claude Code".
+  var name: String
+  var isConnected: Bool
+  /// How many of its `spaces mcp` servers are running.
+  var running: Int
+  var lastActiveAt: Date
+  var version: String?
+  var lastTool: String?
+
+  var id: String { name }
+
+  /// One entry per tool, the one used most recently first.
+  static func list(_ sessions: [AgentSession]) -> [AgentStatus] {
+    var tools: [AgentStatus] = []
+    for session in sessions.sorted(by: { $0.lastActiveAt > $1.lastActiveAt }) {
+      let name = name(of: session.client)
+      if let index = tools.firstIndex(where: { $0.name == name }) {
+        if session.isConnected {
+          tools[index].isConnected = true
+          tools[index].running += 1
+        }
+      } else {
+        tools.append(
+          AgentStatus(
+            name: name,
+            isConnected: session.isConnected,
+            running: session.isConnected ? 1 : 0,
+            lastActiveAt: session.lastActiveAt,
+            version: session.client.version,
+            lastTool: session.lastTool
+          )
+        )
+      }
+    }
+    return tools
+  }
+
+  /// The client's own title, or a known name for people, or the name it gave.
+  static func name(of client: AgentClient) -> String {
+    if let title = client.title { return title }
+    switch client.name.lowercased() {
+    case "": return "An AI tool"
+    case "claude-code": return "Claude Code"
+    case "claude-ai": return "Claude Desktop"
+    case "codex-mcp-client": return "Codex"
+    case "cursor-vscode": return "Cursor"
+    default: return client.name
+    }
+  }
+
+  /// The quiet line on Home, or `nil` when no tool has used Spaces in the last day.
+  static func homeLine(_ tools: [AgentStatus], now: Date) -> String? {
+    let connected = tools.filter(\.isConnected).map(\.name)
+    switch connected.count {
+    case 0:
+      guard let last = tools.first else { return nil }
+      return "\(last.name) · last used \(ago(last.lastActiveAt, now: now))"
+    case 1: return "\(connected[0]) is connected"
+    case 2: return "\(connected[0]) and \(connected[1]) are connected"
+    default: return "\(connected[0]) and \(connected.count - 1) other tools are connected"
+    }
+  }
+
+  /// The state under the name in Settings › Agents.
+  func detail(now: Date) -> String {
+    var parts = [isConnected ? "Connected" : "Not connected"]
+    if running > 1 { parts.append("\(running) connections") }
+    parts.append("last used \(Self.ago(lastActiveAt, now: now))")
+    return parts.joined(separator: " · ")
+  }
+
+  /// "just now", "4 minutes ago", "2 hours ago", "3 days ago".
+  static func ago(_ date: Date, now: Date) -> String {
+    let minutes = max(0, Int(now.timeIntervalSince(date) / 60))
+    func count(_ value: Int, _ unit: String) -> String { "\(value) \(unit)\(value == 1 ? "" : "s") ago" }
+    if minutes < 1 { return "just now" }
+    if minutes < 60 { return count(minutes, "minute") }
+    if minutes < 24 * 60 { return count(minutes / 60, "hour") }
+    return count(minutes / (24 * 60), "day")
   }
 }
 

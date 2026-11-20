@@ -44,6 +44,7 @@ the app and the tool must be given the same value to see the same data.
   meetings/<ID>/meeting.json       one meeting
   meetings/<ID>/notes.md           the same meeting as Markdown, for reading
   meetings/<ID>/audio/             the meeting's audio (see below)
+  agents/<pid>.json                an AI tool connected through `spaces mcp` (see below)
   .lock                            empty; used to take turns (see below)
   .tickets/                        short-lived proof of where a link came from (see below)
 ```
@@ -77,7 +78,8 @@ The examples below were written by the app itself, from made-up data.
   "meetings" : {
     "autoSummarize" : true,
     "captureSystemAudio" : true,
-    "keepAudio" : true
+    "keepAudio" : true,
+    "offerCalendarMeetings" : false
   },
   "onboardedAt" : "2026-11-02T08:15:00Z",
   "playSounds" : true,
@@ -135,6 +137,10 @@ The examples below were written by the app itself, from made-up data.
 - `modifiers` values are `function`, `control`, `option`, `shift` and `command`. `keyCode`
   is a macOS key number. A shortcut with no `keyCode` is modifier keys only. The order
   inside `modifiers` does not matter.
+- `meetings.offerCalendarMeetings` (Mac only, off unless you turn it on): when a call on
+  your calendar starts, the app offers to record it, and a meeting recorded during a call
+  takes the event's title and the names of the people invited. The calendar is read on the
+  Mac itself; nothing from it is sent anywhere.
 - `language` is a two-letter code such as `en`. It is left out when the language is to be
   worked out from the audio.
 - Other keys you may see: `microphoneID`, and `apiBaseURL`, the address of a different
@@ -278,6 +284,10 @@ All four keys are required.
 
 ```json
 {
+  "attendees" : [
+    "Jordan Lee",
+    "Priya Raman"
+  ],
   "endedAt" : "2026-11-16T15:31:00Z",
   "id" : "00000000-0000-4000-8000-000000000006",
   "notes" : {
@@ -338,9 +348,19 @@ All four keys are required.
   one too, when only a part is missing: a piece that could not be turned into text, notes
   that could not be written, or audio that was lost in a crash.
 - `segments` is the transcript. `start` and `end` are seconds from the start of the
-  recording. `speaker` is `me` (your microphone), `others` (the computer's sound), or a name.
+  recording. `speaker` is `me` (your microphone) or one of the people on the computer's
+  sound: `Speaker 1`, `Speaker 2` and so on for voices told apart that have no name yet, or
+  a name. A name comes from you, from an agent, or from the AI notes when the talk makes it
+  plain ("thanks, Priya"). `others` stands for everyone on the computer's sound when their
+  voices were not told apart: in meetings recorded through a server of your own, and in
+  meetings from before voices were told apart.
+- To rename a speaker, change `speaker` on every one of their segments, and `owner` on every
+  action item that names them. Never use `me` or `others` as a name.
 - `notes` holds the AI notes. It is missing until they have been written.
 - `userNotes` is your own free-form Markdown.
+- `attendees` holds the names of the other people invited to the calendar event the meeting
+  was recorded during (an email address when the calendar has no name). It is empty when
+  there was no such event, and an empty list when left out.
 - `endedAt` is missing while the meeting is being recorded.
 - At the top level, only `id` and `startedAt` are required. A meeting with no `title` is
   shown as "Untitled meeting".
@@ -382,14 +402,29 @@ removed.
       "state" : "done",
       "track" : "microphone"
     }
+  ],
+  "voices" : [
+    {
+      "end" : 14.25,
+      "file" : "system-0000.m4a",
+      "name" : "Speaker 1",
+      "start" : 4.25
+    }
   ]
 }
 ```
 
 - `offset` and `duration` are in seconds. `offset` counts from the start of the meeting.
 - `state` is `pending` (not turned into text yet), `done` or `failed` (waiting for a retry).
-- `segments` holds what was heard in that piece, in the same shape as in `meeting.json`.
+- `segments` holds what was heard in that piece, in the same shape as in `meeting.json`. A
+  segment here keeps the speaker the app first gave it (`Speaker 1`); a new name lives in
+  `meeting.json` and is carried over whenever the app writes the transcript again.
 - `lostAudio` is `true` when some sound could not be saved. It is left out otherwise.
+- `voices` lists the voices told apart on the `system` track, at most four, each with a
+  stretch of 2 to 10 seconds (`start` to `end`, in seconds from the start of `file`) in which
+  only that voice speaks. Each later `system` piece is sent to OpenAI with these stretches, so
+  the same person keeps the same number from piece to piece. It is left out until the first
+  voice is found. Voices are only told apart when speech goes to OpenAI itself.
 
 **After a crash.** The audio files are the truth, and the manifest is only a record of
 them. The next time the app starts, it finishes every meeting that was left as `recording`
@@ -414,7 +449,8 @@ JSON. Times are shown in the device's time zone.
 
 **Date:** 2026-11-16 15:00  
 **Length:** 31 min  
-**Tags:** product
+**Tags:** product  
+**Attendees:** Jordan Lee, Priya Raman
 
 ## Summary
 
@@ -447,6 +483,40 @@ Follow up on the pricing page next week.
 `notes.md` is for reading only. It is written again from `meeting.json` every time the
 meeting is saved, so anything you type into it is lost. To add your own notes, change
 `userNotes` in `meeting.json`. A section with nothing in it is left out.
+
+### agents/&lt;pid&gt;.json
+
+Each `spaces mcp` server (the program your AI tool starts) writes one file here, named after
+its process number, so the app can show which AI tool is connected. It holds who the tool says
+it is and when it was last used. It never holds anything the tool read or wrote.
+
+```json
+{
+  "client" : {
+    "name" : "claude-code",
+    "version" : "2.1.0"
+  },
+  "endedAt" : "2026-11-17T11:02:41Z",
+  "lastActiveAt" : "2026-11-17T11:02:40Z",
+  "lastTool" : "meetings_search",
+  "pid" : 4242,
+  "startedAt" : "2026-11-17T09:15:03Z"
+}
+```
+
+- `client` is how the tool names itself over MCP: `name`, and `title` and `version` when it gives
+  them. The tool is not checked, so this is for showing only. `name` is empty when it gave none.
+- The file is written when the first request arrives, and again when the tool names itself
+  differently.
+- `lastActiveAt` moves on when the tool calls a tool, reads a meeting document or uses a
+  ready-made request. To spare the disk, it is written at most about every 30 seconds.
+  `lastTool` is the name of the tool it called last.
+- `endedAt` is written when the server stops on its own, at the end of its input. While it is
+  missing the server is running. If the process with that number is gone (the server was
+  stopped without warning), readers treat the file as ended at `lastActiveAt`.
+- Files that ended more than a day ago are deleted by the app when it reads the folder.
+
+There is nothing here for you to change.
 
 ### .tickets/
 

@@ -23,7 +23,7 @@ enum EchoFilter {
   static let slack: TimeInterval = 2
 
   static func removeEcho(from segments: [TranscriptSegment]) -> [TranscriptSegment] {
-    let others = segments.filter { $0.speaker == .others }.map { (segment: $0, words: words(in: $0.text)) }
+    let others = segments.filter { $0.speaker != .me }.map { (segment: $0, words: words(in: $0.text)) }
     guard !others.isEmpty else { return segments }
     return segments.compactMap { segment in
       guard segment.speaker == .me else { return segment }

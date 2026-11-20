@@ -77,9 +77,9 @@ jobs:
             packages/*/.build
             apps/macos/.build
             apps/ios/Phone/.build
-          key: swift-check-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-${{ github.sha }}
+          key: swift-check-${{ github.event.repository.name }}-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-${{ github.sha }}
           restore-keys: |
-            swift-check-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-
+            swift-check-${{ github.event.repository.name }}-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-
       - name: Make unchanged files look unchanged
         run: scripts/ci-mtimes
       - name: Lint and build everything

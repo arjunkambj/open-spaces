@@ -194,20 +194,32 @@ public struct MeetingSettings: Codable, Sendable, Equatable {
   public var autoSummarize: Bool
   /// Keep the audio files after the transcript is made.
   public var keepAudio: Bool
+  /// Offer to record when a call on the calendar starts, and give a meeting recorded during one
+  /// the event's title and the names of the people invited. Needs calendar access. macOS only.
+  public var offerCalendarMeetings: Bool
 
-  public init(captureSystemAudio: Bool = true, autoSummarize: Bool = true, keepAudio: Bool = true) {
+  public init(
+    captureSystemAudio: Bool = true,
+    autoSummarize: Bool = true,
+    keepAudio: Bool = true,
+    offerCalendarMeetings: Bool = false
+  ) {
     self.captureSystemAudio = captureSystemAudio
     self.autoSummarize = autoSummarize
     self.keepAudio = keepAudio
+    self.offerCalendarMeetings = offerCalendarMeetings
   }
 
-  private enum CodingKeys: String, CodingKey { case captureSystemAudio, autoSummarize, keepAudio }
+  private enum CodingKeys: String, CodingKey {
+    case captureSystemAudio, autoSummarize, keepAudio, offerCalendarMeetings
+  }
 
   public init(from decoder: any Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     captureSystemAudio = try c.decodeIfPresent(Bool.self, forKey: .captureSystemAudio) ?? true
     autoSummarize = try c.decodeIfPresent(Bool.self, forKey: .autoSummarize) ?? true
     keepAudio = try c.decodeIfPresent(Bool.self, forKey: .keepAudio) ?? true
+    offerCalendarMeetings = try c.decodeIfPresent(Bool.self, forKey: .offerCalendarMeetings) ?? false
   }
 }
 
@@ -310,7 +322,8 @@ public enum ShortcutAction: String, Codable, Sendable, CaseIterable, Hashable {
     switch self {
     case .pushToTalk: "Hold to dictate. Release to insert the text."
     case .handsFree: "Press once to start dictating. Press again to stop."
-    case .commandMode: "Select text, hold, and say how to change it."
+    case .commandMode:
+      "Select text, hold, and say how to change it. A snippet can hold a command you use often."
     case .pasteLast: "Insert your most recent dictation again."
     case .toggleMeeting: "Record a meeting from anywhere."
     }
@@ -561,9 +574,22 @@ public struct DictationStats: Sendable, Equatable {
 public enum Speaker: Codable, Sendable, Hashable {
   /// The microphone: the person using the app.
   case me
-  /// The computer's audio: everyone else on the call.
+  /// The computer's audio, when its voices were not told apart: everyone else on the call.
   case others
+  /// One person: a voice told apart on the computer's audio ("Speaker 1", "Speaker 2"… until
+  /// it has a name), or a name someone gave a speaker.
   case named(String)
+
+  /// The label of a voice told apart that has no name yet: "Speaker 1" for `number` 1.
+  public static func unnamed(_ number: Int) -> Speaker { .named("Speaker \(number)") }
+
+  /// The number of a voice that has no name yet, as in `unnamed`. `nil` for any other speaker.
+  public var unnamedNumber: Int? {
+    guard case .named(let name) = self, name.hasPrefix("Speaker "),
+      let number = Int(name.dropFirst("Speaker ".count)), number > 0, Speaker.unnamed(number) == self
+    else { return nil }
+    return number
+  }
 
   public var label: String {
     switch self {
@@ -661,6 +687,9 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
   /// Free-form Markdown written by the user or by an agent.
   public var userNotes: String
   public var tags: [String]
+  /// Names of the other people invited to the calendar event the meeting was recorded during.
+  /// Empty when there was no such event.
+  public var attendees: [String]
 
   public init(
     id: UUID = UUID(),
@@ -672,7 +701,8 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     segments: [TranscriptSegment] = [],
     notes: MeetingNotes? = nil,
     userNotes: String = "",
-    tags: [String] = []
+    tags: [String] = [],
+    attendees: [String] = []
   ) {
     self.id = id
     self.title = title
@@ -684,6 +714,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     self.notes = notes
     self.userNotes = userNotes
     self.tags = tags
+    self.attendees = attendees
   }
 
   public var duration: TimeInterval {
@@ -707,7 +738,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     }.joined(separator: "\n")
   }
 
-  /// The meeting as a Markdown document: title, date, summary, key points,
+  /// The meeting as a Markdown document: title, date, attendees, summary, key points,
   /// decisions, action items, the user's notes and the transcript. Times are in the
   /// device's time zone.
   public func markdown() -> String {
@@ -718,6 +749,11 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     var facts = ["**Date:** \(dateFormat.string(from: startedAt))"]
     if duration > 0 { facts.append("**Length:** \(max(1, Meeting.wholeSeconds(duration + 30) / 60)) min") }
     if !tags.isEmpty { facts.append("**Tags:** \(tags.joined(separator: ", "))") }
+    if !attendees.isEmpty {
+      // Names come from calendar invites: one line each, so a name can never add lines here.
+      let names = attendees.map { $0.split(whereSeparator: \.isNewline).joined(separator: " ") }
+      facts.append("**Attendees:** \(names.joined(separator: ", "))")
+    }
     lines.append(facts.joined(separator: "  \n"))
     func section(_ heading: String, _ body: [String]) {
       guard !body.isEmpty else { return }
@@ -740,7 +776,7 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case id, title, startedAt, endedAt, status, failure, segments, notes, userNotes, tags
+    case id, title, startedAt, endedAt, status, failure, segments, notes, userNotes, tags, attendees
   }
 
   public init(from decoder: any Decoder) throws {
@@ -755,6 +791,102 @@ public struct Meeting: Codable, Sendable, Identifiable, Hashable {
     notes = try c.decodeIfPresent(MeetingNotes.self, forKey: .notes)
     userNotes = try c.decodeIfPresent(String.self, forKey: .userNotes) ?? ""
     tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+    attendees = try c.decodeIfPresent([String].self, forKey: .attendees) ?? []
+  }
+}
+
+// MARK: - Agents
+
+/// An AI tool (Claude Code, Codex, Cursor…) that uses Spaces through `spaces mcp`.
+///
+/// Each `spaces mcp` server keeps one while it runs, and leaves it behind for a day after it
+/// stops. It says who the tool is and when it was last used, never anything from the library.
+public struct AgentSession: Codable, Sendable, Identifiable, Hashable {
+  /// The process ID of the `spaces mcp` server. One session per server.
+  public var pid: Int32
+  /// Who the tool says it is.
+  public var client: AgentClient
+  public var startedAt: Date
+  /// When the tool last read or changed something. Saved at most about every 30 seconds.
+  public var lastActiveAt: Date
+  /// The name of the tool it called last, such as `meetings_search`.
+  public var lastTool: String?
+  /// When the server stopped, or `nil` while it runs. A server that was stopped without
+  /// warning is read back as stopped at `lastActiveAt`.
+  public var endedAt: Date?
+
+  /// How long a session is kept after its server stopped.
+  public static let keptFor: TimeInterval = 86_400
+
+  public var id: Int32 { pid }
+  /// Whether the server is still running, so the tool can use Spaces right now.
+  public var isConnected: Bool { endedAt == nil }
+
+  public init(
+    pid: Int32,
+    client: AgentClient,
+    startedAt: Date = Date(),
+    lastActiveAt: Date? = nil,
+    lastTool: String? = nil,
+    endedAt: Date? = nil
+  ) {
+    self.pid = pid
+    self.client = client
+    self.startedAt = startedAt
+    self.lastActiveAt = lastActiveAt ?? startedAt
+    self.lastTool = lastTool
+    self.endedAt = endedAt
+  }
+}
+
+/// How an MCP client names itself, such as `claude-code` 2.1.0. It is not checked: use it
+/// only to show people which tool it is.
+public struct AgentClient: Codable, Sendable, Hashable {
+  /// The client's own name for itself. Empty when it gave none.
+  public var name: String
+  /// A name for people, when the client gave one.
+  public var title: String?
+  public var version: String?
+
+  public init(name: String, title: String? = nil, version: String? = nil) {
+    self.name = name
+    self.title = title
+    self.version = version
+  }
+}
+
+extension Meeting {
+  /// The most characters a speaker's name may have.
+  public static let longestSpeakerName = 60
+
+  /// A name someone typed for a speaker, tidied: one line, no white space around it. `nil` when
+  /// nothing is left, when it is longer than `longestSpeakerName`, or when it is "Me" or
+  /// "Others", which stand for the person recording and for everyone else.
+  public static func speakerName(_ text: String) -> String? {
+    let name = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).joined(separator: " ")
+    guard !name.isEmpty, name.count <= longestSpeakerName,
+      !["me", "others"].contains(name.lowercased())
+    else { return nil }
+    return name
+  }
+
+  /// Gives `speaker` the name `name` (see `speakerName`) everywhere in this meeting: every line
+  /// they said and every action item they own. A name another speaker already has makes the
+  /// two one speaker. "Me" is the person recording and keeps that name. Returns whether
+  /// anything changed.
+  @discardableResult
+  public mutating func renameSpeaker(_ speaker: Speaker, to name: String) -> Bool {
+    guard speaker != .me, let name = Meeting.speakerName(name), speaker != .named(name) else { return false }
+    var changed = false
+    for index in segments.indices where segments[index].speaker == speaker {
+      segments[index].speaker = .named(name)
+      changed = true
+    }
+    for index in notes?.actionItems.indices ?? 0..<0 where notes?.actionItems[index].owner == speaker.label {
+      notes?.actionItems[index].owner = name
+      changed = true
+    }
+    return changed
   }
 }
 

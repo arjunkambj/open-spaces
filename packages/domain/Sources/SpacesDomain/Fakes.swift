@@ -32,6 +32,7 @@ public actor InMemoryLibrary: Library {
   private var storedSnippets: [Snippet]
   private var storedDictations: [Dictation]
   private var storedMeetings: [Meeting]
+  private var storedAgents: [AgentSession]
   private let scratch: URL
   private let broadcaster = Broadcaster<LibraryChange>()
 
@@ -40,13 +41,15 @@ public actor InMemoryLibrary: Library {
     words: [DictionaryWord] = [],
     snippets: [Snippet] = [],
     dictations: [Dictation] = [],
-    meetings: [Meeting] = []
+    meetings: [Meeting] = [],
+    agents: [AgentSession] = []
   ) {
     storedSettings = settings
     storedWords = words
     storedSnippets = snippets
     storedDictations = dictations
     storedMeetings = meetings
+    storedAgents = agents
     scratch = FileManager.default.temporaryDirectory
       .appendingPathComponent("open-spaces-memory-\(UUID().uuidString)", isDirectory: true)
   }
@@ -158,6 +161,18 @@ public actor InMemoryLibrary: Library {
 
   public func audioDirectory(forMeeting id: Meeting.ID) throws -> URL {
     try directory("meetings/\(id.uuidString)")
+  }
+
+  public func agentSessions() -> [AgentSession] {
+    let cutoff = Date().addingTimeInterval(-AgentSession.keptFor)
+    return storedAgents.filter { $0.isConnected || $0.lastActiveAt > cutoff }
+      .sorted { $0.lastActiveAt > $1.lastActiveAt }
+  }
+
+  public func save(_ session: AgentSession) {
+    storedAgents.removeAll { $0.id == session.id }
+    storedAgents.append(session)
+    broadcaster.send(.agents)
   }
 
   public nonisolated func changes() -> AsyncStream<LibraryChange> {
@@ -322,7 +337,7 @@ public final class FakePermissions: Permissions {
   public let needed: [Permission]
 
   public init(
-    needed: [Permission] = Permission.allCases,
+    needed: [Permission] = [.microphone, .accessibility, .systemAudio],
     statuses: [Permission: PermissionStatus] = [:]
   ) {
     self.needed = needed
@@ -340,6 +355,19 @@ public final class FakePermissions: Permissions {
   }
 }
 
+/// A calendar that holds only the events it was given.
+public struct FakeMeetingCalendar: MeetingCalendar {
+  private let events: [CalendarEvent]
+
+  public init(events: [CalendarEvent] = []) {
+    self.events = events
+  }
+
+  public func calls(at date: Date) async -> [CalendarEvent] {
+    events.filter { $0.start <= date && date < $0.end }.sorted { $0.start > $1.start }
+  }
+}
+
 /// Made-up content for demos and snapshots. Nothing here is real user data.
 public enum SampleData {
   public static func library(now: Date = Date(), onboarded: Bool = true) -> InMemoryLibrary {
@@ -351,8 +379,22 @@ public enum SampleData {
       words: words(now: now),
       snippets: snippets(now: now),
       dictations: dictations(now: now),
-      meetings: meetings(now: now)
+      meetings: meetings(now: now),
+      agents: agents(now: now)
     )
+  }
+
+  /// Claude Code, connected and used a few minutes ago.
+  public static func agents(now: Date = Date()) -> [AgentSession] {
+    [
+      AgentSession(
+        pid: 4_242,
+        client: AgentClient(name: "claude-code", version: "2.1.0"),
+        startedAt: now.addingTimeInterval(-2 * 3_600),
+        lastActiveAt: now.addingTimeInterval(-180),
+        lastTool: "meetings_search"
+      )
+    ]
   }
 
   public static func words(now: Date = Date()) -> [DictionaryWord] {
@@ -413,6 +455,19 @@ public enum SampleData {
     }
   }
 
+  /// One call going on now, for a demo calendar.
+  public static func calendar(now: Date = Date()) -> [CalendarEvent] {
+    [
+      CalendarEvent(
+        id: "demo-design-review",
+        title: "Design review",
+        start: now.addingTimeInterval(-120),
+        end: now.addingTimeInterval(1_680),
+        attendees: ["Priya Raman", "Jordan Lee"]
+      )
+    ]
+  }
+
   public static func meetings(now: Date = Date()) -> [Meeting] {
     let start = now.addingTimeInterval(-26 * 3_600)
     let standup = Meeting(
@@ -428,7 +483,7 @@ public enum SampleData {
           text: "Thanks for joining. Let's start with the launch date."
         ),
         TranscriptSegment(
-          speaker: .others,
+          speaker: .named("Priya"),
           start: 10,
           end: 21,
           text: "We're on track for the 14th. The only open risk is the billing migration."
@@ -437,13 +492,19 @@ public enum SampleData {
           speaker: .me,
           start: 22,
           end: 30,
-          text: "Okay. I'll check in with Sam about billing today."
+          text: "Okay. I'll check in with Sam about billing today. Thanks, Priya. Jordan, how is the copy?"
         ),
         TranscriptSegment(
-          speaker: .others,
+          speaker: .named("Jordan"),
           start: 31,
           end: 44,
           text: "I can have the onboarding copy ready by Wednesday so design can review it."
+        ),
+        TranscriptSegment(
+          speaker: .unnamed(3),
+          start: 45,
+          end: 50,
+          text: "Support is ready for the launch as well."
         ),
       ],
       notes: MeetingNotes(
@@ -482,7 +543,8 @@ public enum SampleData {
         keyPoints: ["Notes are dictated on phones", "Sharing happens over email"],
         actionItems: [ActionItem(text: "Send a summary and pricing", owner: "Alex")]
       ),
-      tags: ["customer"]
+      tags: ["customer"],
+      attendees: ["Dana Whitfield", "Luis Ortega"]
     )
     let untitledStart = now.addingTimeInterval(-6 * 86_400)
     let short = Meeting(

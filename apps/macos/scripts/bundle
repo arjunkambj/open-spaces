@@ -57,8 +57,8 @@
 #
 # Everything is signed from the inside out: the updater's own helper programs, then the
 # updater, then the `spaces` tool, then the app, which seals all of it. All with the
-# hardened runtime. The app has one entitlement of its own, the microphone
-# (Resources/Spaces.entitlements). Typing into other apps and the global shortcuts
+# hardened runtime. The app has two entitlements of its own, the microphone and reading
+# the calendar (Resources/Spaces.entitlements). Typing into other apps and the global shortcuts
 # need no entitlement, only the Accessibility permission.
 #
 # Without an Apple Developer ID, one more entitlement is added: the one that lets the app

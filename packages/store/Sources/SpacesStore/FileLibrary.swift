@@ -20,6 +20,9 @@ public actor FileLibrary: Library {
   private let snippetsFile: JSONDocument<[Snippet]>
   private let dictationsFile: JSONDocument<[Dictation]>
   private let meetingIndex: MeetingIndex
+  private let agentFolder: AgentFolder
+  /// What the agents folder held when it was last looked at, once somebody listens.
+  private var agentsSeen: [Int32: FileSignature]?
   private var watcher: FolderWatcher?
   private var tidied = false
   /// The history newest first, and the revision of `dictationsFile` it was made from.
@@ -64,6 +67,7 @@ public actor FileLibrary: Library {
       salvage: { LibraryJSON.salvageArray(Dictation.self, from: $0) }
     )
     meetingIndex = MeetingIndex(layout: layout, lock: lock)
+    agentFolder = AgentFolder(layout: layout)
   }
 
   deinit {
@@ -259,13 +263,40 @@ public actor FileLibrary: Library {
     try meetingIndex.audioFolder(id)
   }
 
+  // MARK: Agents
+
+  public func agentSessions() -> [AgentSession] {
+    let sessions = agentFolder.sessions()
+    // Reading may have tidied the folder, or found what another process wrote.
+    noteAgents()
+    return sessions
+  }
+
+  public func save(_ session: AgentSession) throws {
+    try write(.agents) { try agentFolder.save(session) }
+    if agentsSeen != nil { agentsSeen = agentFolder.signature() }
+  }
+
+  /// Tells listeners when the agents folder is not what it was when last looked at.
+  private func noteAgents() {
+    guard let seen = agentsSeen else { return }
+    let now = agentFolder.signature()
+    guard now != seen else { return }
+    agentsSeen = now
+    hub.send(.agents)
+  }
+
   // MARK: Changes
 
   public nonisolated func changes() -> AsyncStream<LibraryChange> {
     // What the folder looks like right now, so a write that lands before the watch is up
     // is still reported.
     let files = [FolderLayout.settings, FolderLayout.words, FolderLayout.snippets, FolderLayout.dictations]
-    let baseline = Baseline(moment: Date(), files: files.map { FileSignature.of(layout.file($0)) })
+    let baseline = Baseline(
+      moment: Date(),
+      files: files.map { FileSignature.of(layout.file($0)) },
+      agents: agentFolder.signature()
+    )
     return hub.stream { [weak self] in
       guard let self else { return }
       Task { await self.listenersChanged(baseline) }
@@ -277,6 +308,7 @@ public actor FileLibrary: Library {
     var moment: Date
     /// Settings, words, snippets, dictations.
     var files: [FileSignature?]
+    var agents: [Int32: FileSignature]
   }
 
   /// Watches the folder for as long as somebody is listening, and not a moment longer.
@@ -299,6 +331,7 @@ public actor FileLibrary: Library {
     wordsFile.adopt(earlier: baseline.files[1])
     snippetsFile.adopt(earlier: baseline.files[2])
     dictationsFile.adopt(earlier: baseline.files[3])
+    agentsSeen = agentsSeen ?? baseline.agents
     lookForChanges(since: baseline.moment)
   }
 
@@ -308,6 +341,7 @@ public actor FileLibrary: Library {
     if wordsFile.poll() { hub.send(.words) }
     if snippetsFile.poll() { hub.send(.snippets) }
     if dictationsFile.poll() { hub.send(.dictations) }
+    noteAgents()
     noteMeetingScan(meetingIndex.scan(since: moment))
   }
 
@@ -336,6 +370,7 @@ public actor FileLibrary: Library {
       if !tidied {
         tidied = true
         FileAccess.removeStaleTemporaryFiles(in: layout.root)
+        FileAccess.removeStaleTemporaryFiles(in: layout.agentsFolder)
         meetingIndex.removeLeftovers()
       }
       return try body()

@@ -103,7 +103,7 @@ export const shortcuts: {
 export const meetings = {
   title: "Record the meeting. Keep talking.",
   text: [
-    "It records your microphone and what your Mac plays, so both sides of a call are there. Each line is marked Me or Others.",
+    "It records your microphone and what your Mac plays, so both sides of a call are there. Your lines are marked Me. With OpenAI, each other voice gets its own label, which you can rename.",
     "When you stop, you get a summary, key points, decisions and action items. Ask a question later and the answer comes from that meeting.",
   ],
   crash: "If the app closes in the middle, the audio is kept and the meeting is finished the next time you open it.",
