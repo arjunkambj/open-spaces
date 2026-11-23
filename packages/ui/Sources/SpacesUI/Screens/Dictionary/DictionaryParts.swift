@@ -112,31 +112,27 @@ private struct RowKeys: ViewModifier {
   @Environment(\.rowSetting) private var setting
 
   func body(content: Content) -> some View {
-    #if os(macOS)
-      // Focus works as it does for a button: Tab reaches the row when the Mac's keyboard
-      // navigation is on, and a click does not leave a focus mark behind. The mark is drawn
-      // by us, because a boxed list clips what is outside the row.
-      content
-        .overlay {
-          if isFocused {
-            RoundedRectangle(cornerRadius: Spaces.Radius.control, style: .continuous)
-              .strokeBorder(Spaces.Color.textPrimary, lineWidth: Spaces.Stroke.focus)
-              // Inside a box the mark stays inside the row; on the page it sits where the hover fill does.
-              .padding(.horizontal, setting == .open ? -RowMetrics.reach : Spaces.Space.xs)
-              .padding(.vertical, setting == .open ? 0 : Spaces.Space.xs)
-              .allowsHitTesting(false)
-          }
+    // Focus works as it does for a button: Tab reaches the row when the Mac's keyboard
+    // navigation is on, and a click does not leave a focus mark behind. The mark is drawn
+    // by us, because a boxed list clips what is outside the row.
+    content
+      .overlay {
+        if isFocused {
+          RoundedRectangle(cornerRadius: Spaces.Radius.control, style: .continuous)
+            .strokeBorder(Spaces.Color.textPrimary, lineWidth: Spaces.Stroke.focus)
+            // Inside a box the mark stays inside the row; on the page it sits where the hover fill does.
+            .padding(.horizontal, setting == .open ? -RowMetrics.reach : Spaces.Space.xs)
+            .padding(.vertical, setting == .open ? 0 : Spaces.Space.xs)
+            .allowsHitTesting(false)
         }
-        .focusable(interactions: .activate)
-        .focused($isFocused)
-        .focusEffectDisabled()
-        .onKeyPress(keys: [.return, .space]) { _ in
-          open()
-          return .handled
-        }
-        .onDeleteCommand(perform: delete)
-    #else
-      content
-    #endif
+      }
+      .focusable(interactions: .activate)
+      .focused($isFocused)
+      .focusEffectDisabled()
+      .onKeyPress(keys: [.return, .space]) { _ in
+        open()
+        return .handled
+      }
+      .onDeleteCommand(perform: delete)
   }
 }

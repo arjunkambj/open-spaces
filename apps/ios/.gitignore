@@ -1,5 +1,0 @@
-# Made by XcodeGen from project.yml.
-*.xcodeproj
-Generated/
-# Copied from /assets by XcodeGen's preGenCommand.
-App/Assets.xcassets/AppIcon.appiconset/icon-ios-1024.png

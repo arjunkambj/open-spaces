@@ -37,14 +37,6 @@ final class HomeAudioPlayer {
   func play(_ id: Dictation.ID, file: URL) throws {
     guard !isStill else { return }
     stop()
-    #if os(iOS)
-      // Without this the ring/silent switch would mute the recording.
-      let session = AVAudioSession.sharedInstance()
-      if session.category != .playback && session.category != .playAndRecord {
-        try session.setCategory(.playback, mode: .default)
-      }
-      try session.setActive(true)
-    #endif
     let player = try AVAudioPlayer(contentsOf: file)
     guard player.play() else { throw SpacesError.storage("The recording could not be played.") }
     self.player = player

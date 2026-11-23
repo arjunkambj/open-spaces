@@ -4,7 +4,7 @@ import PackageDescription
 // Microphone and system-audio capture.
 let package = Package(
   name: "SpacesAudio",
-  platforms: [.macOS("14.4"), .iOS(.v17)],
+  platforms: [.macOS("14.4")],
   products: [
     .library(name: "SpacesAudio", targets: ["SpacesAudio"])
   ],

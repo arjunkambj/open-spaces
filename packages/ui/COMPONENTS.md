@@ -1,19 +1,18 @@
 # SpacesUI components
 
-The one page to read before building a screen. Everything here is `public` in the module `SpacesUI` and works on macOS 14.4+ and iOS 17+.
+The one page to read before building a screen. Everything here is `public` in the module `SpacesUI` and works on macOS 14.4+.
 
 The look: black and white, calm, with plenty of room. The greys are one neutral ramp with no hue (the steps are listed in `Design/Colors.swift`): a light grey window, a white page, and as few boxes as possible: lists sit right on the page with hairlines between their rows, and only groups of settings and things that are live get a soft grey fill. One type voice, the system sans (SF), with size, weight and space doing the work that colour and borders would. Headings are semibold, never bold. Buttons are capsules; the primary one is near-black (white in dark mode). There is no brand colour: the "accent" is that same ink. Red is kept for errors, deleting and a live recording. Dark mode is near-black.
 
 ## Rules
 
 - **No literals in screens.** No `Color(...)`, `.font(.system(...))`, raw paddings or corner radii. Use `Spaces.Color`, `.spacesText`, `Spaces.Space`, `Spaces.Radius`. If a token is missing, add it to the kit, not to the screen.
-- **Start every screen with `Page`.** It gives the title, the width, the scrolling and the paddings on both platforms.
+- **Start every screen with `Page`.** It gives the title, the width, the scrolling and the paddings.
 - **Build from the kit.** A list is a `CardList` of `ListRow`s. A settings group is a `Card(padding: 0)` of `SettingRow`s and `ToggleRow`s. An empty list is an `EmptyState`. A form in a popup is a `.dialog`.
 - **A box needs a reason.** Never a fill and a border together. Content lists are plain (no box). A fill groups settings or marks something live. A border is for things you type or choose in, and for the one item set apart on a page.
 - **Nothing that sells.** No banners that introduce a feature, no numbers shown off, no tips that must be dismissed. Say how a thing works in the empty state, or in one quiet line under the title.
 - **One primary button per screen or dialog.** Everything else is secondary, tertiary or ghost.
 - **Ink, not colour.** `accent` is black (white in dark mode). Show what is chosen or live with ink, weight or a fill, never with a hue. Red only for errors, deleting and recording.
-- **Never read the platform with `#if os(...)` for layout.** Read `@Environment(\.spacesIdiom)` (`.mac` or `.phone`). The snapshot tool sets it, which is how iPhone layouts are drawn on a Mac. Use `#if os(...)` only for APIs that do not exist on the other platform.
 - **Every control needs a VoiceOver name.** The kit asks for one where it cannot guess it (`IconButton(label:)`, `Dropdown("…")`).
 - **Text is plain English.** Short sentences, no jargon.
 
@@ -26,7 +25,7 @@ Each is a SwiftUI `Color` that follows light and dark mode by itself.
 | Name | Use |
 | --- | --- |
 | `window` | Behind everything; the sidebar sits on it |
-| `panel` | The content panel; the page background on iPhone |
+| `panel` | The content panel |
 | `surface` | Cards and rows |
 | `surfaceHover` | A row or control under the pointer |
 | `surfaceSelected` | Selected item; fill of secondary buttons and key caps |
@@ -47,18 +46,18 @@ RoundedRectangle(cornerRadius: Spaces.Radius.card).fill(Spaces.Color.surface)
 
 ### Text: `.spacesText(_ style:, color:)`
 
-Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. Sizes follow the idiom and Dynamic Type. Body text gets about 20 points of line on a Mac and 22 on iPhone.
+Sets font, letter spacing and colour. Every style is the system sans; only `.mono` is fixed-width. Sizes follow Dynamic Type. Body text gets about 20 points of line.
 
-| Style | Mac / iPhone | Use |
+| Style | Size | Use |
 | --- | --- | --- |
-| `.pageTitle` | 24 / 28 semibold | Page titles (`Page` does this) |
-| `.hero` | 32 / 30 semibold | The headline of a first-run step |
-| `.cardTitle` | 16 / 18 semibold | Titles of cards and dialogs |
-| `.body`, `.bodyStrong` | 14 / 17, regular and medium | Reading text; row titles that matter |
-| `.caption`, `.captionStrong` | 12 / 14 | Helper text (secondary colour); field labels |
-| `.sectionLabel` | 12 / 14 medium, secondary colour | Labels above groups (`SectionLabel` does this) |
-| `.mono` | 12.5 / 14 fixed-width | Paths, commands |
-| `.keyCap` | 12 / 14 medium | Inside key caps |
+| `.pageTitle` | 24 semibold | Page titles (`Page` does this) |
+| `.hero` | 32 semibold | The headline of a first-run step |
+| `.cardTitle` | 16 semibold | Titles of cards and dialogs |
+| `.body`, `.bodyStrong` | 14, regular and medium | Reading text; row titles that matter |
+| `.caption`, `.captionStrong` | 12 | Helper text (secondary colour); field labels |
+| `.sectionLabel` | 12 medium, secondary colour | Labels above groups (`SectionLabel` does this) |
+| `.mono` | 12.5 fixed-width | Paths, commands |
+| `.keyCap` | 12 medium | Inside key caps |
 
 ```swift
 Text("Hold fn and speak.").spacesText(.body)
@@ -81,12 +80,6 @@ VStack(spacing: Spaces.Space.l) { ... }
 withAnimation(Spaces.Motion.spring) { isOpen = true }
 ```
 
-### Idiom
-
-```swift
-@Environment(\.spacesIdiom) private var idiom   // .mac or .phone
-```
-
 ## Components
 
 ### Page
@@ -104,7 +97,7 @@ Page(title: "Dictionary", subtitle: "Words Spaces should know.") {
 }
 ```
 
-The content is a leading-aligned column with 32 points between children on a Mac (24 on iPhone), inside 48-point side margins on a Mac (20 on iPhone). It is at least as tall as the screen, so an `EmptyState` centres itself in what is left. On iPhone the page paints its own background; on a Mac the hub's panel is behind it.
+The content is a leading-aligned column with 32 points between children, inside 48-point side margins. It is at least as tall as the screen, so an `EmptyState` centres itself in what is left. The hub's panel is behind it.
 
 ### Sections, cards, rows
 
@@ -135,12 +128,12 @@ PageSection("Today") {
 }
 ```
 
-`hoverActions` show while the pointer is over the row on a Mac, and while the keyboard is on the row or on one of the actions; always on iPhone. A row you draw yourself must do the same: Tab reaches an action even while it is unseen, so show the actions when one of them has focus (`.focused` on the group of actions).
+`hoverActions` show while the pointer is over the row, and while the keyboard is on the row or on one of the actions. A row you draw yourself must do the same: Tab reaches an action even while it is unseen, so show the actions when one of them has focus (`.focused` on the group of actions).
 
 The three styles:
 
 - `.plain` (the default for `CardList`): no box. Rows line up with the page title, and the hover fill is a rounded shape that reaches a little into the page margin. For every list of content: dictations, meetings, words, snippets.
-- `.filled`: a light grey fill, no border. For a group of settings, a short menu of places (the iPhone settings list), or something live (the recording card).
+- `.filled`: a light grey fill, no border. For a group of settings, a short menu of places, or something live (the recording card).
 - `.outlined`: a hairline border, no fill. For one thing set apart on a page, such as an answer.
 
 A row you draw yourself ends with `.rowChrome(isHighlighted:)` (after its vertical padding) instead of its own side padding and hover background. That gives it the right inset and hover shape in whichever list it is put.
@@ -159,10 +152,10 @@ NavItem(_ title: String, systemImage: String, isSelected: Bool, badge: String? =
 ```swift
 Button("Add word") { save() }.buttonStyle(.spaces(.primary))
 Button { start() } label: { Label("Start a meeting", systemImage: "record.circle") }.buttonStyle(.spaces())
-Button("Continue") { next() }.buttonStyle(.spaces(.primary, fullWidth: true))   // bottom of an iPhone screen
+Button("Continue") { next() }.buttonStyle(.spaces(.primary, fullWidth: true))   // the width it is given
 ```
 
-Every button is a capsule: 36 points tall on a Mac (28 small), 48 on iPhone (36 small). Primary is solid ink, secondary a grey fill, tertiary an outline, ghost text only, destructive red. `IconButton` is a round spot that fills grey under the pointer.
+Every button is a capsule: 36 points tall (28 small). Primary is solid ink, secondary a grey fill, tertiary an outline, ghost text only, destructive red. `IconButton` is a round spot that fills grey under the pointer.
 
 `NavItem` is the entry of the hub sidebar and of the settings navigation. `hoverHighlight` gives any custom clickable thing the same hover and selected look.
 
@@ -201,7 +194,7 @@ Tabs(selection: $tab, options: Tab.allCases) { $0.title } trailing: { SearchFiel
 Tabs(selection: $view, options: [.notes, .transcript], style: .segmented) { $0.title }
 ```
 
-Underline tabs go at the top of a page. Segmented tabs are for a choice inside a card or on iPhone.
+Underline tabs go at the top of a page. Segmented tabs are for a choice inside a card.
 
 ### Fields
 
@@ -217,7 +210,7 @@ SpacesTextField("OpenAI API key", text: $key, placeholder: "sk-...", error: keyE
   .onSubmit { save() }
 ```
 
-`error` shows red text under the field and a red border. `focusOnAppear: true` puts the cursor in the field when it shows: give it to the first field of a dialog. `SearchField` is an icon that opens into a field on a Mac (Escape closes it) and a plain field on iPhone.
+`error` shows red text under the field and a red border. `focusOnAppear: true` puts the cursor in the field when it shows: give it to the first field of a dialog. `SearchField` is an icon that opens into a field (Escape closes it).
 
 ### Keys
 
@@ -284,7 +277,7 @@ Keys in a dialog:
 
 While a dialog or modal is open on a Mac, the view under it is disabled and hidden from VoiceOver: Tab and the pointer stay inside the dialog.
 
-On a Mac the dialog is a centred card on a dimmed layer that covers **the view the modifier is attached to**. Attach it to the outermost view you own (the `Page`); the Mac app attaches window-wide ones, such as settings, to the hub root. Escape, the close button and a click on the dim area close it. On iPhone it is a native sheet. `.modal` is the same thing without the title and footer, for big custom content such as the settings window.
+The dialog is a centred card on a dimmed layer that covers **the view the modifier is attached to**. Attach it to the outermost view you own (the `Page`); the Mac app attaches window-wide ones, such as settings, to the hub root. Escape, the close button and a click on the dim area close it. `.modal` is the same thing without the title and footer, for big custom content such as the settings window.
 
 ### Voice
 
@@ -329,15 +322,13 @@ enum HomeSnapshots {
   @MainActor static var cases: [SnapshotCase] {
     [
       SnapshotCase("home") { HomeScreen() },
-      SnapshotCase("home-phone", canvas: .phone) { HomeScreen() },
       SnapshotCase("home-empty", model: { .demo(hasAPIKey: false) }) { HomeScreen() },
     ]
   }
 }
 ```
 
-- `.mac` (880 x 720) is the hub's content area: panel background, Mac idiom.
-- `.phone` (393 x 852) is an iPhone: phone idiom, with the safe areas of the status bar and home indicator.
+- `.mac` (880 x 720) is the hub's content area, on the panel background.
 - `.custom(width:height:)` is a bare canvas on the window background.
 - The view gets a loaded `AppModel.demo()` in the environment. Pass `model:` for another starting state.
 

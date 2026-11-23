@@ -2,9 +2,9 @@ import Foundation
 import Observation
 import SpacesDomain
 
-/// What the host app (macOS or iOS) offers to shared screens.
+/// What the host app offers to shared screens.
 public struct HostActions: Sendable {
-  /// Path of the bundled `spaces` agent tool, when the platform has one.
+  /// Path of the bundled `spaces` agent tool, when there is one.
   public var agentToolPath: String?
   /// Folder that holds the library, when it can be shown to the user.
   public var dataFolder: URL?
@@ -15,7 +15,7 @@ public struct HostActions: Sendable {
   /// Global shortcuts changed: the host must re-register them.
   public var shortcutsChanged: @MainActor @Sendable () -> Void
   /// Looks for a new version of the app now and shows what it finds.
-  /// `nil` where the app is updated some other way (the App Store on iPhone, a demo).
+  /// `nil` where the app is not updated this way (a demo).
   public var checkForUpdates: (@MainActor @Sendable () -> Void)?
 
   public init(

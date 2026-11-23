@@ -17,7 +17,7 @@ Package.resolved
 # The Mac app has one outside library, the updater. Its exact version is kept.
 !/apps/macos/Package.resolved
 
-# Xcode. The iOS project is made from apps/ios/project.yml by XcodeGen.
+# Xcode
 DerivedData/
 *.xcodeproj
 *.xcworkspace
@@ -28,7 +28,6 @@ xcuserdata/
 # Things the scripts make: app bundles, zips, logs
 build/
 dist/
-ios-logs/
 
 # Local settings and secrets. An API key never belongs in the repo, and neither does a
 # signing key: scripts/setup-signing keeps those in ~/.config/open-spaces/signing.

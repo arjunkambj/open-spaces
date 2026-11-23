@@ -2,7 +2,7 @@
   "name": "open-spaces",
   "version": "0.1.0",
   "private": true,
-  "description": "Open-source voice dictation and meeting notes for macOS and iOS. Local-first, bring your own OpenAI key.",
+  "description": "Open-source voice dictation and meeting notes for macOS. Local-first, bring your own OpenAI key.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,8 +21,6 @@
     "mac": "pnpm --filter @open-spaces/macos run dev",
     "mac:bundle": "pnpm --filter @open-spaces/macos run bundle",
     "mac:dmg": "pnpm --filter @open-spaces/macos run dmg",
-    "ios:generate": "scripts/ios generate",
-    "ios:build": "scripts/ios build",
     "web": "pnpm --filter @open-spaces/web run dev",
     "web:build": "pnpm --filter @open-spaces/web run build",
     "web:deploy": "pnpm --filter @open-spaces/web run deploy"

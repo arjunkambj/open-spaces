@@ -31,7 +31,7 @@ public struct SpacesButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == SpacesButtonStyle {
   /// A Spaces button: a capsule.
-  /// - fullWidth: stretches the button to the width it is given (bottom-of-screen actions on iPhone).
+  /// - fullWidth: stretches the button to the width it is given.
   public static func spaces(
     _ kind: SpacesButtonStyle.Kind = .secondary,
     size: SpacesButtonStyle.Size = .regular,
@@ -48,7 +48,6 @@ private struct ButtonBody: View {
   let fullWidth: Bool
 
   @Environment(\.isEnabled) private var isEnabled
-  @Environment(\.spacesIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
   @State private var isHovered = false
 
@@ -66,28 +65,23 @@ private struct ButtonBody: View {
       .opacity(isEnabled ? 1 : 0.42)
       .scaleEffect(configuration.isPressed ? 0.98 : 1)
       .contentShape(shape)
-      .focusRingShape(shape)
-      .frame(minHeight: idiom == .phone ? 44 : nil)
+      .contentShape(.focusEffect, shape)
       .onHover { isHovered = $0 }
       .animation(Spaces.Motion.quick, value: isHovered)
       .animation(Spaces.Motion.quick, value: configuration.isPressed)
   }
 
   private var height: CGFloat {
-    switch (idiom, size) {
-    case (.mac, .regular): 36
-    case (.mac, .small): 28
-    case (.phone, .regular): 48
-    case (.phone, .small): 36
+    switch size {
+    case .regular: 36
+    case .small: 28
     }
   }
 
   private var horizontalPadding: CGFloat {
-    switch (idiom, size) {
-    case (.mac, .regular): 18
-    case (.mac, .small): 12
-    case (.phone, .regular): 24
-    case (.phone, .small): 16
+    switch size {
+    case .regular: 18
+    case .small: 12
     }
   }
 
@@ -210,7 +204,6 @@ struct IconChrome<Label: View>: View {
   @ViewBuilder let label: Label
 
   @Environment(\.isEnabled) private var isEnabled
-  @Environment(\.spacesIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
   @State private var isHovered = false
 
@@ -224,45 +217,28 @@ struct IconChrome<Label: View>: View {
       .background(background(hovered: hovered), in: shape)
       .opacity(isEnabled ? 1 : 0.4)
       .contentShape(shape)
-      .focusRingShape(shape)
-      .frame(minWidth: idiom == .phone ? 44 : nil, minHeight: idiom == .phone ? 44 : nil)
-      .contentShape(Rectangle())
+      .contentShape(.focusEffect, shape)
       .onHover { isHovered = $0 }
       .animation(Spaces.Motion.quick, value: isHovered)
   }
 
   private var side: CGFloat {
-    switch (idiom, size) {
-    case (.mac, .regular): 32
-    case (.mac, .small): 26
-    case (.phone, .regular): 40
-    case (.phone, .small): 34
+    switch size {
+    case .regular: 32
+    case .small: 26
     }
   }
 
   private var glyphSize: CGFloat {
-    switch (idiom, size) {
-    case (.mac, .regular): 15
-    case (.mac, .small): 12
-    case (.phone, .regular): 19
-    case (.phone, .small): 15
+    switch size {
+    case .regular: 15
+    case .small: 12
     }
   }
 
   private func background(hovered: Bool) -> SwiftUI.Color {
     if isPressed { return Spaces.Color.surfaceSelected }
     return hovered ? Spaces.Color.surfaceHover : .clear
-  }
-}
-
-extension View {
-  /// Makes the keyboard focus ring follow `shape`. The Mac draws the ring; iOS has none.
-  func focusRingShape(_ shape: some Shape) -> some View {
-    #if os(macOS)
-      contentShape(.focusEffect, shape)
-    #else
-      self
-    #endif
   }
 }
 
@@ -321,24 +297,15 @@ public struct OverflowMenu<Items: View>: View {
       .accessibilityLabel(label)
   }
 
-  // The Mac draws a menu's label as a system button unless it is given a button style;
-  // iOS draws the label as it is.
-  @ViewBuilder private var menu: some View {
-    #if os(macOS)
-      Menu {
-        items
-      } label: {
-        Image(systemName: "ellipsis")
-      }
-      .menuStyle(.button)
-      .buttonStyle(IconButtonStyle())
-    #else
-      Menu {
-        items
-      } label: {
-        IconChrome { Image(systemName: "ellipsis") }
-      }
-    #endif
+  // The Mac draws a menu's label as a system button unless it is given a button style.
+  private var menu: some View {
+    Menu {
+      items
+    } label: {
+      Image(systemName: "ellipsis")
+    }
+    .menuStyle(.button)
+    .buttonStyle(IconButtonStyle())
   }
 }
 
@@ -378,8 +345,6 @@ public struct NavItem: View {
   private let badge: String?
   private let action: () -> Void
 
-  @Environment(\.spacesIdiom) private var idiom
-
   public init(
     _ title: String,
     systemImage: String,
@@ -398,7 +363,7 @@ public struct NavItem: View {
     Button(action: action) {
       HStack(spacing: Spaces.Space.m) {
         Image(systemName: systemImage)
-          .font(.system(size: idiom == .phone ? 18 : 15, weight: isSelected ? .medium : .regular))
+          .font(.system(size: 15, weight: isSelected ? .medium : .regular))
           .foregroundStyle(isSelected ? Spaces.Color.textPrimary : Spaces.Color.textSecondary)
           .frame(width: 22)
         Text(title).spacesText(isSelected ? .bodyStrong : .body)
@@ -406,7 +371,7 @@ public struct NavItem: View {
         if let badge { Badge(badge, tone: .accent) }
       }
       .padding(.horizontal, Spaces.Space.m)
-      .frame(minHeight: idiom == .phone ? 48 : 36)
+      .frame(minHeight: 36)
       .hoverHighlight(isSelected: isSelected)
     }
     .buttonStyle(.plain)

@@ -70,14 +70,8 @@ private struct MeetingTurnRow: View {
   /// Set when the speaker can be renamed: their name is then a button.
   let onRename: ((Speaker) -> Void)?
 
-  @Environment(\.spacesIdiom) private var idiom
-
   var body: some View {
-    let layout =
-      idiom == .phone
-      ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spaces.Space.xs))
-      : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spaces.Space.l))
-    layout {
+    HStack(alignment: .firstTextBaseline, spacing: Spaces.Space.l) {
       who
       Text(marked)
         .spacesText(.body)
@@ -93,7 +87,7 @@ private struct MeetingTurnRow: View {
     }
   }
 
-  @ViewBuilder private var who: some View {
+  private var who: some View {
     let label = Text(turn.speaker.label)
       .spacesText(
         .captionStrong,
@@ -116,18 +110,11 @@ private struct MeetingTurnRow: View {
     let time = Text(MeetingsLogic.clock(turn.start))
       .monospacedDigit()
       .spacesText(.caption, color: Spaces.Color.textTertiary)
-    if idiom == .phone {
-      HStack(alignment: .firstTextBaseline, spacing: Spaces.Space.s) {
-        name
-        time
-      }
-    } else {
-      VStack(alignment: .leading, spacing: Spaces.Space.xxs) {
-        name
-        time
-      }
-      .frame(width: MeetingsMetrics.speakerColumn, alignment: .leading)
+    return VStack(alignment: .leading, spacing: Spaces.Space.xxs) {
+      name
+      time
     }
+    .frame(width: MeetingsMetrics.speakerColumn, alignment: .leading)
   }
 
   /// The turn's text as one paragraph, with every match tinted and the current one filled.
@@ -164,8 +151,6 @@ struct MeetingFindBar: View {
   let onStep: (Int) -> Void
   let onCopy: () -> Void
 
-  @Environment(\.spacesIdiom) private var idiom
-
   var body: some View {
     MeetingBottomBar {
       HStack(spacing: Spaces.Space.xs) {
@@ -183,8 +168,7 @@ struct MeetingFindBar: View {
           IconButton("chevron.down", label: "Next match") { onStep(1) }
             .disabled(count < 2)
         }
-        // On a phone the page's menu copies the transcript; the field needs the room.
-        if idiom == .mac { IconButton("doc.on.doc", label: "Copy transcript", action: onCopy) }
+        IconButton("doc.on.doc", label: "Copy transcript", action: onCopy)
       }
     }
   }
@@ -197,7 +181,6 @@ struct MeetingMyNotesTab: View {
   let meeting: Meeting
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
   @State private var draft: String
   /// What the library holds, as far as this view knows.
   @State private var saved: String
@@ -214,7 +197,7 @@ struct MeetingMyNotesTab: View {
       SpacesTextEditor(
         text: $draft,
         placeholder: "Write anything you want to keep from this meeting.",
-        height: MeetingsMetrics.editorHeight(idiom)
+        height: MeetingsMetrics.editorHeight
       )
       HStack(spacing: Spaces.Space.s) {
         Text("Saved as you type.")

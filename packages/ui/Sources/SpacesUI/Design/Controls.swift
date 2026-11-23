@@ -16,11 +16,10 @@ extension ToggleStyle where Self == SpacesToggleStyle {
 private struct ToggleBody: View {
   let configuration: ToggleStyleConfiguration
   @Environment(\.isEnabled) private var isEnabled
-  @Environment(\.spacesIdiom) private var idiom
 
   var body: some View {
-    let width: CGFloat = idiom == .phone ? 51 : 36
-    let height: CGFloat = idiom == .phone ? 31 : 20
+    let width: CGFloat = 36
+    let height: CGFloat = 20
     let inset: CGFloat = 2
     Button {
       configuration.isOn.toggle()
@@ -127,8 +126,6 @@ public struct Dropdown<Value: Hashable>: View {
   private let options: [Value]
   private let title: (Value) -> String
 
-  @Environment(\.spacesIdiom) private var idiom
-
   /// - label: the VoiceOver name of the control. It is not drawn.
   /// - title: the text shown for an option.
   public init(
@@ -146,30 +143,21 @@ public struct Dropdown<Value: Hashable>: View {
   public var body: some View {
     menu
       .menuIndicator(.hidden)
-      .frame(minWidth: idiom == .phone ? 140 : 170)
+      .frame(minWidth: 170)
       .fixedSize()
       .accessibilityLabel(label)
       .accessibilityValue(title(selection))
   }
 
-  // The Mac draws a menu's label as a system button unless it is given a button style;
-  // iOS draws the label as it is.
-  @ViewBuilder private var menu: some View {
-    #if os(macOS)
-      Menu {
-        choices
-      } label: {
-        current
-      }
-      .menuStyle(.button)
-      .buttonStyle(DropdownButtonStyle())
-    #else
-      Menu {
-        choices
-      } label: {
-        DropdownBox { current }
-      }
-    #endif
+  // The Mac draws a menu's label as a system button unless it is given a button style.
+  private var menu: some View {
+    Menu {
+      choices
+    } label: {
+      current
+    }
+    .menuStyle(.button)
+    .buttonStyle(DropdownButtonStyle())
   }
 
   private var choices: some View {
@@ -204,7 +192,6 @@ private struct DropdownButtonStyle: ButtonStyle {
 /// The bordered box of a select box.
 private struct DropdownBox<Label: View>: View {
   @ViewBuilder let label: Label
-  @Environment(\.spacesIdiom) private var idiom
   @Environment(\.isEnabled) private var isEnabled
   @State private var isHovered = false
 
@@ -212,7 +199,7 @@ private struct DropdownBox<Label: View>: View {
     let shape = RoundedRectangle(cornerRadius: Spaces.Radius.control, style: .continuous)
     label
       .padding(.horizontal, Spaces.Space.m)
-      .frame(minHeight: idiom == .phone ? 44 : 36)
+      .frame(minHeight: 36)
       .background(isHovered ? Spaces.Color.surfaceHover : Spaces.Color.raised, in: shape)
       .overlay { shape.strokeBorder(Spaces.Color.borderStrong, lineWidth: Spaces.Stroke.hairline) }
       .opacity(isEnabled ? 1 : 0.45)
@@ -226,7 +213,7 @@ private struct DropdownBox<Label: View>: View {
 public enum TabsStyle: Sendable {
   /// Text tabs on a hairline, the current one underlined. For the top of a page.
   case underline
-  /// A compact capsule of segments. For a choice inside a card or on iPhone.
+  /// A compact capsule of segments. For a choice inside a card.
   case segmented
 }
 
@@ -243,7 +230,6 @@ public struct Tabs<Value: Hashable, Trailing: View>: View {
   private let trailing: Trailing
 
   @Namespace private var namespace
-  @Environment(\.spacesIdiom) private var idiom
 
   /// - trailing: sits at the end of the tab line (underline style only), e.g. a search field.
   public init(
@@ -322,7 +308,7 @@ public struct Tabs<Value: Hashable, Trailing: View>: View {
             .lineLimit(1)
             .minimumScaleFactor(0.85)
             .padding(.horizontal, Spaces.Space.m)
-            .frame(maxWidth: .infinity, minHeight: idiom == .phone ? 36 : 28)
+            .frame(maxWidth: .infinity, minHeight: 28)
             .background {
               if isSelected {
                 shape

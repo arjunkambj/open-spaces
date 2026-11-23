@@ -17,10 +17,6 @@ enum DesignSnapshots {
       },
       SnapshotCase("kit-voice", canvas: .custom(width: 880, height: 400)) { VoiceGallery() },
       SnapshotCase("kit-hub", canvas: .custom(width: 1180, height: 760)) { HubGallery() },
-      SnapshotCase("kit-phone-page", canvas: .phone) { PhonePageGallery() },
-      SnapshotCase("kit-phone-controls", canvas: .phone) { PhoneControlsGallery() },
-      SnapshotCase("kit-phone-record", canvas: .phone) { PhoneRecordGallery() },
-      SnapshotCase("kit-phone-dialog", canvas: .phone) { PhoneDialogGallery() },
     ]
   }
 }
@@ -639,108 +635,5 @@ private struct HubGallery: View {
         }
       }
     }
-  }
-}
-
-// MARK: - iPhone
-
-private struct PhonePageGallery: View {
-  @State private var query = ""
-  @State private var tab = SampleTab.all
-
-  var body: some View {
-    Page(title: "Dictionary", subtitle: "Words Spaces should spell your way.") {
-      IconButton("plus", label: "Add word") {}
-    } content: {
-      SearchField(text: $query, placeholder: "Search words")
-      Tabs(selection: $tab, options: SampleTab.allCases, style: .segmented) { $0.rawValue }
-      Banner(.warning, title: "No API key yet", message: "Add your OpenAI key to start dictating.") {
-        Button("Add key") {}.buttonStyle(.spaces(.tertiary, size: .small))
-      }
-      PageSection("Today") {
-        CardList(sampleRows.prefix(3)) { row in
-          ListRow(row.text, subtitle: row.time) {
-          } hoverActions: {
-            OverflowMenu { Button("Delete", role: .destructive) {} }
-          }
-          .onTap {}
-          .lineLimit(2)
-        }
-      }
-    }
-  }
-}
-
-private struct PhoneControlsGallery: View {
-  @State private var name = "Sam"
-  @State private var key = ""
-  @State private var on = true
-  @State private var off = false
-  @State private var theme = SampleTheme.system
-
-  var body: some View {
-    Page(title: "Settings") {
-      SpacesTextField("Your name", text: $name, placeholder: "What should we call you?")
-      SpacesTextField(
-        "OpenAI API key",
-        text: $key,
-        placeholder: "sk-...",
-        error: "Paste your key to continue."
-      )
-      Card(padding: 0) {
-        ToggleRow("Sounds", description: "Play a soft sound when dictation starts.", isOn: $on)
-        Hairline().padding(.horizontal, Spaces.Space.xl)
-        ToggleRow("Keep audio", isOn: $off)
-        Hairline().padding(.horizontal, Spaces.Space.xl)
-        SettingRow("Theme") {
-          Dropdown("Theme", selection: $theme, options: SampleTheme.allCases) { $0.rawValue }
-        }
-      }
-      VStack(spacing: Spaces.Space.s) {
-        Button("Continue") {}.buttonStyle(.spaces(.primary, fullWidth: true))
-        Button("Not now") {}.buttonStyle(.spaces(.ghost, fullWidth: true))
-      }
-    }
-    .onBack {}
-  }
-}
-
-private struct PhoneRecordGallery: View {
-  var body: some View {
-    VStack(spacing: Spaces.Space.xl) {
-      Wordmark(size: 22)
-        .padding(.top, Spaces.Space.xl)
-      Spacer()
-      Text("Listening").spacesText(.hero)
-      Text("Say what you want to write.").spacesText(.body, color: Spaces.Color.textSecondary)
-      Waveform(level: 0.7, bars: 25, tint: Spaces.Color.accent, height: 56)
-        .padding(.vertical, Spaces.Space.l)
-      Spacer()
-      RecordButton(.recording(level: 0.7), diameter: 96) {}
-      HStack(spacing: Spaces.Space.xxxl) {
-        RecordButton(.idle, diameter: 56) {}
-        RecordButton(.processing, diameter: 56) {}
-      }
-      .padding(.bottom, Spaces.Space.l)
-    }
-    .frame(maxWidth: .infinity)
-  }
-}
-
-private struct PhoneDialogGallery: View {
-  @State private var isPresented = true
-  @State private var word = ""
-
-  var body: some View {
-    PhonePageGallery()
-      .dialog(
-        isPresented: $isPresented,
-        title: "Add a word",
-        subtitle: "Spaces will spell it this way from now on."
-      ) {
-        SpacesTextField(text: $word, placeholder: "Word or name")
-      } footer: {
-        Button("Add word") {}.buttonStyle(.spaces(.primary, fullWidth: true))
-      }
   }
 }

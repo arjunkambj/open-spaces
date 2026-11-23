@@ -22,7 +22,6 @@ public struct HubView: View {
     content
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Spaces.Color.window.ignoresSafeArea())
-      .environment(\.spacesIdiom, .mac)
   }
 
   @ViewBuilder private var content: some View {

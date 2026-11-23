@@ -92,7 +92,6 @@ public struct PillView: View {
     }
     // Always the dark pill: it sits on other apps, not on our own window.
     .environment(\.colorScheme, .light)
-    .environment(\.spacesIdiom, .mac)
   }
 
   private var state: PillState {

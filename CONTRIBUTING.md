@@ -37,8 +37,6 @@ To look at the app without touching your real data, microphone or key, start it 
 "apps/macos/build/Spaces.app/Contents/MacOS/SpacesApp" --demo
 ```
 
-The iPhone app also needs full Xcode and XcodeGen (`brew install xcodegen`). Run `pnpm ios:generate`, then open `apps/ios/Spaces.xcodeproj` with Xcode. [apps/ios/README.md](apps/ios/README.md) has the rest. Without Xcode you can still work on everything else, and on most of the iPhone code too: it lives in a package, `apps/ios/Phone`, that builds on any Mac. Our CI builds the iPhone app itself on every pull request.
-
 You do not need an OpenAI key to work on the code. Demo mode and the screen pictures run on made-up data.
 
 ## The one command to run before you push
@@ -65,8 +63,6 @@ cd packages/ui
 ```
 
 Use `scripts/swiftw` in place of `swift` to build and run. It makes the build work on a Mac that has only the Command Line Tools.
-
-`pnpm ios:build` builds the iPhone app for a simulator. On a Mac without Xcode or XcodeGen it says why it is skipping and stops, so `pnpm check` still passes.
 
 ## Rules that never bend
 
@@ -101,8 +97,6 @@ packages/engine   the dictation and meeting logic
 packages/ui       shared colours, fonts and screens
 packages/agent    the `spaces` tool and the MCP server
 apps/macos        the macOS app
-apps/ios          the iPhone app, its keyboard and its Lock Screen notice
-apps/ios/Phone    most of the iPhone app's code, as a package that also builds on a Mac
 ```
 
 A few things to know:
@@ -128,11 +122,11 @@ A few things to know:
 - There is one main branch, `main`, and no staging or dev branch. Make a branch from `main` and open a pull request back into `main`.
 - One feature per pull request, with everything that feature needs. A fix is its own pull request, named for the thing it fixes.
 - Say in plain words what changed and how you checked it. Add a screenshot for anything you can see.
-- CI must be green. It runs `pnpm check` and builds both apps. It runs on `macos-26` with Xcode 26.6.
+- CI must be green. It runs `pnpm check` and builds the Mac app. It runs on `macos-26` with Xcode 26.6.
 
-### Trying the iOS build without Xcode
+### Trying a build on CI
 
-If you have push access and no Xcode, this builds the files you have right now on CI, without making a commit:
+CI's Swift can be older than yours. If you have push access, this builds the files you have right now on CI, without making a commit:
 
 ```bash
 scripts/ci-try my-change
@@ -140,8 +134,6 @@ gh run list --branch ci/try-my-change --limit 1
 ```
 
 Delete the branch when you are done: `git push origin --delete ci/try-my-change`.
-
-CI can also take pictures of the iPhone app in a simulator. That takes about eight minutes, so it happens only when asked: start the CI workflow by hand (Actions > CI > Run workflow), or use a name that starts with `ios`, such as `scripts/ci-try ios-my-change`. The pictures are the `ios-screenshots` download of that run.
 
 ## Making a release
 

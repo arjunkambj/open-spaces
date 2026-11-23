@@ -1,14 +1,11 @@
 import AVFoundation
+import CoreAudio
 import SpacesDomain
-
-#if os(macOS)
-  import CoreAudio
-#endif
 
 /// The microphone, read with an `AVAudioEngine` input tap.
 ///
 /// Keeps going when the input device changes (headphones connect, the default
-/// microphone is switched, a phone call interrupts): the engine is rebuilt on
+/// microphone is switched): the engine is rebuilt on
 /// the new device and sound carries on into the same sink.
 ///
 /// `@unchecked Sendable`: every mutable property is read and written on
@@ -26,13 +23,9 @@ final class MicrophoneSource: AudioSource, @unchecked Sendable {
   private var observers: [any NSObjectProtocol] = []
   private var isRunning = false
   private var pendingRebuild: DispatchWorkItem?
-  #if os(macOS)
-    private var watches: [HardwareWatch] = []
-    /// The device the engine is reading right now.
-    private var current: AudioDeviceID?
-  #else
-    private var sessionObservers: [any NSObjectProtocol] = []
-  #endif
+  private var watches: [HardwareWatch] = []
+  /// The device the engine is reading right now.
+  private var current: AudioDeviceID?
   /// Rebuilds that failed in a row.
   private var failures = 0
 
@@ -46,11 +39,9 @@ final class MicrophoneSource: AudioSource, @unchecked Sendable {
       guard !isRunning else { return }
       self.sink = sink
       do {
-        try prepareSession()
         try buildEngine()
       } catch {
         self.sink = nil
-        releaseSession()
         throw error
       }
       isRunning = true
@@ -69,16 +60,12 @@ final class MicrophoneSource: AudioSource, @unchecked Sendable {
       // that holds this very moment, so the last word is not cut off.
       if engine?.isRunning == true { progress.wait(until: HostClock.now(), atMost: 0.25) }
       tearDownEngine()
-      releaseSession()
       sink = nil
     }
   }
 
   deinit {
     for observer in observers { NotificationCenter.default.removeObserver(observer) }
-    #if !os(macOS)
-      for observer in sessionObservers { NotificationCenter.default.removeObserver(observer) }
-    #endif
     engine?.stop()
   }
 
@@ -86,15 +73,13 @@ final class MicrophoneSource: AudioSource, @unchecked Sendable {
 
   private func buildEngine() throws {
     let engine = AVAudioEngine()
-    #if os(macOS)
-      // A chosen device that is not connected falls back to the default. One
-      // that already is the default is left alone: setting it by hand makes
-      // the engine reconfigure and lose the first moments of sound.
-      let standard = AudioHardware.defaultDevice(kAudioHardwarePropertyDefaultInputDevice)
-      let chosen = chosenDevice()
-      if let chosen, chosen != standard { try? engine.inputNode.auAudioUnit.setDeviceID(chosen) }
-      current = chosen ?? standard
-    #endif
+    // A chosen device that is not connected falls back to the default. One
+    // that already is the default is left alone: setting it by hand makes
+    // the engine reconfigure and lose the first moments of sound.
+    let standard = AudioHardware.defaultDevice(kAudioHardwarePropertyDefaultInputDevice)
+    let chosen = chosenDevice()
+    if let chosen, chosen != standard { try? engine.inputNode.auAudioUnit.setDeviceID(chosen) }
+    current = chosen ?? standard
     try run(engine)
     self.engine = engine
 
@@ -231,11 +216,10 @@ final class MicrophoneSource: AudioSource, @unchecked Sendable {
     mustRebuild = false
     tearDownEngine()
     do {
-      try resumeSession()
       try buildEngine()
       failures = 0
     } catch {
-      // No usable microphone at this moment (unplugged, or a phone call has
+      // No usable microphone at this moment (unplugged, or another app has
       // it). Try again shortly, then less often.
       failures += 1
       queueRebuild(after: .seconds(failures < 10 ? 1 : 5))
@@ -248,134 +232,35 @@ final class MicrophoneSource: AudioSource, @unchecked Sendable {
     return format.sampleRate == tapFormat.sampleRate && format.channelCount == tapFormat.channelCount
   }
 
-  // MARK: Platform
+  // MARK: Hardware
 
-  #if os(macOS)
-    private func prepareSession() throws {}
+  private func watchHardware() {
+    let changed: @Sendable () -> Void = { [weak self] in self?.hardwareChanged() }
+    watches = [
+      HardwareWatch(kAudioHardwarePropertyDefaultInputDevice, on: control, changed: changed),
+      HardwareWatch(kAudioHardwarePropertyDevices, on: control, changed: changed),
+    ].compactMap { $0 }
+  }
 
-    private func resumeSession() throws {}
+  private func unwatchHardware() { watches = [] }
 
-    private func releaseSession() {}
+  /// The device the user picked, when it is connected and can record.
+  private func chosenDevice() -> AudioDeviceID? {
+    guard let preferredID, let device = AudioHardware.device(uid: preferredID),
+      AudioHardware.inputChannels(device) > 0
+    else { return nil }
+    return device
+  }
 
-    private func watchHardware() {
-      let changed: @Sendable () -> Void = { [weak self] in self?.hardwareChanged() }
-      watches = [
-        HardwareWatch(kAudioHardwarePropertyDefaultInputDevice, on: control, changed: changed),
-        HardwareWatch(kAudioHardwarePropertyDevices, on: control, changed: changed),
-      ].compactMap { $0 }
-    }
+  /// Moves to the device that should be in use, when that is not the current one.
+  ///
+  /// Compared against the device that was asked for, not the one the engine
+  /// reports: the engine may wrap devices in a private one of its own, and
+  /// making that fires this very notice.
+  private func hardwareChanged() {
+    let wanted = chosenDevice() ?? AudioHardware.defaultDevice(kAudioHardwarePropertyDefaultInputDevice)
+    if let wanted, wanted != current { queueRebuild(after: .milliseconds(300)) }
+  }
 
-    private func unwatchHardware() { watches = [] }
-
-    /// The device the user picked, when it is connected and can record.
-    private func chosenDevice() -> AudioDeviceID? {
-      guard let preferredID, let device = AudioHardware.device(uid: preferredID),
-        AudioHardware.inputChannels(device) > 0
-      else { return nil }
-      return device
-    }
-
-    /// Moves to the device that should be in use, when that is not the current one.
-    ///
-    /// Compared against the device that was asked for, not the one the engine
-    /// reports: the engine may wrap devices in a private one of its own, and
-    /// making that fires this very notice.
-    private func hardwareChanged() {
-      let wanted = chosenDevice() ?? AudioHardware.defaultDevice(kAudioHardwarePropertyDefaultInputDevice)
-      if let wanted, wanted != current { queueRebuild(after: .milliseconds(300)) }
-    }
-
-    static func devices() -> [AudioDevice] { AudioHardware.microphones() }
-  #else
-    /// Sets the shared audio session up for recording speech.
-    private static func configure(_ session: AVAudioSession) throws {
-      // `.playAndRecord` so the app's own sounds can still play; `.measurement`
-      // so the system leaves the voice unprocessed for the speech model. Bluetooth
-      // headsets are allowed as the microphone: the option is spelled by raw
-      // value (0x4) because its name differs between SDK versions
-      // (`allowBluetooth`, later `allowBluetoothHFP`).
-      let bluetooth = AVAudioSession.CategoryOptions(rawValue: 0x4)
-      try session.setCategory(.playAndRecord, mode: .measurement, options: [bluetooth, .defaultToSpeaker])
-    }
-
-    private func prepareSession() throws {
-      let session = AVAudioSession.sharedInstance()
-      do {
-        try MicrophoneSource.configure(session)
-        try session.setActive(true)
-      } catch {
-        throw SpacesError.captureFailed("The microphone could not be started.")
-      }
-      if let preferredID, let port = session.availableInputs?.first(where: { $0.uid == preferredID }) {
-        try? session.setPreferredInput(port)
-      }
-    }
-
-    /// Takes the microphone back after an interruption. Throws while the
-    /// system still has it (during a phone call).
-    private func resumeSession() throws {
-      try AVAudioSession.sharedInstance().setActive(true)
-    }
-
-    private func releaseSession() {
-      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    }
-
-    private func watchHardware() {
-      let center = NotificationCenter.default
-      let session = AVAudioSession.sharedInstance()
-      sessionObservers = [
-        center.addObserver(forName: AVAudioSession.interruptionNotification, object: session, queue: nil) {
-          [weak self] note in
-          let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
-          let began = raw.flatMap { AVAudioSession.InterruptionType(rawValue: $0) } == .began
-          self?.onControl { $0.interruption(began: began) }
-        },
-        center.addObserver(
-          forName: AVAudioSession.mediaServicesWereResetNotification,
-          object: session,
-          queue: nil
-        ) { [weak self] _ in
-          self?.onControl { $0.sessionWasReset() }
-        },
-      ]
-    }
-
-    private func unwatchHardware() {
-      for observer in sessionObservers { NotificationCenter.default.removeObserver(observer) }
-      sessionObservers = []
-    }
-
-    /// A phone call (or similar) took the microphone, or gave it back.
-    private func interruption(began: Bool) {
-      guard isRunning else { return }
-      failures = 0
-      if began {
-        engine?.pause()
-        // The system does not always say when an interruption is over, so
-        // also check back now and then.
-        queueRebuild(after: .seconds(5))
-      } else {
-        queueRebuild(after: .milliseconds(100))
-      }
-    }
-
-    /// The system's audio server restarted: everything must be set up again.
-    private func sessionWasReset() {
-      guard isRunning else { return }
-      try? MicrophoneSource.configure(AVAudioSession.sharedInstance())
-      queueRebuild(after: .milliseconds(100))
-    }
-
-    static func devices() -> [AudioDevice] {
-      let session = AVAudioSession.sharedInstance()
-      // Inputs are only listed in full for a category that can record.
-      if session.category != .playAndRecord && session.category != .record {
-        try? configure(session)
-      }
-      let inputs = session.availableInputs ?? []
-      let active = session.currentRoute.inputs.first?.uid ?? session.preferredInput?.uid ?? inputs.first?.uid
-      return inputs.map { AudioDevice(id: $0.uid, name: $0.portName, isDefault: $0.uid == active) }
-    }
-  #endif
+  static func devices() -> [AudioDevice] { AudioHardware.microphones() }
 }

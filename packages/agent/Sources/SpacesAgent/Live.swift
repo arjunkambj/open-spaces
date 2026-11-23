@@ -147,65 +147,57 @@ private final class LineReader: @unchecked Sendable {
 }
 
 enum Live {
-  #if os(macOS)
-    /// Runs a program and returns its exit code and, when asked, what it printed.
-    /// The program never shares this process's standard output.
-    private static func launch(
-      _ path: String,
-      _ arguments: [String],
-      capture: Bool = false
-    ) async throws -> (code: Int32, output: String) {
-      try await withCheckedThrowingContinuation { continuation in
-        DispatchQueue.global().async {
-          let process = Process()
-          process.executableURL = URL(fileURLWithPath: path)
-          process.arguments = arguments
-          let pipe = capture ? Pipe() : nil
-          process.standardOutput = pipe ?? FileHandle.nullDevice
-          process.standardError = FileHandle.nullDevice
-          process.standardInput = FileHandle.nullDevice
-          do {
-            try process.run()
-          } catch {
-            continuation.resume(throwing: error)
-            return
-          }
-          // Read before waiting: a program with a lot to say stops until someone reads it.
-          let data = pipe.flatMap { try? $0.fileHandleForReading.readToEnd() } ?? Data()
-          process.waitUntilExit()
-          continuation.resume(returning: (process.terminationStatus, String(decoding: data, as: UTF8.self)))
+  /// Runs a program and returns its exit code and, when asked, what it printed.
+  /// The program never shares this process's standard output.
+  private static func launch(
+    _ path: String,
+    _ arguments: [String],
+    capture: Bool = false
+  ) async throws -> (code: Int32, output: String) {
+    try await withCheckedThrowingContinuation { continuation in
+      DispatchQueue.global().async {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        let pipe = capture ? Pipe() : nil
+        process.standardOutput = pipe ?? FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        process.standardInput = FileHandle.nullDevice
+        do {
+          try process.run()
+        } catch {
+          continuation.resume(throwing: error)
+          return
         }
+        // Read before waiting: a program with a lot to say stops until someone reads it.
+        let data = pipe.flatMap { try? $0.fileHandleForReading.readToEnd() } ?? Data()
+        process.waitUntilExit()
+        continuation.resume(returning: (process.terminationStatus, String(decoding: data, as: UTF8.self)))
       }
     }
+  }
 
-    /// Hands a link to the Spaces app without bringing it to the front.
-    static func open(_ url: URL) async throws {
-      let result = try await launch("/usr/bin/open", ["-g", url.absoluteString])
-      guard result.code == 0 else {
-        throw AgentError.failed(
-          "macOS found no app that opens \(SpacesLink.scheme):// links. Is Spaces installed? Open the "
-            + "app once, then try again."
-        )
-      }
+  /// Hands a link to the Spaces app without bringing it to the front.
+  static func open(_ url: URL) async throws {
+    let result = try await launch("/usr/bin/open", ["-g", url.absoluteString])
+    guard result.code == 0 else {
+      throw AgentError.failed(
+        "macOS found no app that opens \(SpacesLink.scheme):// links. Is Spaces installed? Open the "
+          + "app once, then try again."
+      )
     }
+  }
 
-    /// Looks for the app among the running programs. The app is the program
-    /// inside `Spaces.app` that is not this tool. `nil` when that cannot be told.
-    static func appIsRunning() async -> Bool? {
-      guard let result = try? await launch("/bin/ps", ["-axo", "comm="], capture: true), result.code == 0
-      else { return nil }
-      return result.output.split(separator: "\n").contains { line in
-        let name = line.split(separator: "/").last.map(String.init) ?? ""
-        if name == "spaces" { return false }
-        return line.contains("/Spaces.app/Contents/MacOS/") || name == "Spaces"
-          || name == "Spaces"
-      }
+  /// Looks for the app among the running programs. The app is the program
+  /// inside `Spaces.app` that is not this tool. `nil` when that cannot be told.
+  static func appIsRunning() async -> Bool? {
+    guard let result = try? await launch("/bin/ps", ["-axo", "comm="], capture: true), result.code == 0
+    else { return nil }
+    return result.output.split(separator: "\n").contains { line in
+      let name = line.split(separator: "/").last.map(String.init) ?? ""
+      if name == "spaces" { return false }
+      return line.contains("/Spaces.app/Contents/MacOS/") || name == "Spaces"
+        || name == "Spaces"
     }
-  #else
-    static func open(_ url: URL) async throws {
-      throw AgentError.failed("Recording can only be started and stopped from a Mac.")
-    }
-
-    static func appIsRunning() async -> Bool? { nil }
-  #endif
+  }
 }

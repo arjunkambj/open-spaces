@@ -7,15 +7,8 @@ enum DictionarySnapshots {
     let many = manyWords()
     return [
       SnapshotCase("dictionary") { DictionaryScreen(preview: DictionaryPreview(hoveredRow: 0)) },
-      SnapshotCase("dictionary-phone", canvas: .phone) { DictionaryScreen() },
       SnapshotCase("dictionary-empty", model: { ScreenSamples.model() }) { DictionaryScreen() },
-      SnapshotCase("dictionary-empty-phone", canvas: .phone, model: { ScreenSamples.model() }) {
-        DictionaryScreen()
-      },
       SnapshotCase("dictionary-long", model: { ScreenSamples.model(words: many) }) { DictionaryScreen() },
-      SnapshotCase("dictionary-long-phone", canvas: .phone, model: { ScreenSamples.model(words: many) }) {
-        DictionaryScreen()
-      },
       SnapshotCase("dictionary-search", model: { ScreenSamples.model(words: many) }) {
         DictionaryScreen(preview: DictionaryPreview(query: "post"))
       },
@@ -23,11 +16,6 @@ enum DictionarySnapshots {
         DictionaryScreen(preview: DictionaryPreview(query: "giraffe"))
       },
       SnapshotCase("dictionary-add") {
-        DictionaryScreen(
-          preview: DictionaryPreview(editor: DictionaryEditor(text: "Saoirse", heardAs: "seer sha"))
-        )
-      },
-      SnapshotCase("dictionary-add-phone", canvas: .phone) {
         DictionaryScreen(
           preview: DictionaryPreview(editor: DictionaryEditor(text: "Saoirse", heardAs: "seer sha"))
         )

@@ -22,13 +22,12 @@ struct DraftField: View {
 
   @State private var draft: String
   @State private var error: String?
-  @Environment(\.spacesIdiom) private var idiom
 
   /// - placeholder: shown while the field is empty. It is also the field's VoiceOver name.
   /// - value: the stored value. A change from elsewhere replaces the draft.
   /// - isCode: the text is an address or a model name, so the keyboard must not "correct" it.
-  /// - fillsWidth: takes all the width it is given. Otherwise it has a fixed width on a Mac,
-  ///   for the end of a row.
+  /// - fillsWidth: takes all the width it is given. Otherwise it has a fixed width, for the
+  ///   end of a row.
   init(
     placeholder: String,
     value: String,
@@ -48,11 +47,8 @@ struct DraftField: View {
 
   var body: some View {
     SpacesTextField(text: $draft, placeholder: placeholder, error: error)
-      #if os(iOS)
-        .textInputAutocapitalization(isCode ? .never : .words)
-      #endif
       .autocorrectionDisabled(isCode)
-      .frame(width: fillsWidth || idiom == .phone ? nil : SetupMetrics.rowFieldWidth)
+      .frame(width: fillsWidth ? nil : SetupMetrics.rowFieldWidth)
       .onSubmit(commit)
       .onChange(of: draft) { _, text in
         if case .save = check(text) { error = nil }

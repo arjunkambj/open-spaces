@@ -186,7 +186,7 @@ public struct RecordButton: View {
   private let diameter: CGFloat
   private let action: () -> Void
 
-  /// - diameter: 72 suits a toolbar or card, 96 the main control of an iPhone screen.
+  /// - diameter: 72 suits a toolbar or card, 96 the main control of a screen.
   public init(_ mode: Mode, diameter: CGFloat = 80, action: @escaping () -> Void) {
     self.mode = mode
     self.diameter = diameter

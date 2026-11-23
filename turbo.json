@@ -5,7 +5,6 @@
   "concurrency": "2",
   "globalDependencies": [
     "scripts/swiftw",
-    "scripts/ios",
     ".swift-format"
   ],
   "globalEnv": [
@@ -17,11 +16,7 @@
   "globalPassThroughEnv": [
     "CI",
     "GITHUB_ACTIONS",
-    "TMPDIR",
-    "IOS_SKIP",
-    "IOS_SCHEME",
-    "IOS_DESTINATION",
-    "IOS_LOG_DIR"
+    "TMPDIR"
   ],
   "tasks": {
     "lint": {
@@ -55,19 +50,10 @@
         "dist/**"
       ]
     },
-    "@open-spaces/ios#build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "cache": false
-    },
     "bundle": {
       "dependsOn": [
         "^build"
       ],
-      "cache": false
-    },
-    "generate": {
       "cache": false
     }
   }

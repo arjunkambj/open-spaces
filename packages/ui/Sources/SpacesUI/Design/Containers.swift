@@ -207,7 +207,7 @@ public struct CardList<Data: RandomAccessCollection, Row: View>: View where Data
 
 /// One row of a list: something leading, a title, a subtitle, something trailing, and
 /// actions that show while the pointer is over the row or the keyboard is on it or on one
-/// of them (always, on iPhone).
+/// of them.
 ///
 ///     ListRow(dictation.text) {
 ///       Text(time).spacesText(.caption, color: Spaces.Color.textTertiary)
@@ -226,7 +226,6 @@ public struct ListRow<Leading: View, Trailing: View, HoverActions: View>: View {
   private let trailing: Trailing
   private let hoverActions: HoverActions
 
-  @Environment(\.spacesIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
   /// Whether the keyboard is on the row itself, when the caller made the row focusable.
   @Environment(\.isFocused) private var rowIsFocused
@@ -271,11 +270,11 @@ public struct ListRow<Leading: View, Trailing: View, HoverActions: View>: View {
         // Tab reaches the actions even while they are unseen, so they show for the keyboard too.
         HStack(spacing: Spaces.Space.xxs) { hoverActions }
           .focused($actionIsFocused)
-          .opacity(idiom == .phone || hovered || rowIsFocused || actionIsFocused ? 1 : 0)
+          .opacity(hovered || rowIsFocused || actionIsFocused ? 1 : 0)
       }
     }
     .padding(.vertical, Spaces.Space.m)
-    .frame(minHeight: idiom == .phone ? 56 : 52)
+    .frame(minHeight: 52)
     .rowChrome(isHighlighted: hovered && action != nil)
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }

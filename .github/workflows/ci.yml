@@ -2,7 +2,7 @@ name: CI
 
 # Runs on every pull request into main, on every push to main, and on the
 # throwaway branches that scripts/ci-try makes. It can also be started by hand
-# (Actions > CI > Run workflow), which adds pictures of the iOS app.
+# (Actions > CI > Run workflow).
 on:
   pull_request:
     branches: [main]
@@ -34,7 +34,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       macos-bundle: ${{ steps.look.outputs.macos-bundle }}
-      ios: ${{ steps.look.outputs.ios }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -44,16 +43,12 @@ jobs:
         run: |
           have() { [[ -f "$1" ]] && echo true || echo false; }
           echo "macos-bundle=$(have apps/macos/scripts/bundle)" >> "$GITHUB_OUTPUT"
-          echo "ios=$(have apps/ios/project.yml)" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   check:
     name: Lint and build
     runs-on: macos-26
     timeout-minutes: 45
-    env:
-      # The ios-app job builds the iOS app. Do not build it twice.
-      IOS_SKIP: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -76,7 +71,6 @@ jobs:
           path: |
             packages/*/.build
             apps/macos/.build
-            apps/ios/Phone/.build
           key: swift-check-${{ github.event.repository.name }}-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-${{ github.sha }}
           restore-keys: |
             swift-check-${{ github.event.repository.name }}-${{ runner.os }}-${{ runner.arch }}-xcode${{ env.XCODE_VERSION }}-
@@ -96,7 +90,6 @@ jobs:
           path: |
             packages/*/.build
             apps/macos/.build
-            apps/ios/Phone/.build
           key: ${{ steps.swift-cache.outputs.cache-primary-key }}
 
   macos-app:
@@ -126,50 +119,3 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  ios-app:
-    name: iOS app
-    needs: plan
-    if: needs.plan.outputs.ios == 'true'
-    runs-on: macos-26
-    timeout-minutes: 45
-    env:
-      IOS_LOG_DIR: ${{ github.workspace }}/ios-logs
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Select Xcode
-        run: |
-          sudo xcode-select -s "/Applications/Xcode_$XCODE_VERSION.app"
-          xcodebuild -version
-          swift --version
-      - name: Install XcodeGen
-        run: command -v xcodegen || brew install xcodegen
-      - name: Generate the Xcode project
-        run: scripts/ios generate
-      - name: Build for the iOS Simulator
-        run: scripts/ios build
-      - name: Take pictures of the app in the simulator
-        # Something to look at, not a check: a failure here never fails the job.
-        # It takes about eight minutes, so only on request: a run started by hand,
-        # or `scripts/ci-try ios`.
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'ci/try-ios')
-        continue-on-error: true
-        timeout-minutes: 15
-        run: apps/ios/scripts/screenshots ios-screenshots
-      - name: Upload the pictures
-        if: (!cancelled()) && (github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'ci/try-ios'))
-        uses: actions/upload-artifact@v7
-        with:
-          name: ios-screenshots
-          path: ios-screenshots
-          if-no-files-found: ignore
-          retention-days: 14
-      - name: Upload the raw Xcode logs
-        if: (!cancelled())
-        uses: actions/upload-artifact@v7
-        with:
-          name: ios-xcodebuild-logs
-          path: ios-logs
-          if-no-files-found: ignore
-          retention-days: 14

@@ -4,16 +4,15 @@ import SwiftUI
 
 /// Every setting, in sections. Reads `AppModel` from the environment.
 ///
-/// On a Mac it fills the card of the settings window: a navigation column on the left and
-/// the chosen section on the right. On iPhone it is a list of sections; choosing one shows
-/// that section with a back button. Changes are saved as they are made.
-/// - shortcuts: the platform's keyboard-shortcut editor (macOS), or `nil` to leave that section out.
+/// It fills the card of the settings window: a navigation column on the left and the chosen
+/// section on the right. Changes are saved as they are made.
+/// - shortcuts: the Mac app's keyboard-shortcut editor, or `nil` to leave that section out.
 /// - onClose: called by the close button; `nil` hides the button.
-/// - appearance: a control the platform supplies for its own look, such as light or dark (macOS).
+/// - appearance: a control the Mac app supplies for its own look, such as light or dark.
 ///   It is shown as a row of General, under "App". `nil` leaves the row out.
 /// - pill: a row the Mac app supplies about its floating pill, such as putting it back in its
-///   place. It is shown right under "Show the floating pill", on a Mac only. `nil` leaves it out.
-/// - section: the section to open on. `nil` opens General on a Mac and the list on iPhone.
+///   place. It is shown right under "Show the floating pill". `nil` leaves it out.
+/// - section: the section to open on. `nil` opens General.
 public struct SettingsScreen: View {
   private let shortcuts: AnyView?
   private let appearance: AnyView?
@@ -22,11 +21,7 @@ public struct SettingsScreen: View {
   private let preview: SettingsPreview
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
-  /// The section shown on a Mac.
   @State private var selection: SettingsSection
-  /// The section opened on iPhone, or `nil` for the list.
-  @State private var opened: SettingsSection?
   @State private var dialog: SettingsDialog?
 
   public init(
@@ -59,67 +54,60 @@ public struct SettingsScreen: View {
     self.onClose = onClose
     self.preview = preview
     _selection = State(initialValue: preview.section ?? .general)
-    _opened = State(initialValue: preview.section)
     _dialog = State(initialValue: preview.dialog)
   }
 
   public var body: some View {
-    Group {
-      if idiom == .phone {
-        phone
-      } else {
-        mac
+    layout
+      .modal(isPresented: isShowing(.apiKey)) {
+        APIKeyDialog(preview: preview) { dialog = nil }
       }
-    }
-    .modal(isPresented: isShowing(.apiKey)) {
-      APIKeyDialog(preview: preview) { dialog = nil }
-    }
-    .modal(isPresented: isShowing(.claudeKey)) {
-      ClaudeKeyDialog { dialog = nil }
-    }
-    .dialog(
-      isPresented: isShowing(.removeClaudeKey),
-      title: "Remove your Anthropic key?",
-      subtitle: "Claude models stop working until you add a key again. OpenAI models keep working."
-    ) {
-      EmptyView()
-    } footer: {
-      Button("Cancel") { dialog = nil }.buttonStyle(.spaces()).keyboardShortcut(.defaultAction)
-      Button("Remove key") {
-        dialog = nil
-        model.run { try await $0.removeClaudeKey() }
+      .modal(isPresented: isShowing(.claudeKey)) {
+        ClaudeKeyDialog { dialog = nil }
       }
-      .buttonStyle(.spaces(.destructive))
-    }
-    .dialog(
-      isPresented: isShowing(.removeKey),
-      title: "Remove your OpenAI key?",
-      subtitle: "Dictation and meeting notes stop working until you add a key again. Your history stays."
-    ) {
-      EmptyView()
-    } footer: {
-      // Return must never remove or delete: it presses Cancel.
-      Button("Cancel") { dialog = nil }.buttonStyle(.spaces()).keyboardShortcut(.defaultAction)
-      Button("Remove key") {
-        dialog = nil
-        model.run { try await $0.removeAPIKey() }
+      .dialog(
+        isPresented: isShowing(.removeClaudeKey),
+        title: "Remove your Anthropic key?",
+        subtitle: "Claude models stop working until you add a key again. OpenAI models keep working."
+      ) {
+        EmptyView()
+      } footer: {
+        Button("Cancel") { dialog = nil }.buttonStyle(.spaces()).keyboardShortcut(.defaultAction)
+        Button("Remove key") {
+          dialog = nil
+          model.run { try await $0.removeClaudeKey() }
+        }
+        .buttonStyle(.spaces(.destructive))
       }
-      .buttonStyle(.spaces(.destructive))
-    }
-    .dialog(
-      isPresented: isShowing(.deleteHistory),
-      title: "Delete all dictation history?",
-      subtitle: PrivacyCopy.deleteWarning(count: model.dictations.count)
-    ) {
-      EmptyView()
-    } footer: {
-      Button("Cancel") { dialog = nil }.buttonStyle(.spaces()).keyboardShortcut(.defaultAction)
-      Button("Delete history") {
-        dialog = nil
-        model.run { try await $0.library.deleteAllDictations() }
+      .dialog(
+        isPresented: isShowing(.removeKey),
+        title: "Remove your OpenAI key?",
+        subtitle: "Dictation and meeting notes stop working until you add a key again. Your history stays."
+      ) {
+        EmptyView()
+      } footer: {
+        // Return must never remove or delete: it presses Cancel.
+        Button("Cancel") { dialog = nil }.buttonStyle(.spaces()).keyboardShortcut(.defaultAction)
+        Button("Remove key") {
+          dialog = nil
+          model.run { try await $0.removeAPIKey() }
+        }
+        .buttonStyle(.spaces(.destructive))
       }
-      .buttonStyle(.spaces(.destructive))
-    }
+      .dialog(
+        isPresented: isShowing(.deleteHistory),
+        title: "Delete all dictation history?",
+        subtitle: PrivacyCopy.deleteWarning(count: model.dictations.count)
+      ) {
+        EmptyView()
+      } footer: {
+        Button("Cancel") { dialog = nil }.buttonStyle(.spaces()).keyboardShortcut(.defaultAction)
+        Button("Delete history") {
+          dialog = nil
+          model.run { try await $0.library.deleteAllDictations() }
+        }
+        .buttonStyle(.spaces(.destructive))
+      }
   }
 
   private func isShowing(_ wanted: SettingsDialog) -> Binding<Bool> {
@@ -131,9 +119,9 @@ public struct SettingsScreen: View {
     )
   }
 
-  // MARK: Mac
+  // MARK: Layout
 
-  private var mac: some View {
+  private var layout: some View {
     HStack(spacing: 0) {
       navigation
         .frame(width: 220)
@@ -182,55 +170,6 @@ public struct SettingsScreen: View {
     }
   }
 
-  // MARK: iPhone
-
-  private var phone: some View {
-    ZStack {
-      if let opened {
-        Page(title: opened.title) {
-          content(for: opened)
-        }
-        .onBack { show(nil) }
-        .transition(push(from: .trailing))
-      } else {
-        Page(title: "Settings") {
-          if let onClose {
-            IconButton("xmark", label: "Close settings", action: onClose)
-          }
-        } content: {
-          ForEach(SettingsSection.Group.allCases) { group in
-            sectionList(group)
-          }
-        }
-        .transition(push(from: .leading))
-      }
-    }
-  }
-
-  private func sectionList(_ group: SettingsSection.Group) -> some View {
-    CardList(sections(in: group), style: .filled) { section in
-      ListRow(section.title) {
-        Image(systemName: section.systemImage)
-          .spacesText(.bodyStrong)
-          .frame(width: Spaces.Space.xl)
-          .accessibilityHidden(true)
-      } trailing: {
-        Image(systemName: "chevron.right")
-          .spacesText(.captionStrong, color: Spaces.Color.textTertiary)
-          .accessibilityHidden(true)
-      }
-      .onTap { show(section) }
-    }
-  }
-
-  private func show(_ section: SettingsSection?) {
-    withAnimation(Spaces.Motion.smooth) { opened = section }
-  }
-
-  private func push(from edge: Edge) -> AnyTransition {
-    Spaces.Motion.reduceMotion ? .opacity : .move(edge: edge).combined(with: .opacity)
-  }
-
   // MARK: Sections
 
   private func sections(in group: SettingsSection.Group) -> [SettingsSection] {
@@ -239,7 +178,6 @@ public struct SettingsScreen: View {
 
   private func open(_ section: SettingsSection) {
     selection = section
-    if idiom == .phone { show(section) }
   }
 
   @ViewBuilder private func content(for section: SettingsSection) -> some View {
@@ -263,7 +201,7 @@ enum SettingsDialog: Hashable, Sendable {
 
 /// A starting state for the settings screen, for snapshots.
 struct SettingsPreview {
-  /// The section to show. `nil` is General on a Mac and the list on iPhone.
+  /// The section to show. `nil` is General.
   var section: SettingsSection?
   var dialog: SettingsDialog?
   /// What is already typed into the key dialog.

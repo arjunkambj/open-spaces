@@ -7,15 +7,8 @@ enum SnippetsSnapshots {
     let many = manySnippets()
     return [
       SnapshotCase("snippets") { SnippetsScreen(preview: SnippetsPreview(hoveredRow: 1)) },
-      SnapshotCase("snippets-phone", canvas: .phone) { SnippetsScreen() },
       SnapshotCase("snippets-empty", model: { ScreenSamples.model() }) { SnippetsScreen() },
-      SnapshotCase("snippets-empty-phone", canvas: .phone, model: { ScreenSamples.model() }) {
-        SnippetsScreen()
-      },
       SnapshotCase("snippets-long", model: { ScreenSamples.model(snippets: many) }) { SnippetsScreen() },
-      SnapshotCase("snippets-long-phone", canvas: .phone, model: { ScreenSamples.model(snippets: many) }) {
-        SnippetsScreen()
-      },
       SnapshotCase(
         "snippets-narrow",
         canvas: .custom(width: 640, height: 720),
@@ -29,13 +22,6 @@ enum SnippetsSnapshots {
         SnippetsScreen(preview: SnippetsPreview(query: "giraffe"))
       },
       SnapshotCase("snippets-add") {
-        SnippetsScreen(
-          preview: SnippetsPreview(
-            editor: SnippetEditor(trigger: "my sign off", expansion: "Thanks,\nAlex")
-          )
-        )
-      },
-      SnapshotCase("snippets-add-phone", canvas: .phone) {
         SnippetsScreen(
           preview: SnippetsPreview(
             editor: SnippetEditor(trigger: "my sign off", expansion: "Thanks,\nAlex")

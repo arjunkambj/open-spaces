@@ -13,7 +13,6 @@ public struct SpacesTextField: View {
   private let isSecure: Bool
   private let focusOnAppear: Bool
 
-  @Environment(\.spacesIdiom) private var idiom
   @FocusState private var isFocused: Bool
 
   /// - error: shown in red under the field; also turns the border red.
@@ -49,7 +48,7 @@ public struct SpacesTextField: View {
       .focused($isFocused)
       .focusEffectDisabled()
       .padding(.horizontal, Spaces.Space.m)
-      .frame(minHeight: idiom == .phone ? 48 : 36)
+      .frame(minHeight: 36)
       .fieldBox(isFocused: isFocused, hasError: error != nil)
       .accessibilityLabel(label ?? placeholder)
       .onAppear {
@@ -172,13 +171,11 @@ extension View {
   }
 }
 
-/// A search box. On a Mac it is a magnifier icon that opens into a field when clicked;
-/// on iPhone it is always a field.
+/// A search box: a magnifier icon that opens into a field when clicked.
 public struct SearchField: View {
   @Binding private var text: String
   private let placeholder: String
 
-  @Environment(\.spacesIdiom) private var idiom
   @Environment(\.simulatedFocus) private var simulatedFocus
   @FocusState private var isFocused: Bool
   @State private var isOpen = false
@@ -189,7 +186,7 @@ public struct SearchField: View {
   }
 
   public var body: some View {
-    let expanded = idiom == .phone || isOpen || simulatedFocus || !text.isEmpty
+    let expanded = isOpen || simulatedFocus || !text.isEmpty
     Group {
       if expanded {
         field
@@ -204,13 +201,11 @@ public struct SearchField: View {
         }
       }
     }
-    #if os(macOS)
-      .onExitCommand {
-        text = ""
-        isFocused = false
-        withAnimation(Spaces.Motion.smooth) { isOpen = false }
-      }
-    #endif
+    .onExitCommand {
+      text = ""
+      isFocused = false
+      withAnimation(Spaces.Motion.smooth) { isOpen = false }
+    }
     .onChange(of: isFocused) { _, focused in
       if !focused && text.isEmpty {
         withAnimation(Spaces.Motion.smooth) { isOpen = false }
@@ -219,15 +214,14 @@ public struct SearchField: View {
   }
 
   private var field: some View {
-    let phone = idiom == .phone
     let shape = PillShape()
     return HStack(spacing: Spaces.Space.s) {
       Image(systemName: "magnifyingglass")
-        .font(.system(size: phone ? 16 : 13, weight: .medium))
+        .font(.system(size: 13, weight: .medium))
         .foregroundStyle(Spaces.Color.textSecondary)
       TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Spaces.Color.textTertiary))
         .textFieldStyle(.plain)
-        .spacesText(phone ? .body : .caption, color: Spaces.Color.textPrimary)
+        .spacesText(.caption, color: Spaces.Color.textPrimary)
         .focused($isFocused)
         .focusEffectDisabled()
         .accessibilityLabel(placeholder)
@@ -236,7 +230,7 @@ public struct SearchField: View {
           text = ""
         } label: {
           Image(systemName: "xmark.circle.fill")
-            .font(.system(size: phone ? 16 : 13))
+            .font(.system(size: 13))
             .foregroundStyle(Spaces.Color.textTertiary)
         }
         .buttonStyle(.plain)
@@ -244,11 +238,11 @@ public struct SearchField: View {
       }
     }
     .padding(.horizontal, Spaces.Space.m)
-    .frame(width: phone ? nil : 220, height: phone ? 44 : 32)
-    .background(phone ? Spaces.Color.surface : Spaces.Color.raised, in: shape)
+    .frame(width: 220, height: 32)
+    .background(Spaces.Color.raised, in: shape)
     .overlay {
       shape.strokeBorder(
-        isFocused ? Spaces.Color.textPrimary : phone ? .clear : Spaces.Color.borderStrong,
+        isFocused ? Spaces.Color.textPrimary : Spaces.Color.borderStrong,
         lineWidth: Spaces.Stroke.hairline
       )
     }

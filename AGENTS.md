@@ -1,6 +1,6 @@
 # Spaces: guide for agents and contributors
 
-Spaces is an open-source voice dictation and meeting-notes app for macOS and iOS. Hold a key, speak, and clean text lands in whatever app you are typing in. It also records meetings and writes notes. It is local-first: no account, no server, no database. The user brings their own OpenAI API key.
+Spaces is an open-source voice dictation and meeting-notes app for macOS. Hold a key, speak, and clean text lands in whatever app you are typing in. It also records meetings and writes notes. It is local-first: no account, no server, no database. The user brings their own OpenAI API key.
 
 ## Rules that never bend
 
@@ -15,17 +15,15 @@ Spaces is an open-source voice dictation and meeting-notes app for macOS and iOS
 
 ```
 apps/macos        macOS app (SwiftPM; scripts/bundle makes the .app)
-apps/ios          iOS app, keyboard and widget extensions: thin Xcode targets (XcodeGen project.yml)
-apps/ios/Phone    SpacesPhone, SpacesKeyboard, SpacesLive   nearly all iOS code; a package that builds on a Mac
 apps/web          the website whisper.0xhoney.com (TanStack Start + Tailwind, prerendered; on Cloudflare)
 packages/domain   SpacesDomain   models, the seams (protocols), in-memory fakes, APIServer, LinkTicket
 packages/store    SpacesStore    FileLibrary, FileSecretStore
 packages/ai       SpacesAI       OpenAI and Anthropic adapters, ModelRouter
 packages/audio    SpacesAudio    microphone + system-audio capture
 packages/engine   SpacesEngine   DictationEngine, MeetingEngine, AppModel
-packages/ui       SpacesUI       design tokens + SwiftUI components (both platforms)
+packages/ui       SpacesUI       design tokens + SwiftUI components and screens
 packages/agent    SpacesAgent    MCP server + `spaces` command-line tool
-scripts           swiftw, ios, ci-try and other build helpers
+scripts           swiftw, ci-try and other build helpers
 docs              agents.md (connecting an agent), data-format.md (files on disk)
 ```
 
@@ -37,7 +35,7 @@ Dependencies point one way: `domain` knows nothing; `store`, `ai`, `audio`, `eng
 
 - **Server address.** Resolve it with `Settings.apiServer()` (`APIServer`). An address that is set but unusable throws `SpacesError.invalidServerAddress`: send nothing, and never fall back to OpenAI.
 - **API keys.** One key per host. Read it with `SecretStore.apiKey(for: server.host)` and save it with `setAPIKey(_:host:)`, so a key is only ever sent to the server it was saved for. Claude models (`Settings.isClaude`) always go to `APIServer.anthropic` with the key saved for `api.anthropic.com`; the custom server address never applies to them. Speech to text is OpenAI only.
-- **Links.** A link that starts listening or stops a recording (`SpacesLink.needsTrust`) is followed only with a redeemed `LinkTicket` or the user's yes. A sender of ours (the `spaces` tool, the iOS keyboard) attaches one with `LinkTicket.issue`. Without a ticket: starting a meeting asks first, dictation and stop links are ignored.
+- **Links.** A link that starts listening or stops a recording (`SpacesLink.needsTrust`) is followed only with a redeemed `LinkTicket` or the user's yes. A sender of ours (the `spaces` tool) attaches one with `LinkTicket.issue`. Without a ticket: starting a meeting asks first, dictation and stop links are ignored.
 - **Nothing said is lost.** A failed dictation keeps its audio and a history entry to retry. A meeting's audio stays on disk until all of it is transcribed, and `recoverUnfinished` rebuilds from it after a crash.
 - **Agent export.** `meetings export` writes only a new `.md` file. Keep the rules in `docs/agents.md` ("Safety") true.
 - **Updates.** The Mac app updates itself through Sparkle from GitHub Releases. Every release is signed with the same certificate and update key (`scripts/setup-signing`), so permissions survive an update and a tampered download is refused. A release is a `vX.Y.Z` tag that matches `apps/macos/package.json`; see CONTRIBUTING.md.
@@ -67,12 +65,10 @@ pnpm web                # the website on 127.0.0.1:4321; web:build builds it, we
 
 # One package:
 cd packages/engine && ../../scripts/swiftw build
-cd apps/ios/Phone && ../../../scripts/swiftw build
 swift format lint --strict --recursive --parallel packages apps
 
 # Look at screens as PNG files, with no window opened:
 cd packages/ui && ../../scripts/swiftw run spaces-snapshots <folder>              # shared screens
-cd apps/ios/Phone && ../../../scripts/swiftw run spaces-phone-snapshots <folder>  # iPhone screens
 "apps/macos/build/Spaces.app/Contents/MacOS/SpacesApp" --snapshots <folder> # Mac screens
 ```
 
@@ -82,9 +78,9 @@ The Mac app also starts with `--demo`: made-up data, no microphone, saved key, s
 
 Always call `scripts/swiftw` instead of `swift` for build and run. It makes the build work on a Mac that has only the Command Line Tools (it picks an SDK whose compiler plugins are present).
 
-The iOS app cannot be built without full Xcode: `scripts/ios <generate|build>` (also `pnpm ios:build`) skips with a message when Xcode is missing, and CI builds it. To build an uncommitted working tree in CI: `scripts/ci-try <name>` pushes a snapshot to the throwaway branch `ci/try-<name>`; delete that branch when you are done (`git push origin --delete ci/try-<name>`).
+To build an uncommitted working tree in CI: `scripts/ci-try <name>` pushes a snapshot to the throwaway branch `ci/try-<name>`; delete that branch when you are done (`git push origin --delete ci/try-<name>`).
 
-CI runs on `macos-26` with Xcode 26.6 (Swift 6.3), which can be older than your local Swift. Write code that the older compiler accepts. CI takes iOS screenshots only on a run started by hand (Actions > CI > Run workflow) or from `scripts/ci-try ios`.
+CI runs on `macos-26` with Xcode 26.6 (Swift 6.3), which can be older than your local Swift. Write code that the older compiler accepts.
 
 ## Style
 
@@ -94,7 +90,7 @@ CI runs on `macos-26` with Xcode 26.6 (Swift 6.3), which can be older than your 
 - Errors people see are `SpacesError` with plain-English messages.
 - Text shown to people is plain English: short sentences, no jargon.
 - Colours, fonts, spacing and radii come from `SpacesUI` tokens, never literals in a screen.
-- Support light and dark mode, Dynamic Type on iOS, VoiceOver labels on every control.
+- Support light and dark mode and VoiceOver labels on every control.
 - Doc comments (`///`) on public declarations say what a caller must know, not how it works inside.
 
 ## Commits and PRs

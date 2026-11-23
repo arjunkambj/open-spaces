@@ -1,17 +1,13 @@
+import CoreServices
 import Foundation
 import SpacesDomain
-
-#if os(macOS)
-  import CoreServices
-#endif
 
 /// Says when something in the data folder may have changed. It does not say what: the
 /// library looks for itself, which is cheap. Bursts of activity arrive as one call.
 ///
-/// On macOS it listens to file system events. iOS has none of those for a folder tree, so
-/// there it watches the top folder, the meetings folder and the agents folder for files being
-/// added, replaced or removed, and also looks at everything once every `pollInterval` seconds, which catches
-/// what those two watches cannot see.
+/// It listens to file system events. When those cannot be set up, it watches the top folder,
+/// the meetings folder and the agents folder for files being added, replaced or removed, and
+/// also looks at everything once every `pollInterval` seconds.
 final class FolderWatcher: @unchecked Sendable {
   private let layout: FolderLayout
   private let onActivity: @Sendable () -> Void
@@ -21,9 +17,7 @@ final class FolderWatcher: @unchecked Sendable {
   private var timer: (any DispatchSourceTimer)?
   private var folderSources: [String: any DispatchSourceFileSystemObject] = [:]
   private var debouncing = false
-  #if os(macOS)
-    private var stream: FSEventStreamRef?
-  #endif
+  private var stream: FSEventStreamRef?
 
   /// Bursts closer together than this arrive as one call.
   private static let quietTime: TimeInterval = 0.08
@@ -46,11 +40,7 @@ final class FolderWatcher: @unchecked Sendable {
       running = true
       // Watching needs something to watch. Reading alone never makes the folder.
       try? FileAccess.createFolder(layout.root)
-      #if os(macOS)
-        if !startEventStream() { startPolling() }
-      #else
-        startPolling()
-      #endif
+      if !startEventStream() { startPolling() }
       lookAfterStarting()
     }
   }
@@ -75,14 +65,12 @@ final class FolderWatcher: @unchecked Sendable {
     timer = nil
     for source in folderSources.values { source.cancel() }
     folderSources.removeAll()
-    #if os(macOS)
-      if let stream {
-        FSEventStreamStop(stream)
-        FSEventStreamInvalidate(stream)
-        FSEventStreamRelease(stream)
-      }
-      stream = nil
-    #endif
+    if let stream {
+      FSEventStreamStop(stream)
+      FSEventStreamInvalidate(stream)
+      FSEventStreamRelease(stream)
+    }
+    stream = nil
   }
 
   // MARK: Polling
@@ -144,81 +132,79 @@ final class FolderWatcher: @unchecked Sendable {
 
   // MARK: File system events
 
-  #if os(macOS)
-    private func startEventStream() -> Bool {
-      // The events name real paths, so ask for the real path of the folder.
-      guard let resolved = realpath(layout.root.path, nil) else { return false }
-      defer { free(resolved) }
-      let root = String(cString: resolved)
+  private func startEventStream() -> Bool {
+    // The events name real paths, so ask for the real path of the folder.
+    guard let resolved = realpath(layout.root.path, nil) else { return false }
+    defer { free(resolved) }
+    let root = String(cString: resolved)
 
-      // The stream keeps the relay alive, and the relay does not keep the watcher alive,
-      // so an event that arrives late finds nobody instead of a dead object.
-      let relay = Relay(self)
-      var context = FSEventStreamContext(
-        version: 0,
-        info: Unmanaged.passUnretained(relay).toOpaque(),
-        retain: { info in
-          guard let info else { return nil }
-          _ = Unmanaged<Relay>.fromOpaque(info).retain()
-          return info
-        },
-        release: { info in
-          guard let info else { return }
-          Unmanaged<Relay>.fromOpaque(info).release()
-        },
-        copyDescription: nil
+    // The stream keeps the relay alive, and the relay does not keep the watcher alive,
+    // so an event that arrives late finds nobody instead of a dead object.
+    let relay = Relay(self)
+    var context = FSEventStreamContext(
+      version: 0,
+      info: Unmanaged.passUnretained(relay).toOpaque(),
+      retain: { info in
+        guard let info else { return nil }
+        _ = Unmanaged<Relay>.fromOpaque(info).retain()
+        return info
+      },
+      release: { info in
+        guard let info else { return }
+        Unmanaged<Relay>.fromOpaque(info).release()
+      },
+      copyDescription: nil
+    )
+    let callback: FSEventStreamCallback = { _, info, count, paths, flags, _ in
+      guard let info, let watcher = Unmanaged<Relay>.fromOpaque(info).takeUnretainedValue().watcher
+      else { return }
+      let names = paths.assumingMemoryBound(to: UnsafePointer<CChar>.self)
+      for index in 0..<count where watcher.matters(String(cString: names[index]), flags: flags[index]) {
+        watcher.onActivity()
+        return
+      }
+    }
+    // Creating the stream is what takes hold of the relay, so it must live until then.
+    let created = withExtendedLifetime(relay) {
+      FSEventStreamCreate(
+        nil,
+        callback,
+        &context,
+        [root] as CFArray,
+        FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+        FolderWatcher.quietTime,
+        // "Watch root" also reports the folder itself being moved or deleted.
+        FSEventStreamCreateFlags(kFSEventStreamCreateFlagWatchRoot)
       )
-      let callback: FSEventStreamCallback = { _, info, count, paths, flags, _ in
-        guard let info, let watcher = Unmanaged<Relay>.fromOpaque(info).takeUnretainedValue().watcher
-        else { return }
-        let names = paths.assumingMemoryBound(to: UnsafePointer<CChar>.self)
-        for index in 0..<count where watcher.matters(String(cString: names[index]), flags: flags[index]) {
-          watcher.onActivity()
-          return
-        }
-      }
-      // Creating the stream is what takes hold of the relay, so it must live until then.
-      let created = withExtendedLifetime(relay) {
-        FSEventStreamCreate(
-          nil,
-          callback,
-          &context,
-          [root] as CFArray,
-          FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-          FolderWatcher.quietTime,
-          // "Watch root" also reports the folder itself being moved or deleted.
-          FSEventStreamCreateFlags(kFSEventStreamCreateFlagWatchRoot)
-        )
-      }
-      guard let stream = created else { return false }
-      FSEventStreamSetDispatchQueue(stream, queue)
-      guard FSEventStreamStart(stream) else {
-        FSEventStreamInvalidate(stream)
-        FSEventStreamRelease(stream)
-        return false
-      }
-      self.stream = stream
-      return true
     }
-
-    private final class Relay {
-      weak var watcher: FolderWatcher?
-
-      init(_ watcher: FolderWatcher) {
-        self.watcher = watcher
-      }
+    guard let stream = created else { return false }
+    FSEventStreamSetDispatchQueue(stream, queue)
+    guard FSEventStreamStart(stream) else {
+      FSEventStreamInvalidate(stream)
+      FSEventStreamRelease(stream)
+      return false
     }
+    self.stream = stream
+    return true
+  }
 
-    /// Audio being recorded makes a steady flow of events that never changes what the
-    /// library holds. Everything else matters.
-    private func matters(_ path: String, flags: FSEventStreamEventFlags) -> Bool {
-      let coarse = kFSEventStreamEventFlagMustScanSubDirs | kFSEventStreamEventFlagRootChanged
-      if flags & FSEventStreamEventFlags(coarse) != 0 { return true }
-      let parts = path.split(separator: "/")
-      guard let last = parts.last else { return true }
-      if last == layout.dictationAudio.lastPathComponent { return false }
-      if last == "audio", parts.count >= 3, parts[parts.count - 3] == FolderLayout.meetings { return false }
-      return true
+  private final class Relay {
+    weak var watcher: FolderWatcher?
+
+    init(_ watcher: FolderWatcher) {
+      self.watcher = watcher
     }
-  #endif
+  }
+
+  /// Audio being recorded makes a steady flow of events that never changes what the
+  /// library holds. Everything else matters.
+  private func matters(_ path: String, flags: FSEventStreamEventFlags) -> Bool {
+    let coarse = kFSEventStreamEventFlagMustScanSubDirs | kFSEventStreamEventFlagRootChanged
+    if flags & FSEventStreamEventFlags(coarse) != 0 { return true }
+    let parts = path.split(separator: "/")
+    guard let last = parts.last else { return true }
+    if last == layout.dictationAudio.lastPathComponent { return false }
+    if last == "audio", parts.count >= 3, parts[parts.count - 3] == FolderLayout.meetings { return false }
+    return true
+  }
 }

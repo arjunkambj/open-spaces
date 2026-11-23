@@ -72,20 +72,6 @@ final class EncodedFile {
       )
     }
 
-    #if !os(macOS)
-      // The software encoder keeps working in the background and during
-      // interruptions on iOS, where the hardware one does not. The value is
-      // `kAppleSoftwareAudioCodecManufacturer` ('appl'), written out so its
-      // imported type cannot differ between SDK versions.
-      var maker: UInt32 = 0x6170_706C
-      ExtAudioFileSetProperty(
-        file,
-        kExtAudioFileProperty_CodecManufacturer,
-        UInt32(MemoryLayout<UInt32>.size),
-        &maker
-      )
-    #endif
-
     var input = AudioStreamBasicDescription(
       mSampleRate: Encoding.sampleRate,
       mFormatID: kAudioFormatLinearPCM,

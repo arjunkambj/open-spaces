@@ -36,30 +36,29 @@ extension Spaces.TextStyle {
   }
 
   /// Sizes in points. Headings are semibold, never bold; body text is regular and every
-  /// line gets air (about 20 points of line for 14-point text on a Mac, 22 for 17 on iPhone).
-  func metrics(_ idiom: Spaces.Idiom) -> Metrics {
-    let phone = idiom == .phone
+  /// line gets air (about 20 points of line for 14-point text).
+  var metrics: Metrics {
     switch self {
     case .pageTitle:
-      return Metrics(size: phone ? 28 : 24, weight: .semibold, tracking: phone ? -0.4 : -0.3)
+      return Metrics(size: 24, weight: .semibold, tracking: -0.3)
     case .hero:
-      return Metrics(size: phone ? 30 : 32, weight: .semibold, tracking: phone ? -0.5 : -0.6)
+      return Metrics(size: 32, weight: .semibold, tracking: -0.6)
     case .cardTitle:
-      return Metrics(size: phone ? 18 : 16, weight: .semibold, tracking: phone ? -0.2 : -0.1)
+      return Metrics(size: 16, weight: .semibold, tracking: -0.1)
     case .body:
-      return Metrics(size: phone ? 17 : 14, weight: .regular, lineSpacing: phone ? 5 : 4)
+      return Metrics(size: 14, weight: .regular, lineSpacing: 4)
     case .bodyStrong:
-      return Metrics(size: phone ? 17 : 14, weight: .medium, lineSpacing: phone ? 5 : 4)
+      return Metrics(size: 14, weight: .medium, lineSpacing: 4)
     case .caption:
-      return Metrics(size: phone ? 14 : 12, weight: .regular, lineSpacing: phone ? 3 : 4)
+      return Metrics(size: 12, weight: .regular, lineSpacing: 4)
     case .captionStrong:
-      return Metrics(size: phone ? 14 : 12, weight: .medium)
+      return Metrics(size: 12, weight: .medium)
     case .sectionLabel:
-      return Metrics(size: phone ? 14 : 12, weight: .medium)
+      return Metrics(size: 12, weight: .medium)
     case .mono:
-      return Metrics(size: phone ? 14 : 12.5, weight: .regular, design: .monospaced)
+      return Metrics(size: 12.5, weight: .regular, design: .monospaced)
     case .keyCap:
-      return Metrics(size: phone ? 14 : 12, weight: .medium)
+      return Metrics(size: 12, weight: .medium)
     }
   }
 
@@ -84,7 +83,6 @@ extension Spaces.TextStyle {
 private struct TextStyleModifier: ViewModifier {
   let style: Spaces.TextStyle
   let color: SwiftUI.Color?
-  @Environment(\.spacesIdiom) private var idiom
   @ScaledMetric private var scale: CGFloat
 
   init(style: Spaces.TextStyle, color: SwiftUI.Color?) {
@@ -94,7 +92,7 @@ private struct TextStyleModifier: ViewModifier {
   }
 
   func body(content: Content) -> some View {
-    let metrics = style.metrics(idiom)
+    let metrics = style.metrics
     content
       .font(.system(size: metrics.size * scale, weight: metrics.weight, design: metrics.design))
       .tracking(metrics.tracking)
@@ -106,7 +104,7 @@ private struct TextStyleModifier: ViewModifier {
 extension View {
   /// Applies a named text style: font, letter spacing and colour.
   ///
-  /// Sizes follow the idiom (Mac or iPhone) and Dynamic Type.
+  /// Sizes follow Dynamic Type.
   /// - color: replaces the style's own colour (secondary for captions and section labels, primary otherwise).
   public func spacesText(_ style: Spaces.TextStyle, color: SwiftUI.Color? = nil) -> some View {
     modifier(TextStyleModifier(style: style, color: color))

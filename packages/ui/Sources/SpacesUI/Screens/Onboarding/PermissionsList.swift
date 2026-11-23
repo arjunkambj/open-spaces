@@ -127,8 +127,6 @@ private struct PermissionRow: View {
   let isAsking: Bool
   let request: () -> Void
 
-  @Environment(\.spacesIdiom) private var idiom
-
   var body: some View {
     HStack(alignment: .top, spacing: Spaces.Space.m) {
       SymbolTile(PermissionCopy.systemImage(permission), size: 36)
@@ -144,10 +142,9 @@ private struct PermissionRow: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
-        if idiom == .phone { button }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      if idiom == .mac { button }
+      button
     }
     .padding(.horizontal, SetupMetrics.rowInset)
     .padding(.vertical, Spaces.Space.l)

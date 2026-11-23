@@ -316,7 +316,7 @@ links the app answers to:
 | `openspaces://meetings/start?title=Standup` | Starts recording with a title |
 | `openspaces://meetings/stop` | Stops the recording |
 | `openspaces://meetings/<id>` | Shows that meeting |
-| `openspaces://dictation/toggle` | Starts or stops dictation, but only with a ticket. The iPhone keyboard sends one. A bare link is not followed |
+| `openspaces://dictation/toggle` | Starts or stops dictation, but only with a ticket. A bare link is not followed |
 | `openspaces://hub` | Shows the main window |
 
 Anything on your Mac can open such a link: a web page, a document, a message. So the app does not simply

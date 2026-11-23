@@ -5,7 +5,6 @@ import SwiftUI
 /// Snippets: say a trigger, get the expansion. Reads `AppModel` from the environment.
 public struct SnippetsScreen: View {
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   @State private var query: String
   @State private var editor: SnippetEditor
@@ -17,7 +16,7 @@ public struct SnippetsScreen: View {
 
   /// The list gets a search field from this many snippets up.
   private static let searchFrom = 8
-  /// The width of the trigger column on a Mac.
+  /// The width of the trigger column.
   private static let triggerWidth: CGFloat = 190
   private static let dialogWidth: CGFloat = 560
 
@@ -40,14 +39,10 @@ public struct SnippetsScreen: View {
       title: "Snippets",
       subtitle: "Say a short phrase and Spaces types the longer text for you."
     ) {
-      if idiom == .mac && showsSearch {
+      if showsSearch {
         SearchField(text: $query, placeholder: "Search snippets")
       }
-      if idiom == .phone {
-        IconButton("plus", label: "Add snippet") { open(SnippetEditor()) }
-      } else {
-        Button("Add snippet") { open(SnippetEditor()) }.buttonStyle(.spaces(.primary))
-      }
+      Button("Add snippet") { open(SnippetEditor()) }.buttonStyle(.spaces(.primary))
     } content: {
       if !model.isLoaded {
         ScreenLoading("Loading your snippets…")
@@ -89,11 +84,9 @@ public struct SnippetsScreen: View {
     }
   }
 
-  /// Only the Mac has command mode, so only the Mac says a snippet can be a command.
-  private var editorHint: String {
-    let typed = "Say the phrase while you dictate and the text is typed in its place."
-    return idiom == .mac ? typed + " Say it in command mode and the text is your command." : typed
-  }
+  private let editorHint =
+    "Say the phrase while you dictate and the text is typed in its place. "
+    + "Say it in command mode and the text is your command."
 
   private var showsSearch: Bool {
     model.snippets.count >= Self.searchFrom || !query.isEmpty
@@ -103,9 +96,6 @@ public struct SnippetsScreen: View {
 
   @ViewBuilder private var list: some View {
     let snippets = SnippetRules.filter(model.snippets, query: query)
-    if idiom == .phone && showsSearch {
-      SearchField(text: $query, placeholder: "Search snippets")
-    }
     if snippets.isEmpty {
       EmptyState(
         "Nothing matches “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”",
@@ -130,43 +120,22 @@ public struct SnippetsScreen: View {
     }
   }
 
-  /// On a Mac the phrase and the text sit side by side with an arrow between them.
-  /// On iPhone the text goes under the phrase.
-  @ViewBuilder private func row(_ snippet: Snippet) -> some View {
+  /// The phrase and the text sit side by side with an arrow between them.
+  private func row(_ snippet: Snippet) -> some View {
     let text = SnippetRules.preview(snippet.expansion)
-    if idiom == .phone {
-      ListRow("“\(snippet.trigger)”", subtitle: text) {
-      } hoverActions: {
-        OverflowMenu(label: "Actions for \(snippet.trigger)") {
-          Button {
-            open(SnippetEditor(snippet))
-          } label: {
-            Label("Edit", systemImage: "pencil")
-          }
-          Button(role: .destructive) {
-            askToDelete(snippet)
-          } label: {
-            Label("Delete", systemImage: "trash")
-          }
-        }
-      }
-      .onTap { open(SnippetEditor(snippet)) }
-      .lineLimit(2)
-    } else {
-      ListRow(text) {
-        Text("“\(snippet.trigger)”")
-          .spacesText(.bodyStrong)
-          .frame(width: Self.triggerWidth, alignment: .leading)
-        Image(systemName: "arrow.right")
-          .spacesText(.caption, color: Spaces.Color.textTertiary)
-          .accessibilityHidden(true)
-      } hoverActions: {
-        IconButton("pencil", label: "Edit \(snippet.trigger)") { open(SnippetEditor(snippet)) }
-        IconButton("trash", label: "Delete \(snippet.trigger)") { askToDelete(snippet) }
-      }
-      .onTap { open(SnippetEditor(snippet)) }
-      .lineLimit(2)
+    return ListRow(text) {
+      Text("“\(snippet.trigger)”")
+        .spacesText(.bodyStrong)
+        .frame(width: Self.triggerWidth, alignment: .leading)
+      Image(systemName: "arrow.right")
+        .spacesText(.caption, color: Spaces.Color.textTertiary)
+        .accessibilityHidden(true)
+    } hoverActions: {
+      IconButton("pencil", label: "Edit \(snippet.trigger)") { open(SnippetEditor(snippet)) }
+      IconButton("trash", label: "Delete \(snippet.trigger)") { askToDelete(snippet) }
     }
+    .onTap { open(SnippetEditor(snippet)) }
+    .lineLimit(2)
   }
 
   // MARK: - Empty

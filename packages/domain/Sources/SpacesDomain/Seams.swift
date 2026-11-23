@@ -615,10 +615,7 @@ public enum SpacesLink: Sendable, Equatable {
 
 // MARK: - Text target
 
-/// Where dictated text goes: the app the user is typing in.
-///
-///   macOS -> the focused text field of the frontmost app
-///   iOS   -> the clipboard / the app's own note
+/// Where dictated text goes: the focused text field of the frontmost app.
 public protocol TextTarget: Sendable {
   /// What the user is dictating into right now.
   func context() async -> DictationContext
@@ -692,7 +689,7 @@ extension SpacesLink {
 }
 
 /// Proof that a link was sent by something that can already write the data
-/// folder (the bundled `spaces` tool, the keyboard extension), and not by a
+/// folder (the bundled `spaces` tool), and not by a
 /// web page or a document.
 ///
 /// The sender calls `issue` and puts the ticket in the link

@@ -11,8 +11,8 @@ struct HomeRowActions {
 
 /// One dictation in the history list: when, the text, where it went, and its actions.
 ///
-/// On a Mac the actions show while the pointer is over the row or one of them has keyboard
-/// focus. On iPhone they are in the "…" menu. Both have them in the context menu too.
+/// The actions show while the pointer is over the row or one of them has keyboard focus.
+/// The context menu has them too.
 struct HomeDictationRow: View {
   let dictation: Dictation
   let player: HomeAudioPlayer
@@ -21,7 +21,6 @@ struct HomeDictationRow: View {
   let canRetry: Bool
   let actions: HomeRowActions
 
-  @Environment(\.spacesIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
   @State private var isHovered = false
   @State private var isExpanded = false
@@ -33,16 +32,14 @@ struct HomeDictationRow: View {
     case play, copy, delete
   }
 
-  /// The width kept free at the end of a Mac row for the app name and the actions.
+  /// The width kept free at the end of a row for the app name and the actions.
   private static let gutter: CGFloat = 84
   private static let timeWidth: CGFloat = 64
   /// The heights of the kit's own rows.
-  private static let macRowHeight: CGFloat = 46
-  private static let macRowPadding: CGFloat = 12
-  /// The side of a small icon button on a Mac.
+  private static let rowHeight: CGFloat = 46
+  private static let rowPadding: CGFloat = 12
+  /// The side of a small icon button.
   private static let actionSide: CGFloat = 26
-  private static let phoneRowHeight: CGFloat = 56
-  private static let touchHeight: CGFloat = 32
   private static let indicatorHeight: CGFloat = 14
   /// The height of the small Retry button, so the row does not jump while it retries.
   private static let retryHeight: CGFloat = 28
@@ -53,17 +50,15 @@ struct HomeDictationRow: View {
   private var time: String { HomeHistory.time(dictation.createdAt) }
 
   var body: some View {
-    Group {
-      if idiom == .phone { phone } else { mac }
-    }
-    .contentShape(Rectangle())
-    .contextMenu { menuItems }
-    .accessibilityElement(children: .contain)
+    row
+      .contentShape(Rectangle())
+      .contextMenu { menuItems }
+      .accessibilityElement(children: .contain)
   }
 
-  // MARK: - Layouts
+  // MARK: - Layout
 
-  private var mac: some View {
+  private var row: some View {
     HStack(alignment: .top, spacing: Spaces.Space.m) {
       Text(time)
         .spacesText(.caption, color: Spaces.Color.textTertiary)
@@ -80,8 +75,8 @@ struct HomeDictationRow: View {
         .opacity(showsActions ? 0 : 1)
         .accessibilityLabel(dictation.appName.map { "In \($0)" } ?? "")
     }
-    .padding(.vertical, Self.macRowPadding)
-    .frame(minHeight: Self.macRowHeight, alignment: .top)
+    .padding(.vertical, Self.rowPadding)
+    .frame(minHeight: Self.rowHeight, alignment: .top)
     .overlay(alignment: .topTrailing) {
       HStack(spacing: Spaces.Space.xxs) {
         // While it plays, the stop button is beside the progress bar.
@@ -97,31 +92,13 @@ struct HomeDictationRow: View {
           .focused($focusedAction, equals: .delete)
       }
       // Small buttons, so three of them fit in the gutter and the text keeps its width.
-      .padding(.top, (Self.macRowHeight - Self.actionSide) / 2)
+      .padding(.top, (Self.rowHeight - Self.actionSide) / 2)
       .padding(.trailing, -Spaces.Space.xs)
       .opacity(showsActions ? 1 : 0)
     }
     .rowChrome(isHighlighted: showsActions)
     .onHover { isHovered = $0 }
     .animation(Spaces.Motion.quick, value: showsActions)
-  }
-
-  private var phone: some View {
-    HStack(alignment: .top, spacing: Spaces.Space.xs) {
-      VStack(alignment: .leading, spacing: Spaces.Space.xs) {
-        content
-        Text([time, dictation.appName].compactMap { $0 }.joined(separator: " · "))
-          .spacesText(.caption, color: Spaces.Color.textTertiary)
-          .lineLimit(1)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.vertical, Spaces.Space.m)
-      OverflowMenu(label: "Actions") { menuItems }
-        .padding(.top, Spaces.Space.xs)
-    }
-    .padding(.trailing, -Spaces.Space.s)
-    .frame(minHeight: Self.phoneRowHeight)
-    .rowChrome(isHighlighted: false)
   }
 
   @ViewBuilder private var menuItems: some View {
@@ -176,7 +153,7 @@ struct HomeDictationRow: View {
   }
 
   private var text: some View {
-    let lines = idiom == .phone ? 4 : 3
+    let lines = 3
     let measures = HomeHistory.mayNeedCutting(dictation.text)
     let isCut = fullHeight > shownHeight + 1
     return VStack(alignment: .leading, spacing: Spaces.Space.xs) {
@@ -210,7 +187,6 @@ struct HomeDictationRow: View {
         }
         .buttonStyle(.plain)
         .spacesText(.captionStrong, color: Spaces.Color.accent)
-        .frame(minHeight: idiom == .phone ? Self.touchHeight : nil)
         .contentShape(Rectangle())
       }
     }

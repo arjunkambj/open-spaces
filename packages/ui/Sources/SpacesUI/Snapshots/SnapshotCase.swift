@@ -2,7 +2,7 @@ import SpacesEngine
 import SwiftUI
 
 /// One screen state to render to an image, so a screen can be looked at
-/// without running the app (and iOS layouts without a simulator).
+/// without running the app.
 ///
 /// Each area lists its cases in `Screens/<Area>/<Area>Snapshots.swift`.
 /// The renderer puts a loaded demo `AppModel` in the environment.
@@ -10,14 +10,11 @@ public struct SnapshotCase {
   public enum Canvas: Sendable, Equatable {
     /// The content area of the macOS hub window.
     case mac
-    /// An iPhone screen, 393 x 852 points.
-    case phone
     case custom(width: CGFloat, height: CGFloat)
 
     public var size: CGSize {
       switch self {
       case .mac: CGSize(width: 880, height: 720)
-      case .phone: CGSize(width: 393, height: 852)
       case .custom(let width, let height): CGSize(width: width, height: height)
       }
     }

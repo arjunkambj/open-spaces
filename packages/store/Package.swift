@@ -4,7 +4,7 @@ import PackageDescription
 // File-backed Library and secret store.
 let package = Package(
   name: "SpacesStore",
-  platforms: [.macOS("14.4"), .iOS(.v17)],
+  platforms: [.macOS("14.4")],
   products: [
     .library(name: "SpacesStore", targets: ["SpacesStore"])
   ],

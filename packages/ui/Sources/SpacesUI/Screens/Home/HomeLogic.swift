@@ -91,11 +91,6 @@ enum HomeHistory {
 
 /// The words and numbers on the home screen.
 enum HomeText {
-  /// The page title: the name of the place, as the sidebar and the tab bar say it.
-  static func title(_ idiom: Spaces.Idiom) -> String {
-    idiom == .phone ? "History" : "Home"
-  }
-
   /// The numbers in one quiet line: "1.2K words dictated · 136 words a minute".
   /// `nil` before the first dictation. The pace is left out until it is known.
   static func summary(_ stats: DictationStats) -> String? {

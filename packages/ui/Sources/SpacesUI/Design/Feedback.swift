@@ -136,8 +136,6 @@ public struct Banner<Action: View>: View {
   private let message: String?
   private let action: Action
 
-  @Environment(\.spacesIdiom) private var idiom
-
   public init(
     _ tone: NoticeTone = .info,
     title: String,
@@ -152,11 +150,7 @@ public struct Banner<Action: View>: View {
 
   public var body: some View {
     let shape = RoundedRectangle(cornerRadius: Spaces.Radius.card, style: .continuous)
-    let layout =
-      idiom == .phone
-      ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spaces.Space.m))
-      : AnyLayout(HStackLayout(alignment: .center, spacing: Spaces.Space.l))
-    layout {
+    HStack(alignment: .center, spacing: Spaces.Space.l) {
       HStack(alignment: .firstTextBaseline, spacing: 10) {
         Image(systemName: tone.symbol)
           .font(.system(size: 15, weight: .medium))
