@@ -123,7 +123,7 @@ public struct DictionaryScreen: View {
       message:
         "Add names, places and terms that are easy to mishear. They are spelled your way in every dictation."
     ) {
-      SymbolTile("character.book.closed")
+      SymbolTile("book.closed")
     } action: {
       VStack(spacing: Spaces.Space.m) {
         Text("Try one").spacesText(.sectionLabel)

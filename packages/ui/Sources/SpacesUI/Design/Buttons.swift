@@ -361,17 +361,17 @@ public struct NavItem: View {
 
   public var body: some View {
     Button(action: action) {
-      HStack(spacing: Spaces.Space.m) {
+      HStack(spacing: Spaces.Space.s) {
         Image(systemName: systemImage)
-          .font(.system(size: 15, weight: isSelected ? .medium : .regular))
+          .font(.system(size: 13, weight: isSelected ? .medium : .regular))
           .foregroundStyle(isSelected ? Spaces.Color.textPrimary : Spaces.Color.textSecondary)
-          .frame(width: 22)
-        Text(title).spacesText(isSelected ? .bodyStrong : .body)
+          .frame(width: 20)
+        Text(title).spacesText(isSelected ? .navStrong : .nav)
         Spacer(minLength: Spaces.Space.s)
         if let badge { Badge(badge, tone: .accent) }
       }
-      .padding(.horizontal, Spaces.Space.m)
-      .frame(minHeight: 36)
+      .padding(.horizontal, Spaces.Space.s)
+      .frame(minHeight: 30)
       .hoverHighlight(isSelected: isSelected)
     }
     .buttonStyle(.plain)

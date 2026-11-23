@@ -58,6 +58,7 @@ Sets font, letter spacing and colour. Every style is the system sans; only `.mon
 | `.sectionLabel` | 12 medium, secondary colour | Labels above groups (`SectionLabel` does this) |
 | `.mono` | 12.5 fixed-width | Paths, commands |
 | `.keyCap` | 12 medium | Inside key caps |
+| `.nav`, `.navStrong` | 13 | Sidebar and settings navigation entries (strong for the chosen one) |
 
 ```swift
 Text("Hold fn and speak.").spacesText(.body)

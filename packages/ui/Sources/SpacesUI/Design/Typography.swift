@@ -23,6 +23,10 @@ extension Spaces {
     case mono
     /// The label inside a key cap.
     case keyCap
+    /// The label of a sidebar or settings navigation entry.
+    case nav
+    /// The label of the chosen navigation entry.
+    case navStrong
   }
 }
 
@@ -59,6 +63,10 @@ extension Spaces.TextStyle {
       return Metrics(size: 12.5, weight: .regular, design: .monospaced)
     case .keyCap:
       return Metrics(size: 12, weight: .medium)
+    case .nav:
+      return Metrics(size: 13, weight: .regular)
+    case .navStrong:
+      return Metrics(size: 13, weight: .medium)
     }
   }
 
@@ -68,6 +76,7 @@ extension Spaces.TextStyle {
     case .pageTitle, .hero: .largeTitle
     case .cardTitle: .headline
     case .body, .bodyStrong: .body
+    case .nav, .navStrong: .callout
     case .caption, .captionStrong, .sectionLabel, .mono, .keyCap: .footnote
     }
   }

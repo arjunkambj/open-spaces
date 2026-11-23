@@ -145,7 +145,7 @@ public struct SnippetsScreen: View {
       "No snippets yet",
       message: "Save text you type again and again, such as a link, a sign-off or your address."
     ) {
-      SymbolTile("text.quote")
+      SymbolTile("text.bubble")
     } action: {
       VStack(spacing: Spaces.Space.m) {
         Text("Start from an example").spacesText(.sectionLabel)

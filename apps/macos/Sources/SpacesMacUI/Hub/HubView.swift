@@ -131,7 +131,7 @@ public struct HubView: View {
 }
 
 enum HubMetrics {
-  static let sidebarWidth: CGFloat = 224
+  static let sidebarWidth: CGFloat = 200
   static let settingsSize = CGSize(width: 960, height: 640)
   /// The height of the top strip when the window has no title bar to match (snapshots).
   static let minimumStrip: CGFloat = 32
@@ -167,10 +167,10 @@ struct Sidebar: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spaces.Space.xxs) {
-      Wordmark()
-        .padding(.horizontal, Spaces.Space.m)
-        .padding(.top, Spaces.Space.m)
-        .padding(.bottom, Spaces.Space.xl)
+      Wordmark(size: 17)
+        .padding(.horizontal, Spaces.Space.s)
+        .padding(.top, Spaces.Space.s)
+        .padding(.bottom, Spaces.Space.l)
       ForEach(HubNavigation.Section.allCases) { section in
         NavItem(
           section.title,
@@ -184,8 +184,8 @@ struct Sidebar: View {
       Spacer(minLength: Spaces.Space.l)
       NavItem("Settings", systemImage: "gearshape", isSelected: false) { navigation.showsSettings = true }
     }
-    .padding(.horizontal, Spaces.Space.m)
-    .padding(.bottom, Spaces.Space.m)
+    .padding(.horizontal, Spaces.Space.s)
+    .padding(.bottom, Spaces.Space.s)
   }
 }
 

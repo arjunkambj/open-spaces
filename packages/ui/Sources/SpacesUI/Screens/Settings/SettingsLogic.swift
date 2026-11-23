@@ -34,7 +34,7 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .general: "slider.horizontal.3"
     case .shortcuts: "keyboard"
-    case .meetings: "record.circle"
+    case .meetings: "person.2"
     case .openAI: "key"
     case .agents: "terminal"
     case .privacy: "lock.shield"

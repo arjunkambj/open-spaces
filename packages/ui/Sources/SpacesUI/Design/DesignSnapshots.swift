@@ -252,8 +252,8 @@ private struct ControlsGallery: View {
         HStack(alignment: .top, spacing: Spaces.Space.l) {
           VStack(spacing: Spaces.Space.xxs) {
             NavItem("Home", systemImage: "house", isSelected: true) {}
-            NavItem("Meetings", systemImage: "record.circle", isSelected: false, badge: "New") {}
-            NavItem("Dictionary", systemImage: "character.book.closed", isSelected: false) {}
+            NavItem("Meetings", systemImage: "person.2", isSelected: false, badge: "New") {}
+            NavItem("Dictionary", systemImage: "book.closed", isSelected: false) {}
               .environment(\.simulatedHover, true)
           }
           .frame(width: 220)
@@ -351,7 +351,7 @@ private struct PageGallery: View {
       }
       CardList(sampleRows.prefix(2), style: .filled) { row in
         ListRow(row.text, subtitle: "Added \(row.time)") {
-          SymbolTile("character.book.closed", size: 36)
+          SymbolTile("book.closed", size: 36)
         } trailing: {
           Badge("Learned", tone: .accent)
         }
@@ -424,7 +424,7 @@ private struct SettingsSheetGallery: View {
               .padding(.bottom, Spaces.Space.s)
             NavItem("General", systemImage: "slider.horizontal.3", isSelected: true) {}
             NavItem("Shortcuts", systemImage: "keyboard", isSelected: false) {}
-            NavItem("Meetings", systemImage: "record.circle", isSelected: false) {}
+            NavItem("Meetings", systemImage: "person.2", isSelected: false) {}
             SectionLabel("Your data")
               .padding(.horizontal, Spaces.Space.m)
               .padding(.top, Spaces.Space.xl)
@@ -604,9 +604,9 @@ private struct HubGallery: View {
         .padding(.top, 44)
         .padding(.bottom, Spaces.Space.xl)
       NavItem("Home", systemImage: "house", isSelected: true) {}
-      NavItem("Meetings", systemImage: "record.circle", isSelected: false, badge: "Live") {}
-      NavItem("Dictionary", systemImage: "character.book.closed", isSelected: false) {}
-      NavItem("Snippets", systemImage: "text.quote", isSelected: false) {}
+      NavItem("Meetings", systemImage: "person.2", isSelected: false, badge: "Live") {}
+      NavItem("Dictionary", systemImage: "book.closed", isSelected: false) {}
+      NavItem("Snippets", systemImage: "text.bubble", isSelected: false) {}
       NavItem("Style", systemImage: "textformat", isSelected: false) {}
       Spacer()
       NavItem("Settings", systemImage: "gearshape", isSelected: false) {}
