@@ -45,7 +45,7 @@ struct StyleOptionCard: View {
       .contentShape(shape)
     }
     .buttonStyle(.plain)
-    .focusRingShape(shape)
+    .contentShape(.focusEffect, shape)
     .onHover { isHovered = $0 }
     .animation(Spaces.Motion.quick, value: isHovered)
     .animation(Spaces.Motion.smooth, value: isSelected)

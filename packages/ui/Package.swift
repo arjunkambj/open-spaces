@@ -4,7 +4,7 @@ import PackageDescription
 // Design system: tokens and SwiftUI components.
 let package = Package(
   name: "SpacesUI",
-  platforms: [.macOS("14.4"), .iOS(.v17)],
+  platforms: [.macOS("14.4")],
   products: [
     .library(name: "SpacesUI", targets: ["SpacesUI"]),
     // macOS-only tool that renders every snapshot case to PNG files.

@@ -12,20 +12,19 @@ enum MeetingsMetrics {
   /// The red dot of a live recording.
   static let recordingDot: CGFloat = 8
   /// The window onto the live transcript on the recording card: about four lines.
-  static func liveLinesHeight(_ idiom: Spaces.Idiom) -> CGFloat { idiom == .phone ? 132 : 100 }
+  static let liveLinesHeight: CGFloat = 100
   /// A grey bar that stands in for a line of text that is still being written.
   static let skeletonLine: CGFloat = 12
-  /// The page gutters and top gap of `Page`, which a meeting's page repeats.
-  static func gutter(_ idiom: Spaces.Idiom) -> CGFloat { idiom == .phone ? 20 : 40 }
-  static func top(_ idiom: Spaces.Idiom) -> CGFloat { idiom == .phone ? Spaces.Space.s : 36 }
+  /// The page gutter of `Page`, which a meeting's page repeats.
+  static let gutter: CGFloat = 40
   /// The inline field a new tag is typed into, and the height of a tag.
   static let tagField: CGFloat = 110
-  static func tagHeight(_ idiom: Spaces.Idiom) -> CGFloat { idiom == .phone ? 32 : 24 }
+  static let tagHeight: CGFloat = 24
   /// The side padding of a small button, by which the row of suggested questions is pulled left.
-  static func suggestionInset(_ idiom: Spaces.Idiom) -> CGFloat { idiom == .phone ? 14 : 11 }
+  static let suggestionInset: CGFloat = 11
   /// The least height of a checklist row.
-  static func checklistRow(_ idiom: Spaces.Idiom) -> CGFloat { idiom == .phone ? 56 : 48 }
-  static func editorHeight(_ idiom: Spaces.Idiom) -> CGFloat { idiom == .phone ? 340 : 400 }
+  static let checklistRow: CGFloat = 48
+  static let editorHeight: CGFloat = 400
 }
 
 /// What a snapshot can set up front, because it cannot click: the open tab, an open dialog,
@@ -62,7 +61,7 @@ enum MeetingTab: String, CaseIterable, Hashable {
 enum MeetingActions {
   /// Copies notes or a transcript: what was said in a meeting is private.
   static func copy(_ text: String) {
-    ScreenClipboard.copy(text, as: .personal)
+    ScreenClipboard.copy(text)
   }
 
   /// Deletes the meeting. When it is the one being recorded, the recording stops too.
@@ -158,9 +157,7 @@ struct MeetingInlineText: View {
           if !focused { commit() }
         }
         .onAppear { isFocused = true }
-        #if os(macOS)
-          .onExitCommand { isEditing = false }
-        #endif
+        .onExitCommand { isEditing = false }
         .accessibilityLabel(label)
     } else {
       Button {

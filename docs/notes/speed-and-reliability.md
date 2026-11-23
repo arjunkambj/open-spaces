@@ -267,9 +267,8 @@ than without the live side (the head start), and `timing.path` in the history sa
 
 **To switch it on**, two things are needed, and until both are done nothing changes:
 
-1. The apps pass the live adapter in. One line where each app builds its model
-   (`apps/macos/Sources/SpacesApp/Composition.swift`,
-   `apps/ios/Phone/Sources/SpacesPhone/PhoneSession.swift`), next to `transcriber:`:
+1. The app passes the live adapter in. One line where it builds its model
+   (`apps/macos/Sources/SpacesApp/Composition.swift`), next to `transcriber:`:
 
    ```swift
    transcriber: openAI.transcriber,

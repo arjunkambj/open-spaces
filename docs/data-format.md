@@ -6,20 +6,14 @@ tools.
 
 Your API keys (OpenAI, and Anthropic if you use Claude) are kept apart from everything else, in
 one file, `api-key.json`.
-Only your user account can open it, and the key is never written to any other file. On macOS
-that file is in this folder. On iOS it is in the app's own storage, outside the folder the
-app shares with its keyboard, so the keyboard cannot read it.
+Only your user account can open it, and the key is never written to any other file. That
+file is in this folder.
 
 ## Where the folder is
 
-| Platform | Folder |
-| --- | --- |
-| macOS | `~/Library/Application Support/Spaces` |
-| iOS | `Spaces`, in the folder the app shares with its keyboard (its App Group) |
-
-On iOS, a copy of the app that was built without the shared folder keeps its data in
-`Application Support/Spaces` inside its own storage instead. The keyboard cannot see
-that folder. See [apps/ios/README.md](../apps/ios/README.md).
+```
+~/Library/Application Support/Spaces
+```
 
 To use a different folder, set the `SPACES_HOME` environment variable before starting
 the app or the `spaces` tool:
@@ -165,8 +159,6 @@ The examples below were written by the app itself, from made-up data.
 - The file is readable by your user account only (mode 0600) and is left out of backups.
   Removing the last key in Settings deletes the file.
 - If you copy, zip or share the data folder, leave this file out.
-- On iOS this file is in the app's own `Application Support` folder, not in the shared
-  folder.
 - Tools must not read, copy or change this file. The `spaces` tool never opens it.
 
 ### dictionary.json
@@ -374,7 +366,7 @@ All four keys are required.
 
 The app owns this folder. It holds the recording in pieces of about 30 seconds, one set per
 track: `microphone-0000.m4a`, `system-0000.m4a`, and so on. (`system` is the sound the Mac
-plays. An iPhone has only the `microphone` track.)
+plays.)
 
 While a piece is being recorded there is also a plain `.wav` copy beside it
 (`microphone-0003.wav`). An `.m4a` file cannot be read until it is closed, so the copy is
@@ -522,7 +514,7 @@ There is nothing here for you to change.
 
 The app answers links that start with `openspaces://`. Any web page or document can open
 such a link, so a link that would start or stop a recording has to prove where it came
-from. Before the `spaces` tool (or the iPhone keyboard) sends one, it puts an empty file
+from. Before the `spaces` tool sends one, it puts an empty file
 with a long random name in this folder and adds that name to the link. The app checks for
 the file and deletes it. A ticket works once, and only for one minute. Old tickets are
 cleaned up by themselves.
@@ -560,8 +552,8 @@ Reading needs no lock, because every file is replaced in one step.
 
 Other things to know:
 
-- **The app notices your change by itself.** There is nothing to restart or reload. On
-  macOS it shows up in well under a second. On iOS it can take about two seconds.
+- **The app notices your change by itself.** There is nothing to restart or reload. It
+  shows up in well under a second.
 - **To add a meeting**, make the folder `meetings/<new UUID>/` and put `meeting.json` in
   it. The app writes `notes.md` for you. To delete a meeting, delete its folder.
 - **Leave the audio folders to the app.** Do not rename or edit files in `dictation-audio/`

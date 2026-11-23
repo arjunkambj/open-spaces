@@ -65,17 +65,13 @@ struct AgentFolder: Sendable {
   /// another program once the first one is gone, so on a Mac a process that started after the
   /// session did is not the server.
   private static func isRunning(_ pid: Int32, startedBy date: Date) -> Bool {
-    #if os(macOS)
-      var info = kinfo_proc()
-      var size = MemoryLayout<kinfo_proc>.stride
-      var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
-      guard sysctl(&name, UInt32(name.count), &info, &size, nil, 0) == 0, size > 0 else { return false }
-      let start = info.kp_proc.p_un.__p_starttime
-      let started = Date(timeIntervalSince1970: Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000)
-      // The server notes its start a moment after the process began; clocks are not exact.
-      return started <= date.addingTimeInterval(5)
-    #else
-      return kill(pid, 0) == 0 || errno == EPERM
-    #endif
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+    guard sysctl(&name, UInt32(name.count), &info, &size, nil, 0) == 0, size > 0 else { return false }
+    let start = info.kp_proc.p_un.__p_starttime
+    let started = Date(timeIntervalSince1970: Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000)
+    // The server notes its start a moment after the process began; clocks are not exact.
+    return started <= date.addingTimeInterval(5)
   }
 }

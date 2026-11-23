@@ -2,15 +2,14 @@ import SpacesDomain
 import SpacesEngine
 import SwiftUI
 
-/// First-run setup: name, OpenAI key, permissions, then the platform's practice step.
+/// First-run setup: name, OpenAI key, permissions, then the practice step.
 /// Calls `AppModel.finishOnboarding(userName:)` at the end. Reads `AppModel` from the environment.
-/// - practice: a last step supplied by the platform (macOS: try the shortcut; iOS: turn on the keyboard).
+/// - practice: a last step supplied by the Mac app: try the shortcut.
 public struct OnboardingFlow: View {
   private let practice: AnyView?
   private let steps: [OnboardingStep]
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   @State private var step: OnboardingStep
   @State private var isMovingForward = true
@@ -76,20 +75,20 @@ public struct OnboardingFlow: View {
         Spacer()
       }
     }
-    .padding(.horizontal, idiom == .phone ? Spaces.Space.s : Spaces.Space.l)
-    .padding(.top, idiom == .phone ? Spaces.Space.xs : Spaces.Space.l)
+    .padding(.horizontal, Spaces.Space.l)
+    .padding(.top, Spaces.Space.l)
   }
 
   private var footer: some View {
     Button(primaryTitle, action: advance)
       .buttonStyle(.spaces(.primary, fullWidth: true))
-      .frame(maxWidth: idiom == .phone ? .infinity : OnboardingMetrics.buttonWidth)
+      .frame(maxWidth: OnboardingMetrics.buttonWidth)
       .disabled(!primaryIsEnabled)
       // Steps with a text field take Return themselves; the practice step may need every key.
       .keyboardShortcut(step == .welcome || step == .permissions || step == .done ? .defaultAction : nil)
       .padding(.horizontal, SetupMetrics.rowInset)
       .padding(.top, Spaces.Space.m)
-      .padding(.bottom, idiom == .phone ? Spaces.Space.m : Spaces.Space.xxl)
+      .padding(.bottom, Spaces.Space.xxl)
   }
 
   private var transition: AnyTransition {
@@ -115,7 +114,7 @@ public struct OnboardingFlow: View {
   }
 
   private var welcome: some View {
-    OnboardingPage(title: "Speak instead of typing", message: OnboardingCopy.welcome(idiom)) {
+    OnboardingPage(title: "Speak instead of typing", message: OnboardingCopy.welcome) {
       SpacesGlyph(size: 40, tint: Spaces.Color.accent)
     } content: {
       EmptyView()
@@ -130,11 +129,6 @@ public struct OnboardingFlow: View {
       SpacesTextField(text: $name, placeholder: "Your name")
         .focused($nameIsFocused)
         .onSubmit(advance)
-        #if os(iOS)
-          .textInputAutocapitalization(.words)
-          .textContentType(.givenName)
-          .submitLabel(.continue)
-        #endif
         .frame(maxWidth: OnboardingMetrics.fieldWidth)
         .onAppear { nameIsFocused = true }
     }
@@ -191,10 +185,6 @@ public struct OnboardingFlow: View {
               error: serverError
             )
             .onSubmit(advance)
-            #if os(iOS)
-              .textInputAutocapitalization(.never)
-              .keyboardType(.URL)
-            #endif
             .autocorrectionDisabled()
             if ServerAddress(server).address == nil {
               Text(
@@ -230,7 +220,7 @@ public struct OnboardingFlow: View {
   }
 
   private var doneStep: some View {
-    OnboardingPage(title: OnboardingCopy.allSetTitle(name: name), message: OnboardingCopy.allSet(idiom)) {
+    OnboardingPage(title: OnboardingCopy.allSetTitle(name: name), message: OnboardingCopy.allSet) {
       SymbolTile("checkmark.circle.fill", size: 72, tint: Spaces.Color.accent)
     } content: {
       EmptyView()
@@ -357,8 +347,6 @@ private struct OnboardingPage<Top: View, Content: View>: View {
   private let top: Top
   private let content: Content
 
-  @Environment(\.spacesIdiom) private var idiom
-
   init(
     title: String,
     message: String? = nil,
@@ -392,12 +380,11 @@ private struct OnboardingPage<Top: View, Content: View>: View {
           .frame(maxWidth: OnboardingMetrics.textWidth)
           content
         }
-        .padding(.horizontal, idiom == .phone ? SetupMetrics.rowInset : Spaces.Space.xxl)
+        .padding(.horizontal, Spaces.Space.xxl)
         .padding(.vertical, Spaces.Space.m)
         .frame(maxWidth: .infinity)
         .frame(minHeight: proxy.size.height)
       }
-      .scrollDismissesKeyboard(.interactively)
     }
   }
 }

@@ -171,13 +171,6 @@ struct MeetingManifest: Codable, Equatable, Sendable {
       close(descriptor)
       if !renamed { unlink(temporary.path) }
     }
-    #if !os(macOS)
-      // Stays writable while the screen is locked, like the rest of a meeting that is being recorded.
-      try? FileManager.default.setAttributes(
-        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-        ofItemAtPath: temporary.path
-      )
-    #endif
     let written = data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) -> Bool in
       guard let base = bytes.baseAddress else { return true }
       var offset = 0

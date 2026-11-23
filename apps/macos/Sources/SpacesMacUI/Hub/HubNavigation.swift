@@ -32,9 +32,9 @@ public final class HubNavigation {
     public var symbol: String {
       switch self {
       case .home: "house"
-      case .meetings: "record.circle"
-      case .dictionary: "character.book.closed"
-      case .snippets: "text.quote"
+      case .meetings: "person.2"
+      case .dictionary: "book.closed"
+      case .snippets: "text.bubble"
       case .style: "textformat"
       }
     }

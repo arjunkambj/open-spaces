@@ -45,18 +45,17 @@ Knowing the design helps you judge what counts as a problem.
 - **Everything else stays on your device** as plain files in the app's data folder. The folder and its files can be opened by your user account only. They are not encrypted by Spaces. Anything that runs as you can read them, the same as your documents.
 - **Your audio and text go only** to OpenAI, or to the compatible server you chose, to be turned into text and notes. If you pick a Claude model, the text (never the audio) goes to Anthropic instead, with the key you saved for Anthropic. There is no Spaces server, no account, no analytics and no tracking.
 - **The Mac app makes one other kind of request:** about once a day it asks GitHub whether there is a newer version, and it downloads that version when you say yes. The request carries the app's name and version. It carries none of your data and nothing about your Mac. "Updates" below has the details.
-- **On a Mac, text is typed by pasting.** Spaces borrows the clipboard for a moment and then puts back what you had there. The text it places is marked so that clipboard-history apps know to skip it.
-- **On an iPhone, your text goes to the clipboard.** That copy stays on the phone (it is not handed to your other Apple devices) and iOS clears it after 10 minutes.
+- **Text is typed by pasting.** Spaces borrows the clipboard for a moment and then puts back what you had there. The text it places is marked so that clipboard-history apps know to skip it.
 
 ### Links
 
 Spaces answers links that start with `openspaces://`. Any web page, document or app can open such a link, so a link alone is never enough to make the app listen.
 
 - A link that only shows something (the main window, a meeting) is always followed.
-- The `spaces` tool, and the Spaces keyboard on iPhone, leave a **ticket** in the data folder before they send a link: a long random name that works once, for one minute. Only a program that can already write your Spaces data can leave one. A link with a valid ticket is followed at once.
+- The `spaces` tool leaves a **ticket** in the data folder before it sends a link: a long random name that works once, for one minute. Only a program that can already write your Spaces data can leave one. A link with a valid ticket is followed at once.
 - A link with no ticket that asks to **record a meeting** makes the app ask you first. There is one question at a time, and after a "no" it does not ask again for a minute.
-- A link with no ticket that asks to **start dictation** or **stop a recording** is not followed. (On iPhone, a dictation link shows the Dictate screen and waits for you to tap.)
-- On a Mac, a meeting that a link started always plays the start sound, also when sounds are switched off.
+- A link with no ticket that asks to **start dictation** or **stop a recording** is not followed.
+- A meeting that a link started always plays the start sound, also when sounds are switched off.
 - No link is followed before first-run setup is finished.
 
 ### The agent tool
@@ -96,5 +95,5 @@ An app you built yourself, with your own certificate or none, does not look for 
 ## Not security problems
 
 - How OpenAI or another AI provider stores what you send it. That is covered by their own terms.
-- Someone who already has full access to your unlocked Mac or iPhone reading your files.
+- Someone who already has full access to your unlocked Mac reading your files.
 - A program that already runs as you, with access to your files, leaving a ticket and starting a recording. Such a program can already read your data.

@@ -249,13 +249,9 @@ enum MeetingsLogic {
   }
 
   /// What the empty list says: what a recording gives, what is recorded, and the one rule.
-  static func firstMeetingHint(_ idiom: Spaces.Idiom) -> String {
-    let sound =
-      idiom == .phone
-      ? "An iPhone cannot record the sound of other apps, so put a call on speaker."
-      : "Both sides of a call are recorded: your microphone and the sound your Mac plays."
-    return "Record a meeting to get its transcript and notes. \(sound) Tell people before you record them."
-  }
+  static let firstMeetingHint =
+    "Record a meeting to get its transcript and notes. Both sides of a call are recorded: your "
+    + "microphone and the sound your Mac plays. Tell people before you record them."
 
   static func openActionItems(in meeting: Meeting) -> Int {
     meeting.notes?.actionItems.filter { !$0.done }.count ?? 0

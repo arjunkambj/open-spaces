@@ -4,7 +4,7 @@ import PackageDescription
 // Dictation and meeting engines.
 let package = Package(
   name: "SpacesEngine",
-  platforms: [.macOS("14.4"), .iOS(.v17)],
+  platforms: [.macOS("14.4")],
   products: [
     .library(name: "SpacesEngine", targets: ["SpacesEngine"])
   ],

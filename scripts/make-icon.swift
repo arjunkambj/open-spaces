@@ -8,7 +8,6 @@
 //   assets/icon-1024.png                 the macOS icon (rounded square on a clear background)
 //   assets/AppIcon.iconset/              the same at every size macOS asks for
 //   apps/macos/Resources/AppIcon.icns    made from the iconset with `iconutil`
-//   assets/icon-ios-1024.png             full square, no transparency (iOS adds the corners)
 //   assets/menubar-template.pdf          one-colour mark for the menu bar (vector)
 //   assets/menubar-template.png, @2x     the same as pixels, at 1x and 2x
 //
@@ -247,20 +246,6 @@ func drawMacIcon(in context: CGContext, size: CGFloat) {
   )
 }
 
-/// The iOS icon: the same artwork filling the whole square, fully opaque. iOS rounds the corners.
-func drawIOSIcon(in context: CGContext, size: CGFloat) {
-  let square = CGRect(x: 0, y: 0, width: size, height: size)
-  drawPlateColour(in: context, rect: square)
-  // A little smaller than the plate would suggest: the Home Screen crops closer than the Dock does.
-  drawMark(
-    .icon(pixels: size),
-    in: context,
-    center: CGPoint(x: square.midX, y: square.midY),
-    height: size * markOnPlate * 0.9,
-    ink: paper
-  )
-}
-
 /// The menu bar mark: black on clear, 16 points tall. macOS tints it to suit the menu bar.
 let menuBarHeight: CGFloat = 16
 let menuBarWidth: CGFloat = 22
@@ -277,13 +262,7 @@ func drawMenuBarMark(in context: CGContext, scale: CGFloat) {
 
 // MARK: - Files
 
-func bitmap(
-  width: Int,
-  height: Int,
-  opaque: Bool = false,
-  draw: (CGContext) -> Void
-) -> CGImage {
-  let alpha: CGImageAlphaInfo = opaque ? .noneSkipLast : .premultipliedLast
+func bitmap(width: Int, height: Int, draw: (CGContext) -> Void) -> CGImage {
   let context = CGContext(
     data: nil,
     width: width,
@@ -291,7 +270,7 @@ func bitmap(
     bitsPerComponent: 8,
     bytesPerRow: 0,
     space: colorSpace,
-    bitmapInfo: alpha.rawValue
+    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
   )!
   context.interpolationQuality = .high
   context.setShouldAntialias(true)
@@ -299,8 +278,8 @@ func bitmap(
   return context.makeImage()!
 }
 
-func square(pixels: Int, opaque: Bool = false, draw: (CGContext, CGFloat) -> Void) -> CGImage {
-  bitmap(width: pixels, height: pixels, opaque: opaque) { draw($0, CGFloat(pixels)) }
+func square(pixels: Int, draw: (CGContext, CGFloat) -> Void) -> CGImage {
+  bitmap(width: pixels, height: pixels) { draw($0, CGFloat(pixels)) }
 }
 
 func writePNG(_ image: CGImage, to url: URL) throws {
@@ -360,11 +339,6 @@ do {
   }
   try? files.removeItem(at: icns)
   try run("/usr/bin/iconutil", ["--convert", "icns", iconset.path, "--output", icns.path])
-
-  try writePNG(
-    square(pixels: 1024, opaque: true, draw: drawIOSIcon),
-    to: assets.appendingPathComponent("icon-ios-1024.png")
-  )
 
   try writePDF(
     width: menuBarWidth,

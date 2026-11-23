@@ -98,7 +98,6 @@ enum FileAccess {
       close(descriptor)
       if !renamed { unlink(temporary.path) }
     }
-    protect(temporary)
     let written = data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) -> Bool in
       var offset = 0
       while offset < bytes.count {
@@ -149,7 +148,6 @@ enum FileAccess {
         "The folder \(url.lastPathComponent) could not be created. \(error.localizedDescription)"
       )
     }
-    protect(url)
   }
 
   /// Makes the folder at `url` one that only its owner can open (mode 0700), when it is not
@@ -208,17 +206,6 @@ enum FileAccess {
 
   /// Hidden files with this prefix are writes in progress.
   static let temporaryPrefix = ".tmp-"
-
-  /// On iOS, keeps the item readable after the first unlock following a restart, so a
-  /// recording that carries on with the screen locked can still be saved. macOS needs nothing.
-  static func protect(_ url: URL) {
-    #if !os(macOS)
-      try? FileManager.default.setAttributes(
-        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-        ofItemAtPath: url.path
-      )
-    #endif
-  }
 
   /// The system's reason for the last failed call, as a sentence.
   static func reason() -> String {

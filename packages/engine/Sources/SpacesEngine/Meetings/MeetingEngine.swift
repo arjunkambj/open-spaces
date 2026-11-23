@@ -43,17 +43,6 @@ public final class MeetingEngine {
   /// The shortest time between two saves of the transcript while recording.
   private static let liveSaveInterval: Duration = .seconds(5)
 
-  /// Whether this kind of device can record what other apps play: a Mac can, an iPhone or
-  /// iPad cannot. Where it cannot, the engine does not ask for it, and has nothing to tell
-  /// the user about it.
-  private static var recordsSystemAudio: Bool {
-    #if os(macOS)
-      true
-    #else
-      false
-    #endif
-  }
-
   /// A meeting the engine is working on, as it last saw it, and where its audio is.
   private struct Held {
     var meeting: Meeting
@@ -379,8 +368,7 @@ public final class MeetingEngine {
         chunkSeconds: MeetingEngine.chunkSeconds
       )
     }
-    // Where system audio cannot be recorded at all there is nothing to try, and nothing to tell.
-    guard settings.meetings.captureSystemAudio, MeetingEngine.recordsSystemAudio else {
+    guard settings.meetings.captureSystemAudio else {
       return try await capture.start(request([.microphone]))
     }
     do {

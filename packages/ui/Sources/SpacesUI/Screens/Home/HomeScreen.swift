@@ -6,7 +6,6 @@ import SwiftUI
 /// Reads `AppModel` from the environment.
 public struct HomeScreen: View {
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   @State private var query: String
   @State private var player: HomeAudioPlayer
@@ -35,8 +34,8 @@ public struct HomeScreen: View {
   }
 
   public var body: some View {
-    Page(title: HomeText.title(idiom)) {
-      if idiom == .mac, model.isLoaded, !model.dictations.isEmpty {
+    Page(title: "Home") {
+      if model.isLoaded, !model.dictations.isEmpty {
         SearchField(text: $query, placeholder: "Search your dictations")
       }
     } content: {
@@ -94,9 +93,6 @@ public struct HomeScreen: View {
     } else {
       let matching = HomeHistory.filter(model.dictations, query: query)
       let days = HomeHistory.days(Array(matching.prefix(limit)))
-      if idiom == .phone {
-        SearchField(text: $query, placeholder: "Search your dictations")
-      }
       if days.isEmpty {
         EmptyState(
           "Nothing matches “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”",
@@ -165,9 +161,6 @@ public struct HomeScreen: View {
   }
 
   private var firstDictationHint: String {
-    if idiom == .phone {
-      return "What you dictate shows up here."
-    }
     let keys = HomeText.keyLabels(model.settings.shortcut(for: .pushToTalk))
     if keys.isEmpty {
       return "Choose a push-to-talk shortcut in Settings, then hold it and speak. What you say shows up here."
@@ -179,7 +172,7 @@ public struct HomeScreen: View {
   // MARK: - Actions
 
   private func copy(_ dictation: Dictation) {
-    ScreenClipboard.copy(dictation.text, as: .personal)
+    ScreenClipboard.copy(dictation.text)
     toast = Toast("Copied")
   }
 
@@ -213,7 +206,7 @@ public struct HomeScreen: View {
       // never typed somewhere. When it fails again, the row goes on saying why.
       let outcome = HomeRetry(await model.dictation.retry(dictation.id, insert: false))
       retryingID = nil
-      if let text = outcome.textToCopy { ScreenClipboard.copy(text, as: .personal) }
+      if let text = outcome.textToCopy { ScreenClipboard.copy(text) }
       toast = outcome.toast
     }
   }
@@ -245,30 +238,25 @@ private struct HomeSummary: View {
   let showAgents: (() -> Void)?
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   var body: some View {
     let numbers = model.isLoaded ? HomeText.summary(model.stats) : nil
-    if idiom == .phone {
-      if let numbers { Text(numbers).spacesText(.body, color: Spaces.Color.textSecondary) }
-    } else {
-      VStack(alignment: .leading, spacing: Spaces.Space.s) {
-        // Side by side when they fit; the numbers go under the hint in a narrow window.
-        ViewThatFits(in: .horizontal) {
-          HStack(alignment: .center, spacing: Spaces.Space.l) {
-            hint
-            Spacer(minLength: Spaces.Space.l)
-            if let numbers {
-              Text(numbers).spacesText(.caption, color: Spaces.Color.textTertiary).fixedSize()
-            }
-          }
-          VStack(alignment: .leading, spacing: Spaces.Space.s) {
-            hint
-            if let numbers { Text(numbers).spacesText(.caption, color: Spaces.Color.textTertiary) }
+    VStack(alignment: .leading, spacing: Spaces.Space.s) {
+      // Side by side when they fit; the numbers go under the hint in a narrow window.
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .center, spacing: Spaces.Space.l) {
+          hint
+          Spacer(minLength: Spaces.Space.l)
+          if let numbers {
+            Text(numbers).spacesText(.caption, color: Spaces.Color.textTertiary).fixedSize()
           }
         }
-        HomeAgentLine(sessions: model.agentSessions, open: showAgents)
+        VStack(alignment: .leading, spacing: Spaces.Space.s) {
+          hint
+          if let numbers { Text(numbers).spacesText(.caption, color: Spaces.Color.textTertiary) }
+        }
       }
+      HomeAgentLine(sessions: model.agentSessions, open: showAgents)
     }
   }
 

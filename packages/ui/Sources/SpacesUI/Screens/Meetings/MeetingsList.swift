@@ -10,7 +10,6 @@ struct MeetingsList: View {
   private let preset: MeetingsPreset
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   @State private var query: String
   /// The meetings the search found. `nil` while nothing is being searched for.
@@ -35,7 +34,7 @@ struct MeetingsList: View {
     let past = pastMeetings(liveID: live?.meetingID)
     let searching = MeetingSearchTrigger(query: query, round: searchRound)
     Page(title: "Meetings") {
-      if idiom == .mac, hasPastMeetings(liveID: live?.meetingID) {
+      if hasPastMeetings(liveID: live?.meetingID) {
         SearchField(text: $query, placeholder: "Search meetings")
       }
       if live == nil { startButton(.primary) }
@@ -49,9 +48,6 @@ struct MeetingsList: View {
         } onStop: {
           Task { await model.meetings.stop() }
         }
-      }
-      if idiom == .phone, hasPastMeetings(liveID: live?.meetingID) {
-        SearchField(text: $query, placeholder: "Search meetings")
       }
       if !model.isLoaded {
         MeetingsLoading()
@@ -140,7 +136,7 @@ struct MeetingsList: View {
     Button(action: start) {
       Label("Start recording", systemImage: "record.circle")
     }
-    .buttonStyle(.spaces(kind, size: idiom == .phone && kind == .primary ? .small : .regular))
+    .buttonStyle(.spaces(kind))
     // Never shortened to make room for the search field beside it.
     .fixedSize()
     .disabled(isStarting)
@@ -232,7 +228,7 @@ struct MeetingsList: View {
           .buttonStyle(.spaces(.tertiary))
       }
     } else if !isLive {
-      EmptyState("No meetings yet", message: MeetingsLogic.firstMeetingHint(idiom)) {
+      EmptyState("No meetings yet", message: MeetingsLogic.firstMeetingHint) {
         SymbolTile("waveform.and.mic")
       }
     }
@@ -250,7 +246,6 @@ private struct MeetingRow: View {
   let onDelete: () -> Void
   let onFix: (MeetingProblem.Remedy) -> Void
 
-  @Environment(\.spacesIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
   @State private var isHovered = false
   /// Whether the keyboard is on the row, or on one of its actions.
@@ -258,43 +253,33 @@ private struct MeetingRow: View {
   @FocusState private var actionIsFocused: Bool
 
   var body: some View {
-    let phone = idiom == .phone
     let hovered = isHovered || simulatedHover
     let problem = MeetingsLogic.problem(of: meeting, phase: phase)
     HStack(alignment: .center, spacing: Spaces.Space.m) {
       VStack(alignment: .leading, spacing: Spaces.Space.xxs) {
         Text(meeting.title)
           .spacesText(.bodyStrong)
-          .lineLimit(phone ? 2 : 1)
+          .lineLimit(1)
         Text(facts)
           .spacesText(.caption, color: Spaces.Color.textTertiary)
           .lineLimit(1)
         about(problem)
-        if phone, problem != nil || !meeting.tags.isEmpty {
-          MeetingFlow {
-            badge(problem)
-            tags
-          }
-          .padding(.top, Spaces.Space.xxs)
-        }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      if !phone {
-        badge(problem).layoutPriority(1)
-      }
-      if !phone, let problem, let remedy = problem.remedy, problem.isSevere || phase == .interrupted {
+      badge(problem).layoutPriority(1)
+      if let problem, let remedy = problem.remedy, problem.isSevere || phase == .interrupted {
         Button(problem.actionTitle) { onFix(remedy) }
           .buttonStyle(.spaces(.tertiary, size: .small))
       }
-      let showsActions = phone || hovered || isFocused || actionIsFocused
+      let showsActions = hovered || isFocused || actionIsFocused
       // The tags rest where the actions show, as the app's name does on the history list.
       ZStack(alignment: .trailing) {
-        if !phone { tags.opacity(showsActions ? 0 : 1) }
+        tags.opacity(showsActions ? 0 : 1)
         actions(problem)
           // Tab reaches the actions even while they are unseen, so they show for the keyboard too.
           .focused($actionIsFocused)
           .opacity(showsActions ? 1 : 0)
-          .padding(.trailing, phone ? -Spaces.Space.s : -Spaces.Space.xs)
+          .padding(.trailing, -Spaces.Space.xs)
       }
     }
     .padding(.vertical, Spaces.Space.m)
@@ -318,7 +303,7 @@ private struct MeetingRow: View {
 
   private func actions(_ problem: MeetingProblem?) -> some View {
     HStack(spacing: Spaces.Space.xxs) {
-      if idiom == .mac { IconButton("doc.on.doc", label: "Copy", action: onCopy) }
+      IconButton("doc.on.doc", label: "Copy", action: onCopy)
       OverflowMenu(label: "More for \(meeting.title)") {
         Button("Open", action: onOpen)
         if let problem, let remedy = problem.remedy { Button(problem.actionTitle) { onFix(remedy) } }
@@ -360,11 +345,11 @@ private struct MeetingRow: View {
     } else if let problem, problem.isSevere || phase == .interrupted {
       Text(problem.title)
         .spacesText(.caption)
-        .lineLimit(idiom == .phone ? 2 : 1)
+        .lineLimit(1)
     } else if let preview = MeetingsLogic.preview(of: meeting) {
       Text(preview)
         .spacesText(.caption)
-        .lineLimit(idiom == .phone ? 2 : 1)
+        .lineLimit(1)
     }
   }
 
@@ -393,11 +378,9 @@ private struct MeetingLiveCard: View {
   let onOpen: () -> Void
   let onStop: () -> Void
 
-  @Environment(\.spacesIdiom) private var idiom
   @State private var isStopping = false
 
   var body: some View {
-    let phone = idiom == .phone
     Card(padding: 0) {
       VStack(alignment: .leading, spacing: Spaces.Space.m) {
         HStack(alignment: .center, spacing: Spaces.Space.m) {
@@ -409,13 +392,12 @@ private struct MeetingLiveCard: View {
           }
           .frame(maxWidth: .infinity, alignment: .leading)
           if showsLevel { MeetingLevelMeter() }
-          if !phone { stopButton(fullWidth: false) }
+          stopButton
         }
         Hairline()
         MeetingLiveLines(segments: live.segments)
-        if phone { stopButton(fullWidth: true) }
       }
-      .padding(phone ? Spaces.Space.l : 20)
+      .padding(20)
     }
     .contentShape(Rectangle())
     .onTapGesture(perform: onOpen)
@@ -423,14 +405,14 @@ private struct MeetingLiveCard: View {
     .accessibilityAction(named: "Open this meeting", onOpen)
   }
 
-  private func stopButton(fullWidth: Bool) -> some View {
+  private var stopButton: some View {
     Button {
       isStopping = true
       onStop()
     } label: {
       Label("Stop", systemImage: "stop.fill")
     }
-    .buttonStyle(.spaces(.primary, fullWidth: fullWidth))
+    .buttonStyle(.spaces(.primary))
     .disabled(isStopping)
     .accessibilityLabel("Stop recording")
   }
@@ -439,7 +421,6 @@ private struct MeetingLiveCard: View {
 /// The newest lines of a live transcript, kept at the bottom as more arrive.
 private struct MeetingLiveLines: View {
   let segments: [TranscriptSegment]
-  @Environment(\.spacesIdiom) private var idiom
 
   var body: some View {
     let turns = MeetingsLogic.turns(segments).suffix(4)
@@ -452,21 +433,14 @@ private struct MeetingLiveLines: View {
           let name = Text(turn.speaker.label)
             .foregroundStyle(turn.speaker == .me ? Spaces.Color.accent : Spaces.Color.textSecondary)
           let words = turn.segments.map(\.text).joined(separator: " ")
-          if idiom == .phone {
-            // No room for a column of names: the name leads the line.
-            Text("\(name.fontWeight(.medium))  \(words)")
+          HStack(alignment: .firstTextBaseline, spacing: Spaces.Space.m) {
+            name
+              .spacesText(.captionStrong)
+              .lineLimit(1)
+              .frame(width: MeetingsMetrics.speakerColumn, alignment: .leading)
+            Text(words)
               .spacesText(.body)
               .frame(maxWidth: .infinity, alignment: .leading)
-          } else {
-            HStack(alignment: .firstTextBaseline, spacing: Spaces.Space.m) {
-              name
-                .spacesText(.captionStrong)
-                .lineLimit(1)
-                .frame(width: MeetingsMetrics.speakerColumn, alignment: .leading)
-              Text(words)
-                .spacesText(.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
           }
         }
       }
@@ -474,7 +448,7 @@ private struct MeetingLiveLines: View {
     }
     .defaultScrollAnchor(.bottom)
     .scrollDisabled(true)
-    .frame(height: MeetingsMetrics.liveLinesHeight(idiom))
+    .frame(height: MeetingsMetrics.liveLinesHeight)
     // Older lines fade out at the top instead of being cut through.
     .mask {
       LinearGradient(

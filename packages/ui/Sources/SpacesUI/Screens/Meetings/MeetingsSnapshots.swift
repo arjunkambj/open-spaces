@@ -11,25 +11,14 @@ enum MeetingsSnapshots {
   @MainActor private static var list: [SnapshotCase] {
     [
       SnapshotCase("meetings", model: { model() }) { screen() },
-      SnapshotCase("meetings-phone", canvas: .phone, model: { model() }) { screen() },
       SnapshotCase("meetings-list", model: { model(MeetingSamples.many) }) {
         screen(preset: MeetingsPreset())
       },
-      SnapshotCase("meetings-list-phone", canvas: .phone, model: { model(MeetingSamples.many) }) {
-        screen(preset: MeetingsPreset())
-      },
       SnapshotCase("meetings-empty", model: { model([]) }) { screen() },
-      SnapshotCase("meetings-empty-phone", canvas: .phone, model: { model([]) }) { screen() },
       SnapshotCase("meetings-live", model: { recording() }) { screen() },
-      SnapshotCase("meetings-live-phone", canvas: .phone, model: { recording() }) { screen() },
       SnapshotCase("meetings-live-quiet", model: { recording(heard: false) }) { screen() },
       // The Mac could not record what it plays: the engine says so while the meeting goes on.
       SnapshotCase("meetings-live-microphone-only", model: { recording(microphoneOnly: true) }) { screen() },
-      SnapshotCase(
-        "meetings-live-microphone-only-phone",
-        canvas: .phone,
-        model: { recording(microphoneOnly: true) }
-      ) { screen() },
       SnapshotCase("meetings-search", model: { model(MeetingSamples.many) }) {
         screen(preset: MeetingsPreset(query: "billing"))
       },
@@ -39,15 +28,7 @@ enum MeetingsSnapshots {
       SnapshotCase("meetings-delete", model: { model() }) {
         screen(preset: MeetingsPreset(confirmsDelete: true))
       },
-      SnapshotCase("meetings-delete-phone", canvas: .phone, model: { model() }) {
-        screen(preset: MeetingsPreset(confirmsDelete: true))
-      },
       SnapshotCase("meetings-no-microphone", model: { model(hasAPIKey: false, microphone: .denied) }) {
-        screen(
-          preset: MeetingsPreset(startFailure: .permissionDenied(.microphone))
-        )
-      },
-      SnapshotCase("meetings-no-microphone-phone", canvas: .phone, model: { model(microphone: .denied) }) {
         screen(
           preset: MeetingsPreset(startFailure: .permissionDenied(.microphone))
         )
@@ -59,37 +40,21 @@ enum MeetingsSnapshots {
     let sync = MeetingSamples.syncID
     return [
       SnapshotCase("meeting-notes", model: { model() }) { screen(sync) },
-      SnapshotCase("meeting-notes-phone", canvas: .phone, model: { model() }) { screen(sync) },
       // Tall, so the whole Notes tab shows: the checklist and the questions under it.
       SnapshotCase("meeting-asked", canvas: .custom(width: 880, height: 1_500), model: { model() }) {
         screen(sync, preset: MeetingsPreset(questions: MeetingSamples.questions))
           .background(Spaces.Color.panel)
       },
-      SnapshotCase("meeting-checklist-phone", canvas: .phone, model: { model(MeetingSamples.checklist) }) {
-        screen(MeetingSamples.checklistID, preset: MeetingsPreset(questions: MeetingSamples.questions))
-      },
       SnapshotCase("meeting-transcript", model: { model() }) {
-        screen(sync, preset: MeetingsPreset(tab: .transcript))
-      },
-      SnapshotCase("meeting-transcript-phone", canvas: .phone, model: { model() }) {
         screen(sync, preset: MeetingsPreset(tab: .transcript))
       },
       SnapshotCase("meeting-rename-speaker", model: { model() }) {
         screen(sync, preset: MeetingsPreset(tab: .transcript, renamesSpeaker: .unnamed(3)))
       },
-      SnapshotCase("meeting-rename-speaker-phone", canvas: .phone, model: { model() }) {
-        screen(sync, preset: MeetingsPreset(tab: .transcript, renamesSpeaker: .named("Priya")))
-      },
       SnapshotCase("meeting-transcript-find", model: { model() }) {
         screen(sync, preset: MeetingsPreset(tab: .transcript, find: "billing"))
       },
-      SnapshotCase("meeting-transcript-find-phone", canvas: .phone, model: { model() }) {
-        screen(sync, preset: MeetingsPreset(tab: .transcript, find: "billing"))
-      },
       SnapshotCase("meeting-my-notes", model: { model() }) {
-        screen(sync, preset: MeetingsPreset(tab: .myNotes))
-      },
-      SnapshotCase("meeting-my-notes-phone", canvas: .phone, model: { model() }) {
         screen(sync, preset: MeetingsPreset(tab: .myNotes))
       },
       SnapshotCase("meeting-tags", model: { model() }) {
@@ -101,19 +66,10 @@ enum MeetingsSnapshots {
       SnapshotCase("meeting-long", model: { model(MeetingSamples.many) }) {
         screen(MeetingSamples.longID)
       },
-      SnapshotCase("meeting-long-phone", canvas: .phone, model: { model(MeetingSamples.many) }) {
-        screen(MeetingSamples.longID)
-      },
       SnapshotCase("meeting-processing", model: { model(MeetingSamples.many) }) {
         screen(MeetingSamples.processingID)
       },
-      SnapshotCase("meeting-processing-phone", canvas: .phone, model: { model(MeetingSamples.many) }) {
-        screen(MeetingSamples.processingID)
-      },
       SnapshotCase("meeting-failed", model: { model(MeetingSamples.many) }) {
-        screen(MeetingSamples.failedID)
-      },
-      SnapshotCase("meeting-failed-phone", canvas: .phone, model: { model(MeetingSamples.many) }) {
         screen(MeetingSamples.failedID)
       },
       SnapshotCase("meeting-part-missing", model: { model(MeetingSamples.many) }) {
@@ -123,17 +79,11 @@ enum MeetingsSnapshots {
       SnapshotCase("meeting-part-lost", model: { model(MeetingSamples.many) }) {
         screen(MeetingSamples.lostID)
       },
-      SnapshotCase("meeting-part-lost-phone", canvas: .phone, model: { model(MeetingSamples.many) }) {
-        screen(MeetingSamples.lostID)
-      },
       SnapshotCase("meeting-no-notes", model: { model(MeetingSamples.many) }) {
         screen(MeetingSamples.noNotesID)
       },
       SnapshotCase("meeting-gone", model: { model() }) { screen(UUID()) },
       SnapshotCase("meeting-live", model: { recording() }) { MeetingLiveSnapshot(tab: .transcript) },
-      SnapshotCase("meeting-live-phone", canvas: .phone, model: { recording() }) {
-        MeetingLiveSnapshot(tab: .transcript)
-      },
       SnapshotCase("meeting-live-notes", model: { recording(heard: false) }) {
         MeetingLiveSnapshot(tab: .notes)
       },

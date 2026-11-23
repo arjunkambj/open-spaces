@@ -11,7 +11,6 @@ struct GeneralSettings: View {
   var pill: AnyView?
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
   @State private var devices: [AudioDevice] = []
 
   var body: some View {
@@ -66,20 +65,18 @@ struct GeneralSettings: View {
           description: "A soft sound when dictation starts and stops.",
           isOn: model.settingBinding(\.playSounds)
         )
-        if idiom == .mac {
+        SettingsDivider()
+        ToggleRow(
+          "Show the floating pill",
+          description: "A small bar at the edge of the screen. It shows when Spaces is listening.",
+          isOn: model.settingBinding(\.showPill)
+        )
+        if let pill {
           SettingsDivider()
-          ToggleRow(
-            "Show the floating pill",
-            description: "A small bar at the edge of the screen. It shows when Spaces is listening.",
-            isOn: model.settingBinding(\.showPill)
-          )
-          if let pill {
-            SettingsDivider()
-            pill
-          }
-          SettingsDivider()
-          ToggleRow("Open at login", isOn: model.settingBinding(\.launchAtLogin))
+          pill
         }
+        SettingsDivider()
+        ToggleRow("Open at login", isOn: model.settingBinding(\.launchAtLogin))
         if let appearance {
           SettingsDivider()
           appearance
@@ -118,7 +115,6 @@ struct MeetingSettingsSection: View {
   let open: (SettingsSection) -> Void
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
   @State private var computerAudioIsBlocked = false
   /// Calendar access was refused: the calendar toggle says how to allow it.
   @State private var calendarIsBlocked = false
@@ -126,15 +122,13 @@ struct MeetingSettingsSection: View {
   var body: some View {
     PageSection("Recording") {
       Card(padding: 0) {
-        if idiom == .mac {
-          ToggleRow(
-            "Record computer audio",
-            description:
-              "Records the other side of a call too, not only your microphone.",
-            isOn: model.settingBinding(\.meetings.captureSystemAudio)
-          )
-          SettingsDivider()
-        }
+        ToggleRow(
+          "Record computer audio",
+          description:
+            "Records the other side of a call too, not only your microphone.",
+          isOn: model.settingBinding(\.meetings.captureSystemAudio)
+        )
+        SettingsDivider()
         if model.calendar != nil {
           ToggleRow(
             "Offer to record calendar calls",
@@ -163,7 +157,7 @@ struct MeetingSettingsSection: View {
         )
       }
     }
-    if idiom == .mac, model.settings.meetings.captureSystemAudio, computerAudioIsBlocked {
+    if model.settings.meetings.captureSystemAudio, computerAudioIsBlocked {
       Banner(
         .warning,
         title: "Computer audio is not allowed yet",
@@ -217,7 +211,6 @@ struct OpenAISettings: View {
   @Binding var dialog: SettingsDialog?
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
   @State private var typingTranscriptionModel = false
   @State private var typingTextModel = false
 
@@ -254,7 +247,7 @@ struct OpenAISettings: View {
               .buttonStyle(.spaces(.ghost, size: .small))
           }
           Spacer(minLength: Spaces.Space.s)
-          if idiom == .mac, server.customHost == nil { SetupLink("Get a key", url: SetupLinks.openAIKeys) }
+          if server.customHost == nil { SetupLink("Get a key", url: SetupLinks.openAIKeys) }
         }
         .padding(.horizontal, SetupMetrics.rowInset)
         .padding(.top, Spaces.Space.m)
@@ -266,7 +259,6 @@ struct OpenAISettings: View {
           "You pay OpenAI directly for what you use. Spaces adds nothing on top.",
           style: .caption
         )
-        if idiom == .phone { SetupLink("Get a key", url: SetupLinks.openAIKeys) }
       }
     }
     PageSection("Claude") {
@@ -295,7 +287,7 @@ struct OpenAISettings: View {
               .buttonStyle(.spaces(.ghost, size: .small))
           }
           Spacer(minLength: Spaces.Space.s)
-          if idiom == .mac { SetupLink("Get a key", url: SetupLinks.anthropicKeys) }
+          SetupLink("Get a key", url: SetupLinks.anthropicKeys)
         }
         .padding(.horizontal, SetupMetrics.rowInset)
         .padding(.top, Spaces.Space.m)
@@ -306,7 +298,6 @@ struct OpenAISettings: View {
           + "write meeting notes. OpenAI still turns your voice into text. You pay Anthropic directly.",
         style: .caption
       )
-      if idiom == .phone { SetupLink("Get a key", url: SetupLinks.anthropicKeys) }
     }
     PageSection("Models") {
       Card(padding: 0) {
@@ -566,7 +557,6 @@ struct PrivacySettings: View {
   @Binding var dialog: SettingsDialog?
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   var body: some View {
     SetupParagraph(PrivacyCopy.promise(customServer: model.settings.apiBaseURL != nil))
@@ -601,7 +591,7 @@ struct PrivacySettings: View {
         }
       }
     }
-    if idiom == .mac, let folder = model.host.dataFolder {
+    if let folder = model.host.dataFolder {
       PageSection("Your files") {
         Card(padding: 0) {
           SettingRow("Data folder", description: PrivacyCopy.shortPath(folder)) {
@@ -670,7 +660,7 @@ struct AboutSettings: View {
     Wordmark(size: 24)
     Card(padding: 0) {
       SettingRow("Version \(AppVersion.text)", description: AboutCopy.tagline) {
-        // Only where the app updates itself: on iPhone the App Store does it.
+        // Only where the app updates itself.
         if let check = model.host.checkForUpdates {
           Button("Check for updates", action: check)
             .buttonStyle(.spaces(.secondary, size: .small))

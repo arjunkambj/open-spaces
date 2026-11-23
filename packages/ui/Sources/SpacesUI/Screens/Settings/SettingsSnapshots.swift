@@ -11,10 +11,8 @@ enum SettingsSnapshots {
     var cases: [SnapshotCase] = []
     for section in SettingsSection.allCases {
       cases.append(mac("settings-\(section.rawValue)", SettingsPreview(section: section)))
-      cases.append(phone("settings-\(section.rawValue)-phone", SettingsPreview(section: section)))
     }
     cases += [
-      phone("settings-list-phone", SettingsPreview()),
       mac(
         "settings-agents-none",
         SettingsPreview(section: .agents),
@@ -58,18 +56,6 @@ enum SettingsSnapshots {
         height: 860,
         model: { SetupSnapshotModels.make(settings: { $0.apiBaseURL = "http://models.example.com/v1" }) }
       ),
-      phone(
-        "settings-openai-not-private-phone",
-        SettingsPreview(section: .openAI),
-        height: 1_180,
-        model: {
-          SetupSnapshotModels.make(
-            keyHost: APIServer.openAIHost,
-            onPhone: true,
-            settings: { $0.apiBaseURL = "http://192.168.1.20:8080/v1" }
-          )
-        }
-      ),
       mac(
         "settings-key-dialog-server",
         SettingsPreview(section: .openAI, dialog: .apiKey),
@@ -89,13 +75,8 @@ enum SettingsSnapshots {
           keyError: APIKeyEntry.message(for: SpacesError.invalidAPIKey)
         )
       ),
-      phone("settings-key-dialog-phone", SettingsPreview(section: .openAI, dialog: .apiKey)),
       mac("settings-remove-key-dialog", SettingsPreview(section: .openAI, dialog: .removeKey)),
       mac("settings-delete-history-dialog", SettingsPreview(section: .privacy, dialog: .deleteHistory)),
-      phone(
-        "settings-delete-history-dialog-phone",
-        SettingsPreview(section: .privacy, dialog: .deleteHistory)
-      ),
       mac(
         "settings-permissions-missing",
         SettingsPreview(section: .permissions),
@@ -119,22 +100,6 @@ enum SettingsSnapshots {
           )
         }
       ),
-      // No iPhone has the spaces program. This one shows that the code wraps in a narrow box.
-      phone(
-        "settings-agents-narrow",
-        SettingsPreview(section: .agents),
-        model: { SetupSnapshotModels.make() }
-      ),
-      phone(
-        "settings-agents-iphone",
-        SettingsPreview(section: .agents),
-        model: { SetupSnapshotModels.make(onPhone: true) }
-      ),
-      phone(
-        "settings-permissions-iphone",
-        SettingsPreview(section: .permissions),
-        model: { SetupSnapshotModels.make(permissions: [:], onPhone: true) }
-      ),
     ]
     return cases
   }
@@ -150,28 +115,6 @@ enum SettingsSnapshots {
       SettingsScreen(shortcuts: AnyView(ShortcutsStandIn()), onClose: {}, preview: preview)
         .frame(width: card.width, height: height)
         .modalSurface()
-    }
-  }
-
-  /// - height: a taller screen than an iPhone's, to show a section down to its foot.
-  @MainActor private static func phone(
-    _ name: String,
-    _ preview: SettingsPreview,
-    height: CGFloat? = nil,
-    model: @escaping @MainActor () -> AppModel = { SetupSnapshotModels.make(onPhone: true) }
-  ) -> SnapshotCase {
-    let canvas = height.map {
-      SnapshotCase.Canvas.custom(width: SnapshotCase.Canvas.phone.size.width, height: $0)
-    }
-    return SnapshotCase(name, canvas: canvas ?? .phone, model: model) {
-      if canvas == nil {
-        SettingsScreen(onClose: {}, preview: preview)
-      } else {
-        // A custom canvas is drawn as a Mac's: say it is a phone, on the phone's background.
-        SettingsScreen(onClose: {}, preview: preview)
-          .environment(\.spacesIdiom, .phone)
-          .background(Spaces.Color.panel)
-      }
     }
   }
 }
@@ -219,7 +162,6 @@ enum SetupSnapshotModels {
     permissions: [Permission: PermissionStatus] = [
       .microphone: .granted, .accessibility: .granted, .systemAudio: .granted,
     ],
-    onPhone: Bool = false,
     agents: [AgentSession] = SampleData.agents(),
     settings change: (inout SpacesDomain.Settings) -> Void = { _ in }
   ) -> AppModel {
@@ -228,23 +170,17 @@ enum SetupSnapshotModels {
       onboardedAt: onboarded ? Date().addingTimeInterval(-20 * 86_400) : nil
     )
     change(&settings)
-    let devices =
-      onPhone
-      ? [AudioDevice(id: "iphone", name: "iPhone Microphone", isDefault: true)]
-      : [
-        AudioDevice(id: "built-in", name: "MacBook Pro Microphone", isDefault: true),
-        AudioDevice(id: "headset", name: "Studio Headset"),
-      ]
-    let host =
-      onPhone
-      ? HostActions()
-      : HostActions(
-        agentToolPath: "/Applications/Spaces.app/Contents/MacOS/spaces",
-        dataFolder: URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-          .appendingPathComponent("Library/Application Support/Spaces", isDirectory: true),
-        // So the About section shows its button in a picture. It does nothing here.
-        checkForUpdates: {}
-      )
+    let devices = [
+      AudioDevice(id: "built-in", name: "MacBook Pro Microphone", isDefault: true),
+      AudioDevice(id: "headset", name: "Studio Headset"),
+    ]
+    let host = HostActions(
+      agentToolPath: "/Applications/Spaces.app/Contents/MacOS/spaces",
+      dataFolder: URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        .appendingPathComponent("Library/Application Support/Spaces", isDirectory: true),
+      // So the About section shows its button in a picture. It does nothing here.
+      checkForUpdates: {}
+    )
     return AppModel(
       AppModel.Dependencies(
         library: InMemoryLibrary(
@@ -264,10 +200,10 @@ enum SetupSnapshotModels {
         languageModel: FakeLanguageModel(text: "This is a demo dictation."),
         target: FakeTextTarget(),
         permissions: FakePermissions(
-          needed: onPhone ? [.microphone] : [.microphone, .accessibility, .systemAudio],
+          needed: [.microphone, .accessibility, .systemAudio],
           statuses: permissions
         ),
-        calendar: onPhone ? nil : FakeMeetingCalendar(),
+        calendar: FakeMeetingCalendar(),
         host: host,
         checkAPIKey: { key in
           if !key.hasPrefix("sk-") { throw SpacesError.invalidAPIKey }

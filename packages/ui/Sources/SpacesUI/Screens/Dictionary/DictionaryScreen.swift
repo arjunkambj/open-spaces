@@ -5,7 +5,6 @@ import SwiftUI
 /// The personal dictionary: words and replacements. Reads `AppModel` from the environment.
 public struct DictionaryScreen: View {
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   @State private var query: String
   @State private var editor: DictionaryEditor
@@ -37,14 +36,10 @@ public struct DictionaryScreen: View {
       title: "Dictionary",
       subtitle: "Teach Spaces your names and special words, so it spells them your way."
     ) {
-      if idiom == .mac && showsSearch {
+      if showsSearch {
         SearchField(text: $query, placeholder: "Search words")
       }
-      if idiom == .phone {
-        IconButton("plus", label: "Add word") { open(DictionaryEditor()) }
-      } else {
-        Button("Add word") { open(DictionaryEditor()) }.buttonStyle(.spaces(.primary))
-      }
+      Button("Add word") { open(DictionaryEditor()) }.buttonStyle(.spaces(.primary))
     } content: {
       if !model.isLoaded {
         ScreenLoading("Loading your words…")
@@ -90,9 +85,6 @@ public struct DictionaryScreen: View {
 
   @ViewBuilder private var list: some View {
     let words = DictionaryRules.filter(model.words, query: query)
-    if idiom == .phone && showsSearch {
-      SearchField(text: $query, placeholder: "Search words")
-    }
     if words.isEmpty {
       EmptyState(
         "Nothing matches “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”",
@@ -107,23 +99,8 @@ public struct DictionaryScreen: View {
         CardList(words) { word in
           ListRow(word.text, subtitle: word.replaces.map { "Replaces “\($0)”" }) {
           } hoverActions: {
-            if idiom == .phone {
-              OverflowMenu(label: "Actions for \(word.text)") {
-                Button {
-                  open(DictionaryEditor(word))
-                } label: {
-                  Label("Edit", systemImage: "pencil")
-                }
-                Button(role: .destructive) {
-                  askToDelete(word)
-                } label: {
-                  Label("Delete", systemImage: "trash")
-                }
-              }
-            } else {
-              IconButton("pencil", label: "Edit \(word.text)") { open(DictionaryEditor(word)) }
-              IconButton("trash", label: "Delete \(word.text)") { askToDelete(word) }
-            }
+            IconButton("pencil", label: "Edit \(word.text)") { open(DictionaryEditor(word)) }
+            IconButton("trash", label: "Delete \(word.text)") { askToDelete(word) }
           }
           .onTap { open(DictionaryEditor(word)) }
           .lineLimit(2)
@@ -146,7 +123,7 @@ public struct DictionaryScreen: View {
       message:
         "Add names, places and terms that are easy to mishear. They are spelled your way in every dictation."
     ) {
-      SymbolTile("character.book.closed")
+      SymbolTile("book.closed")
     } action: {
       VStack(spacing: Spaces.Space.m) {
         Text("Try one").spacesText(.sectionLabel)

@@ -1,4 +1,4 @@
-import { closing, download, links } from "../content";
+import { closing, download } from "../content";
 import { version } from "../version";
 import { DownloadButton } from "./DownloadButton";
 
@@ -28,12 +28,6 @@ export function Closing() {
               </li>
             ))}
           </ul>
-          <p className="mt-6 text-sm text-neutral-500 dark:text-neutral-400">
-            {closing.iphone}{" "}
-            <a href={links.buildIphone} className="link">
-              {closing.iphoneLink}
-            </a>
-          </p>
         </div>
       </div>
     </section>

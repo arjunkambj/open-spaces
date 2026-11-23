@@ -5,7 +5,6 @@ import SwiftUI
 /// Writing style per kind of app. Reads `AppModel` from the environment.
 public struct StyleScreen: View {
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   @State private var category: AppCategory
   /// The width the content has. Decides whether the three cards fit side by side.
@@ -34,13 +33,7 @@ public struct StyleScreen: View {
         )
       }
       VStack(alignment: .leading, spacing: Spaces.Space.l) {
-        if idiom == .phone {
-          Tabs(selection: $category, options: AppCategory.allCases, style: .segmented) {
-            StyleText.shortLabel($0)
-          }
-        } else {
-          Tabs(selection: $category, options: AppCategory.allCases) { $0.label }
-        }
+        Tabs(selection: $category, options: AppCategory.allCases) { $0.label }
         Label {
           Text(StyleText.apps(category))
             .spacesText(.body, color: Spaces.Color.textSecondary)
@@ -69,7 +62,7 @@ public struct StyleScreen: View {
   }
 
   @ViewBuilder private var cards: some View {
-    if idiom == .mac && width >= Self.rowBreakpoint {
+    if width >= Self.rowBreakpoint {
       HStack(alignment: .top, spacing: Spaces.Space.l) {
         options(isCompact: false)
       }
@@ -100,16 +93,6 @@ public struct StyleScreen: View {
 
 /// The words of the style screen.
 enum StyleText {
-  /// A tab title short enough for four tabs on an iPhone.
-  static func shortLabel(_ category: AppCategory) -> String {
-    switch category {
-    case .personalMessages: "Personal"
-    case .workMessages: "Work"
-    case .email: "Email"
-    case .other: "Other"
-    }
-  }
-
   /// Which apps count for a category, in one line.
   static func apps(_ category: AppCategory) -> String {
     switch category {

@@ -200,7 +200,6 @@ private struct MeetingActionItemRow: View {
   let onRename: (String) -> Void
   let onDelete: () -> Void
 
-  @Environment(\.spacesIdiom) private var idiom
   @Environment(\.simulatedHover) private var simulatedHover
   @State private var isHovered = false
   /// Whether the keyboard is on one of the row's controls.
@@ -228,11 +227,11 @@ private struct MeetingActionItemRow: View {
       if let owner = item.owner, !owner.isEmpty { Badge(owner) }
       IconButton("trash", label: "Delete this action item", size: .small, action: onDelete)
         // Tab reaches the button even while it is unseen, so it shows for the keyboard too.
-        .opacity(idiom == .phone || isHovered || simulatedHover || isFocused ? 1 : 0)
+        .opacity(isHovered || simulatedHover || isFocused ? 1 : 0)
     }
     .focused($isFocused)
     .padding(.vertical, Spaces.Space.s)
-    .frame(minHeight: MeetingsMetrics.checklistRow(idiom))
+    .frame(minHeight: MeetingsMetrics.checklistRow)
     .rowChrome(isHighlighted: false)
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
@@ -280,12 +279,11 @@ private struct MeetingAnswer: View {
 /// The strip under a meeting's page that holds the ask field or the find field.
 struct MeetingBottomBar<Content: View>: View {
   @ViewBuilder let content: Content
-  @Environment(\.spacesIdiom) private var idiom
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spaces.Space.s) { content }
-      .frame(maxWidth: idiom == .phone ? .infinity : PageWidth.regular.points, alignment: .leading)
-      .padding(.horizontal, MeetingsMetrics.gutter(idiom))
+      .frame(maxWidth: PageWidth.regular.points, alignment: .leading)
+      .padding(.horizontal, MeetingsMetrics.gutter)
       .padding(.vertical, Spaces.Space.m)
       .frame(maxWidth: .infinity)
       .background { Spaces.Color.panel.ignoresSafeArea(edges: .bottom) }
@@ -300,7 +298,6 @@ struct MeetingAskBar: View {
   let onAsk: (String) -> Void
 
   @State private var question = ""
-  @Environment(\.spacesIdiom) private var idiom
 
   var body: some View {
     MeetingBottomBar {
@@ -313,7 +310,7 @@ struct MeetingAskBar: View {
             }
           }
           // The words of the first one line up with the field under them.
-          .padding(.leading, -MeetingsMetrics.suggestionInset(idiom))
+          .padding(.leading, -MeetingsMetrics.suggestionInset)
         }
         .disabled(isWaiting)
       }

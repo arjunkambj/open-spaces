@@ -64,21 +64,13 @@ enum OnboardingCopy {
   }
 
   /// What Spaces is, in three short sentences, on the first step.
-  static func welcome(_ idiom: Spaces.Idiom) -> String {
-    let how =
-      idiom == .phone
-      ? "Tap, talk, and your words are written down."
-      : "Hold a key and talk. Your words are typed where your cursor is, in any app."
-    return "\(how) Meetings get a transcript and notes. Everything stays on this device, "
-      + "and you bring your own OpenAI key."
-  }
+  static let welcome =
+    "Hold a key and talk. Your words are typed where your cursor is, in any app. "
+    + "Meetings get a transcript and notes. Everything stays on this device, "
+    + "and you bring your own OpenAI key."
 
   /// The one thing to remember, on the last step.
-  static func allSet(_ idiom: Spaces.Idiom) -> String {
-    idiom == .phone
-      ? "Tap the big button and speak. In other apps, switch to the Spaces keyboard."
-      : "Hold your shortcut and speak, in any app. What you say is kept in this window."
-  }
+  static let allSet = "Hold your shortcut and speak, in any app. What you say is kept in this window."
 
   static func keyMessage(usesServer: Bool) -> String {
     usesServer

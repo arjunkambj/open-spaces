@@ -1,10 +1,5 @@
+import AppKit
 import SwiftUI
-
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-  import AppKit
-#elseif canImport(UIKit)
-  import UIKit
-#endif
 
 /// One colour with its light and dark value, as `0xRRGGBB` plus an opacity.
 struct ColorPair: Sendable {
@@ -32,31 +27,19 @@ struct ColorPair: Sendable {
 
   /// A colour that follows the light or dark appearance by itself. No asset catalog needed.
   var color: SwiftUI.Color {
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-      let spec = self
-      return SwiftUI.Color(
-        nsColor: NSColor(name: nil) { appearance in
-          let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-          let value = isDark ? spec.dark : spec.light
-          return NSColor(
-            srgbRed: value.red,
-            green: value.green,
-            blue: value.blue,
-            alpha: value.alpha
-          )
-        }
-      )
-    #elseif canImport(UIKit)
-      let spec = self
-      return SwiftUI.Color(
-        uiColor: UIColor { traits in
-          let value = traits.userInterfaceStyle == .dark ? spec.dark : spec.light
-          return UIColor(red: value.red, green: value.green, blue: value.blue, alpha: value.alpha)
-        }
-      )
-    #else
-      return SwiftUI.Color(.sRGB, red: light.red, green: light.green, blue: light.blue, opacity: light.alpha)
-    #endif
+    let spec = self
+    return SwiftUI.Color(
+      nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let value = isDark ? spec.dark : spec.light
+        return NSColor(
+          srgbRed: value.red,
+          green: value.green,
+          blue: value.blue,
+          alpha: value.alpha
+        )
+      }
+    )
   }
 }
 
@@ -108,7 +91,7 @@ extension Spaces {
   public enum Color {
     /// The window behind everything; the sidebar sits right on it.
     public static let window = Palette.window.color
-    /// The large content panel, and the page background on iPhone.
+    /// The large content panel.
     public static let panel = Palette.panel.color
     /// Cards and rows.
     public static let surface = Palette.surface.color

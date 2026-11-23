@@ -6,7 +6,7 @@ import SwiftUI
 enum SetupMetrics {
   /// The side inset of a `SettingRow`, so our own rows and dividers line up with it.
   static let rowInset = Spaces.Space.xl
-  /// The width of a text field that sits at the end of a row on a Mac.
+  /// The width of a text field that sits at the end of a row.
   static let rowFieldWidth: CGFloat = 240
   /// The widest a block of reading text gets.
   static let readingWidth: CGFloat = 560
@@ -33,12 +33,12 @@ struct SettingsDivider: View {
 
 /// One setting with a control that needs room, such as a text field or a select box.
 ///
-/// On a Mac the control sits at the end of the row, like `SettingRow`. On iPhone, and
-/// always with `.stacked`, the control goes under the text and takes the full width.
+/// The control sits at the end of the row, like `SettingRow`. With `.stacked` it goes under
+/// the text and takes the full width.
 struct SettingsItem<Control: View>: View {
   enum Layout {
-    /// Beside the text on a Mac, under it on iPhone.
-    case adaptive
+    /// At the end of the row, beside the text.
+    case beside
     /// Always under the text.
     case stacked
   }
@@ -48,12 +48,10 @@ struct SettingsItem<Control: View>: View {
   private let layout: Layout
   private let control: Control
 
-  @Environment(\.spacesIdiom) private var idiom
-
   init(
     _ title: String,
     description: String? = nil,
-    layout: Layout = .adaptive,
+    layout: Layout = .beside,
     @ViewBuilder control: () -> Control
   ) {
     self.title = title
@@ -63,7 +61,7 @@ struct SettingsItem<Control: View>: View {
   }
 
   var body: some View {
-    if layout == .stacked || idiom == .phone {
+    if layout == .stacked {
       VStack(alignment: .leading, spacing: Spaces.Space.m) {
         VStack(alignment: .leading, spacing: Spaces.Space.xs) {
           Text(title).spacesText(.bodyStrong)
@@ -247,7 +245,7 @@ struct CopyBlock: View {
       .accessibilityValue(text)
       IconButton(copied ? "checkmark" : "doc.on.doc", label: copied ? "Copied" : "Copy \(label)") {
         // A command or a path, nothing private.
-        ScreenClipboard.copy(text, as: .plain)
+        ScreenClipboard.copy(text)
         copied = true
       }
     }
@@ -286,7 +284,6 @@ struct APIKeyField: View {
   private let focusOnAppear: Bool
 
   @State private var isRevealed = false
-  @Environment(\.spacesIdiom) private var idiom
 
   /// - label: what the key is for. A key for a server of the person's own is not an OpenAI key.
   /// - focusOnAppear: puts the cursor in the field when it shows. For a dialog.
@@ -312,9 +309,6 @@ struct APIKeyField: View {
         isSecure: !isRevealed,
         focusOnAppear: focusOnAppear
       )
-      #if os(iOS)
-        .textInputAutocapitalization(.never)
-      #endif
       .autocorrectionDisabled()
       VStack(spacing: Self.labelGap) {
         // Takes the room of the field's label, so the buttons line up with the box under it.
@@ -332,7 +326,7 @@ struct APIKeyField: View {
             }
           }
         }
-        .frame(minHeight: fieldHeight)
+        .frame(minHeight: Self.fieldHeight)
       }
     }
   }
@@ -342,5 +336,5 @@ struct APIKeyField: View {
   /// The gap `SpacesTextField` leaves between its label and its box.
   private static let labelGap: CGFloat = 6
   /// The height of a `SpacesTextField`, so the buttons centre on the box and not on the error under it.
-  private var fieldHeight: CGFloat { idiom == .phone ? 48 : 38 }
+  private static let fieldHeight: CGFloat = 38
 }

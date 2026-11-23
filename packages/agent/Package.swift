@@ -4,7 +4,7 @@ import PackageDescription
 // MCP server and `spaces` command-line tool for agents.
 let package = Package(
   name: "SpacesAgent",
-  platforms: [.macOS("14.4"), .iOS(.v17)],
+  platforms: [.macOS("14.4")],
   products: [
     .library(name: "SpacesAgent", targets: ["SpacesAgent"]),
     .executable(name: "spaces", targets: ["spaces"]),

@@ -1,36 +1,11 @@
+import AppKit
 import SwiftUI
-
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-  import AppKit
-#elseif canImport(UIKit)
-  import UIKit
-#endif
 
 /// The Spaces design tokens: `Spaces.Color`, `Spaces.TextStyle`, `Spaces.Space`,
 /// `Spaces.Radius`, `Spaces.Stroke` and `Spaces.Motion`.
 ///
 /// Screens take every colour, font, gap and corner from here. See `COMPONENTS.md`.
 public enum Spaces {
-  /// The kind of device a view is laid out for.
-  ///
-  /// Components read it from the environment (`\.spacesIdiom`) to pick sizes and layouts.
-  /// It follows the platform by default; the snapshot renderer sets `.phone` on phone canvases.
-  public enum Idiom: Sendable, Equatable {
-    /// A Mac: pointer, hover, dense rows.
-    case mac
-    /// An iPhone or iPad: touch, larger text and targets.
-    case phone
-
-    /// The idiom of the platform this code was built for.
-    public static var current: Idiom {
-      #if os(iOS)
-        .phone
-      #else
-        .mac
-      #endif
-    }
-  }
-
   /// Gaps and paddings, in points. Everything sits on a 4-point grid.
   public enum Space {
     public static let xxs: CGFloat = 2
@@ -80,19 +55,9 @@ public enum Spaces {
 
     /// Whether the person asked the system for less motion.
     public static var reduceMotion: Bool {
-      #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-      #elseif canImport(UIKit)
-        UIAccessibility.isReduceMotionEnabled
-      #else
-        false
-      #endif
+      NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
   }
-}
-
-private struct IdiomKey: EnvironmentKey {
-  static let defaultValue = Spaces.Idiom.current
 }
 
 /// Forces the hover look, so the component gallery can show it in a still image.
@@ -106,12 +71,6 @@ private struct SimulatedFocusKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-  /// The kind of device the view is laid out for. See `Spaces.Idiom`.
-  public var spacesIdiom: Spaces.Idiom {
-    get { self[IdiomKey.self] }
-    set { self[IdiomKey.self] = newValue }
-  }
-
   var simulatedHover: Bool {
     get { self[SimulatedHoverKey.self] }
     set { self[SimulatedHoverKey.self] = newValue }

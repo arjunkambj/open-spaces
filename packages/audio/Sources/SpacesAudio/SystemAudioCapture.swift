@@ -23,8 +23,6 @@ import SpacesDomain
 /// - `start` never shows a permission prompt. It throws
 ///   `SpacesError.permissionDenied(.microphone)` unless microphone access was
 ///   already granted.
-/// - On iOS the `.system` track is not available and asking for it throws
-///   `SpacesError.captureFailed`.
 public struct SystemAudioCapture: AudioCapture {
   public init() {}
 
@@ -45,11 +43,7 @@ public struct SystemAudioCapture: AudioCapture {
 
     var sources: [AudioTrack: any AudioSource] = [:]
     if request.tracks.contains(.system) {
-      #if os(macOS)
-        sources[.system] = SystemTapSource()
-      #else
-        throw SpacesError.captureFailed("iPhone and iPad cannot record the sound of other apps.")
-      #endif
+      sources[.system] = SystemTapSource()
     }
     if request.tracks.contains(.microphone) {
       // Reading the status never prompts. Asking is the `Permissions` seam's job.

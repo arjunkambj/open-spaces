@@ -25,4 +25,3 @@ To connect an AI agent, see [docs/agents.md](https://github.com/arjunkambj/open-
 
 You need your own OpenAI API key. Spaces has no account and no server of its own.
 
-There is no iOS download. To use the iOS app, build it with Xcode (see the README).

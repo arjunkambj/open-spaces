@@ -39,8 +39,6 @@ body:
       label: Where?
       options:
         - macOS app
-        - iOS app
-        - iOS keyboard
         - "`spaces` command-line tool or MCP server"
         - Building from source
     validations:
@@ -49,7 +47,7 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: Your macOS or iOS version, and the Spaces version or commit.
+      description: Your macOS version, and the Spaces version or commit.
       placeholder: macOS 26.5, Spaces 0.1.0 (commit 3f8ff44)
     validations:
       required: true

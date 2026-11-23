@@ -24,8 +24,7 @@ public enum PageWidth: Sendable {
 ///       CardList(words) { word in ListRow(word.text) }
 ///     }
 ///
-/// On a Mac it matches the hub's content panel. On iPhone it reads as a large-title screen
-/// and paints the page background. The content is at least as tall as the screen, so
+/// It matches the hub's content panel. The content is at least as tall as the screen, so
 /// `.frame(maxHeight: .infinity)` centres an empty state in the space that is left.
 public struct Page<Toolbar: View, Content: View>: View {
   private let title: String
@@ -35,8 +34,6 @@ public struct Page<Toolbar: View, Content: View>: View {
   private var accessory: AnyView?
   private let toolbar: Toolbar
   private let content: Content
-
-  @Environment(\.spacesIdiom) private var idiom
 
   public init(
     title: String,
@@ -68,35 +65,27 @@ public struct Page<Toolbar: View, Content: View>: View {
   }
 
   public var body: some View {
-    let phone = idiom == .phone
     GeometryReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: phone ? Spaces.Space.xl : Spaces.Space.xxl) {
+        VStack(alignment: .leading, spacing: Spaces.Space.xxl) {
           header
-          VStack(alignment: .leading, spacing: phone ? Spaces.Space.xl : Spaces.Space.xxl) { content }
+          VStack(alignment: .leading, spacing: Spaces.Space.xxl) { content }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: phone ? .infinity : width.points, alignment: .leading)
-        .padding(.horizontal, phone ? Spaces.Space.l + Spaces.Space.xs : Spaces.Space.xxxl)
-        .padding(.top, phone ? Spaces.Space.s : Spaces.Space.xxl + Spaces.Space.s)
-        .padding(.bottom, phone ? Spaces.Space.xl : Spaces.Space.xxxl)
+        .frame(maxWidth: width.points, alignment: .leading)
+        .padding(.horizontal, Spaces.Space.xxxl)
+        .padding(.top, Spaces.Space.xxl + Spaces.Space.s)
+        .padding(.bottom, Spaces.Space.xxxl)
         .frame(maxWidth: .infinity)
         .frame(minHeight: proxy.size.height, alignment: .top)
       }
-    }
-    .background {
-      if phone { Spaces.Color.panel.ignoresSafeArea() }
     }
   }
 
   private var header: some View {
     VStack(alignment: .leading, spacing: Spaces.Space.s) {
-      if idiom == .phone, let onBack {
-        IconButton("chevron.left", label: "Back", action: onBack)
-          .padding(.leading, -10)
-      }
       HStack(alignment: .center, spacing: Spaces.Space.m) {
-        if idiom == .mac, let onBack {
+        if let onBack {
           IconButton("chevron.left", label: "Back", action: onBack)
             .padding(.leading, -6)
         }

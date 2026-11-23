@@ -179,27 +179,6 @@ importers:
         specifier: 2.11.11
         version: 2.11.11
 
-  apps/ios:
-    dependencies:
-      '@open-spaces/ai':
-        specifier: workspace:*
-        version: link:../../packages/ai
-      '@open-spaces/audio':
-        specifier: workspace:*
-        version: link:../../packages/audio
-      '@open-spaces/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@open-spaces/engine':
-        specifier: workspace:*
-        version: link:../../packages/engine
-      '@open-spaces/store':
-        specifier: workspace:*
-        version: link:../../packages/store
-      '@open-spaces/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-
   apps/macos:
     dependencies:
       '@open-spaces/agent':

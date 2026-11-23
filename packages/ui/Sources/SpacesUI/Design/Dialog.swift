@@ -11,8 +11,6 @@ public struct DialogCard<Content: View, Footer: View>: View {
   private let content: Content
   private let footer: Footer
 
-  @Environment(\.spacesIdiom) private var idiom
-
   /// - onClose: called by the close button; `nil` hides it.
   /// - footer: buttons. Put a `Spacer()` between the ones that belong left and right.
   public init(
@@ -32,7 +30,6 @@ public struct DialogCard<Content: View, Footer: View>: View {
   }
 
   public var body: some View {
-    let phone = idiom == .phone
     VStack(alignment: .leading, spacing: 0) {
       HStack(alignment: .top, spacing: Spaces.Space.m) {
         VStack(alignment: .leading, spacing: Spaces.Space.s) {
@@ -65,35 +62,27 @@ public struct DialogCard<Content: View, Footer: View>: View {
           .padding(.top, Spaces.Space.xl)
       }
     }
-    .padding(phone ? Spaces.Space.xl : Spaces.Space.xxl)
-    .frame(maxWidth: phone ? .infinity : width, alignment: .topLeading)
+    .padding(Spaces.Space.xxl)
+    .frame(maxWidth: width, alignment: .topLeading)
     .modalSurface()
   }
 }
 
 private struct ModalSurface: ViewModifier {
-  @Environment(\.spacesIdiom) private var idiom
-
   func body(content: Content) -> some View {
-    if idiom == .phone {
-      // The sheet is the surface.
-      content
-    } else {
-      let shape = RoundedRectangle(cornerRadius: Spaces.Radius.panel, style: .continuous)
-      content
-        .background {
-          shape.fill(Spaces.Color.raised).shadow(color: .black.opacity(0.16), radius: 32, y: 12)
-        }
-        .clipShape(shape)
-        .overlay { shape.strokeBorder(Spaces.Color.border, lineWidth: Spaces.Stroke.hairline) }
-    }
+    let shape = RoundedRectangle(cornerRadius: Spaces.Radius.panel, style: .continuous)
+    content
+      .background {
+        shape.fill(Spaces.Color.raised).shadow(color: .black.opacity(0.16), radius: 32, y: 12)
+      }
+      .clipShape(shape)
+      .overlay { shape.strokeBorder(Spaces.Color.border, lineWidth: Spaces.Stroke.hairline) }
   }
 }
 
 extension View {
-  /// The look of something shown with `.modal(isPresented:)` on a Mac: a raised card with
-  /// large round corners, a hairline border and a soft shadow. Does nothing on iPhone,
-  /// where the sheet is the surface. `DialogCard` already has it.
+  /// The look of something shown with `.modal(isPresented:)`: a raised card with large
+  /// round corners, a hairline border and a soft shadow. `DialogCard` already has it.
   public func modalSurface() -> some View {
     modifier(ModalSurface())
   }
@@ -116,9 +105,7 @@ struct ScrimOverlay<Content: View>: View {
       content
         .padding(Spaces.Space.xl)
     }
-    #if os(macOS)
-      .onExitCommand(perform: onDismiss)
-    #endif
+    .onExitCommand(perform: onDismiss)
     .accessibilityAddTraits(.isModal)
   }
 }
@@ -127,69 +114,29 @@ private struct ModalModifier<ModalContent: View>: ViewModifier {
   @Binding var isPresented: Bool
   let modalContent: () -> ModalContent
 
-  @Environment(\.spacesIdiom) private var idiom
-
   func body(content: Content) -> some View {
-    #if os(iOS)
-      content.sheet(isPresented: $isPresented) {
-        ScrollView { modalContent() }
-          .background(Spaces.Color.panel)
-          .presentationDetents([.medium, .large])
-          .presentationDragIndicator(.visible)
-      }
-    #else
-      // What is under the dim layer is out of reach while it is there: for the pointer, for
-      // Tab and for VoiceOver. A phone layout drawn on a Mac only stands in for the native sheet.
-      content
-        .disabled(isPresented && idiom == .mac)
-        .accessibilityHidden(isPresented)
-        .overlay {
-          if isPresented {
-            if idiom == .phone {
-              sheetPreview
-            } else {
-              ScrimOverlay(onDismiss: { isPresented = false }) {
-                modalContent()
-                  .transition(.scale(scale: 0.97).combined(with: .opacity))
-              }
-              .transition(.opacity)
-            }
+    // What is under the dim layer is out of reach while it is there: for the pointer, for
+    // Tab and for VoiceOver.
+    content
+      .disabled(isPresented)
+      .accessibilityHidden(isPresented)
+      .overlay {
+        if isPresented {
+          ScrimOverlay(onDismiss: { isPresented = false }) {
+            modalContent()
+              .transition(.scale(scale: 0.97).combined(with: .opacity))
           }
+          .transition(.opacity)
         }
-        .animation(Spaces.Motion.spring, value: isPresented)
-    #endif
-  }
-
-  #if !os(iOS)
-    /// Stands in for the native sheet when a phone layout is drawn on a Mac (snapshots).
-    private var sheetPreview: some View {
-      ZStack(alignment: .bottom) {
-        Spaces.Color.scrim.ignoresSafeArea()
-        modalContent()
-          .fixedSize(horizontal: false, vertical: true)
-          .padding(.top, Spaces.Space.m)
-          .overlay(alignment: .top) {
-            Capsule().fill(Spaces.Color.borderStrong).frame(width: 36, height: 5).padding(.top, 6)
-          }
-          .padding(.bottom, Spaces.Space.l)
-          .background {
-            UnevenRoundedRectangle(
-              topLeadingRadius: Spaces.Radius.panel,
-              topTrailingRadius: Spaces.Radius.panel,
-              style: .continuous
-            )
-            .fill(Spaces.Color.panel)
-            .ignoresSafeArea(edges: .bottom)
-          }
       }
-    }
-  #endif
+      .animation(Spaces.Motion.spring, value: isPresented)
+  }
 }
 
 extension View {
-  /// Presents any view over this one. On a Mac it sits centred on a dimmed layer that
-  /// covers this view, so attach it to the root of the window (or of the screen it belongs
-  /// to); give the content `.modalSurface()`. On iPhone it is a native sheet.
+  /// Presents any view over this one. It sits centred on a dimmed layer that covers this
+  /// view, so attach it to the root of the window (or of the screen it belongs to); give the
+  /// content `.modalSurface()`.
   ///
   /// While it shows, the view under it cannot be used: not with the pointer, not with Tab
   /// and not with VoiceOver.

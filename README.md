@@ -3,7 +3,7 @@
 [![CI](https://github.com/arjunkambj/open-spaces/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/arjunkambj/open-spaces/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Spaces is a free, open-source app for macOS and iOS that turns your voice into text. Hold a key, speak, and clean text appears in whatever app you are typing in; it can also record your meetings and write the notes.
+Spaces is a free, open-source Mac app that turns your voice into text. Hold a key, speak, and clean text appears in whatever app you are typing in; it can also record your meetings and write the notes.
 
 **Website and download: [whisper.0xhoney.com](https://whisper.0xhoney.com)**
 
@@ -13,15 +13,9 @@ Spaces is a free, open-source app for macOS and iOS that turns your voice into t
 | --- | --- |
 | ![The Meetings screen with a live recording](docs/images/mac-meeting.png) | ![The small pill that sits at the bottom of the screen](docs/images/mac-pill.jpg) |
 
-<p align="center">
-  <img src="docs/images/iphone-dictate.png" alt="Dictating on iPhone" width="260">
-  &nbsp;&nbsp;
-  <img src="docs/images/iphone-meeting.png" alt="A meeting on iPhone" width="260">
-</p>
-
 All pictures show made-up sample data.
 
-> **Status: early.** This is a first version. Some things will be rough or broken. The macOS app is the main focus. The iOS app is newer and less tested. The Mac download is not checked by Apple, so macOS asks you to allow it the first time (see [Install](#install)). Bug reports are welcome.
+> **Status: early.** This is a first version. Some things will be rough or broken. The Mac download is not checked by Apple, so macOS asks you to allow it the first time (see [Install](#install)). Bug reports are welcome.
 
 Spaces is an independent open-source project. It is not affiliated with Wispr Flow.
 
@@ -51,7 +45,6 @@ Spaces is an independent open-source project. It is not affiliated with Wispr Fl
 **Everything else**
 
 - **Works with your AI agent.** A command-line tool and an MCP server let an agent such as Claude read your meetings and notes and add to them. (MCP is a common way for AI agents to use outside tools.)
-- **iPhone app with a keyboard.** Tap, speak, and the text is on your clipboard. The app's keyboard has a Dictate key and a key that types your latest dictation, so you can use it from any app. The iPhone app records meetings too.
 - **Use your own server.** Point it at any server that speaks the same language as OpenAI's, such as a proxy or a model running on your own machine.
 
 ## Install
@@ -67,8 +60,6 @@ For a Mac with Apple silicon and macOS 14.4 or newer.
 You do steps 3 to 5 only once. macOS asks because the app is not signed with an Apple developer certificate, which costs money each year. Apple has not checked it. If you would rather not run such an app, [build it yourself](#build-and-run) from the code on this page.
 
 After that the app asks for your name, your OpenAI API key and a few [permissions](#permissions-on-first-run).
-
-There is no iPhone download. To use the iPhone app, [build it with Xcode](#iphone).
 
 ## Updates
 
@@ -125,11 +116,8 @@ In Settings, under OpenAI, you can type the address of another server that works
 - To build it:
   - Apple's **Command Line Tools** (`xcode-select --install`) or Xcode, with Swift 6 or newer.
   - **Node.js 22 or newer** and **pnpm 12**. These only run the build commands. The app itself is all Swift.
-- For the iPhone app as well: full **Xcode** (26 or newer), [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`), and an iPhone or simulator with **iOS 17 or newer**.
 
 ## Build and run
-
-### macOS
 
 The Command Line Tools are enough. You do not need Xcode.
 
@@ -156,22 +144,6 @@ Why it matters: macOS ties the permissions you gave to the signature of the app.
 
 A build of your own does not look for updates, and has no **Check for Updates…** in its menus: an update from this project is signed with the project's keys, and would replace your build with a different app. Get new versions with `git pull` and `pnpm mac`. If you publish releases from a fork, [CONTRIBUTING.md](CONTRIBUTING.md#making-a-release) has the steps.
 
-### iPhone
-
-The iPhone app needs full Xcode.
-
-```bash
-pnpm install
-pnpm ios:generate
-open apps/ios/Spaces.xcodeproj
-```
-
-`pnpm ios:generate` makes the Xcode project, `apps/ios/Spaces.xcodeproj`. Pick an iPhone simulator and press Run. A simulator needs no other setup.
-
-To put it on your own iPhone you need to do three things first: pick your team for each of the three targets under **Signing & Capabilities**, change the app's IDs to ones of your own, and change the name of the folder the app shares with its keyboard. [apps/ios/README.md](apps/ios/README.md) has the steps.
-
-To turn on the keyboard, go to **Settings → General → Keyboard → Keyboards → Add New Keyboard** on your phone and pick Spaces. Then tap it in the list and turn on **Allow Full Access**. The app walks you through this the first time you open it.
-
 ## Permissions on first run
 
 macOS asks before an app can listen or type for you. Spaces asks for three things and tells you why.
@@ -185,8 +157,6 @@ macOS asks before an app can listen or type for you. Spaces asks for three thing
 You can skip any of them and allow it later. Without Accessibility, the shortcuts do not work and no text can be typed for you. You can change any of these in **System Settings → Privacy & Security**.
 
 If you do not want your Mac's sound recorded, turn off **Record computer audio** in the Spaces settings, under Meetings. Meetings then record only your microphone.
-
-The iPhone app asks only for the microphone.
 
 ## Shortcuts
 
@@ -240,16 +210,12 @@ On macOS, everything is in one folder:
 
 The files are JSON, Markdown and audio. You can read them, back them up, or delete them yourself. Your API keys are in that folder too, in `api-key.json`, which only your user account can open and which backups leave out. If you share or copy the folder, leave that file out.
 
-On an iPhone, the same files are kept inside the app's own storage, in a folder the app shares with its keyboard.
-
 See [docs/data-format.md](docs/data-format.md) for what each file holds.
 
 ## Project layout
 
 ```
 apps/macos        the macOS app
-apps/ios          the iPhone app, its keyboard and its Lock Screen notice
-apps/ios/Phone    most of the iPhone app's code, as a package that also builds on a Mac
 apps/web          the website, whisper.0xhoney.com
 packages/domain   the shared types and the contracts between parts
 packages/store    saving to files

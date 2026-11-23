@@ -11,7 +11,6 @@ export const links = {
   download: `${repo}/releases/latest/download/Spaces.dmg`,
   releases: `${repo}/releases`,
   install: `${repo}#install`,
-  buildIphone: `${repo}#iphone`,
   agentGuide: `${repo}/blob/main/docs/agents.md`,
   contributing: `${repo}/blob/main/CONTRIBUTING.md`,
   issues: `${repo}/issues/new/choose`,
@@ -176,8 +175,6 @@ export const closing = {
     { label: "How to contribute", href: links.contributing },
     { label: "Report a bug", href: links.issues },
   ],
-  iphone: "There is an iPhone app in the same repository. It is not on the App Store.",
-  iphoneLink: "Build it with Xcode",
 } as const;
 
 export const footer = {

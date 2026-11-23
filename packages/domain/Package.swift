@@ -4,7 +4,7 @@ import PackageDescription
 // Models and seams shared by every Spaces module.
 let package = Package(
   name: "SpacesDomain",
-  platforms: [.macOS("14.4"), .iOS(.v17)],
+  platforms: [.macOS("14.4")],
   products: [
     .library(name: "SpacesDomain", targets: ["SpacesDomain"])
   ],

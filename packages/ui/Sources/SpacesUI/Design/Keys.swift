@@ -3,14 +3,13 @@ import SwiftUI
 /// One key of the keyboard, as a small chip: "fn", "Space", "⌘".
 public struct KeyCap: View {
   private let label: String
-  @Environment(\.spacesIdiom) private var idiom
 
   public init(_ label: String) {
     self.label = label
   }
 
   public var body: some View {
-    let side: CGFloat = idiom == .phone ? 28 : 24
+    let side: CGFloat = 24
     let shape = RoundedRectangle(cornerRadius: Spaces.Radius.small, style: .continuous)
     Text(label)
       .spacesText(.keyCap)

@@ -7,15 +7,12 @@ import UniformTypeIdentifiers
 /// Also the page of the meeting being recorded, which shows the transcript as it grows.
 struct MeetingDetail: View {
   let id: Meeting.ID
-  /// Whether the page draws its own back button. False where the system's bar has one.
-  let showsBack: Bool
   let questions: MeetingQuestions
   private let preset: MeetingsPreset
   /// Goes back to the list.
   private let onClose: () -> Void
 
   @Environment(AppModel.self) private var model
-  @Environment(\.spacesIdiom) private var idiom
 
   @State private var tab: MeetingTab
   @State private var find: String
@@ -26,8 +23,6 @@ struct MeetingDetail: View {
   @State private var deleting: Meeting?
   @State private var deletingItem: ActionItem?
   @State private var isConfirmingRewrite = false
-  @State private var isRenaming = false
-  @State private var newTitle = ""
   /// The speaker whose new name is being typed.
   @State private var renamingSpeaker: Speaker?
   @State private var newSpeakerName = ""
@@ -39,13 +34,11 @@ struct MeetingDetail: View {
 
   init(
     id: Meeting.ID,
-    showsBack: Bool,
     questions: MeetingQuestions,
     preset: MeetingsPreset = MeetingsPreset(),
     onClose: @escaping () -> Void
   ) {
     self.id = id
-    self.showsBack = showsBack
     self.questions = questions
     self.preset = preset
     self.onClose = onClose
@@ -61,18 +54,17 @@ struct MeetingDetail: View {
         if let meeting {
           found(meeting, proxy: proxy)
         } else if model.isLoaded {
-          framed(
-            Page(title: "Meeting") {
-              EmptyState("This meeting is not here", message: "It may have been deleted.") {
-                SymbolTile("questionmark.folder")
-              } action: {
-                Button("Back to meetings", action: onClose)
-                  .buttonStyle(.spaces(.tertiary))
-              }
+          Page(title: "Meeting") {
+            EmptyState("This meeting is not here", message: "It may have been deleted.") {
+              SymbolTile("questionmark.folder")
+            } action: {
+              Button("Back to meetings", action: onClose)
+                .buttonStyle(.spaces(.tertiary))
             }
-          )
+          }
+          .onBack(onClose)
         } else {
-          framed(Page(title: "Meeting") { MeetingsLoading() })
+          Page(title: "Meeting") { MeetingsLoading() }.onBack(onClose)
         }
       }
     }
@@ -118,7 +110,6 @@ struct MeetingDetail: View {
   }
 
   private func found(_ meeting: Meeting, proxy: ScrollViewProxy) -> some View {
-    let phone = idiom == .phone
     let phase = MeetingsLogic.phase(
       of: meeting,
       liveID: model.meetings.live?.meetingID,
@@ -134,47 +125,46 @@ struct MeetingDetail: View {
     let onRenameSpeaker: ((Speaker) -> Void)? = canRename ? { startRenaming($0) } : nil
 
     return VStack(spacing: 0) {
-      framed(
-        Page(title: phone ? meeting.title : "") {
-          toolbar(meeting, phase: phase)
-        } content: {
-          header(meeting, phase: phase)
-          if let problem = MeetingsLogic.problem(of: meeting, phase: phase) {
-            Banner(problem.isSevere ? .error : .warning, title: problem.title, message: problem.message) {
-              if let remedy = problem.remedy {
-                Button(problem.actionTitle) { MeetingActions.fix(remedy, id, in: model) }
-                  .buttonStyle(.spaces(.tertiary, size: .small))
-              }
+      Page(title: "") {
+        toolbar(meeting, phase: phase)
+      } content: {
+        header(meeting, phase: phase)
+        if let problem = MeetingsLogic.problem(of: meeting, phase: phase) {
+          Banner(problem.isSevere ? .error : .warning, title: problem.title, message: problem.message) {
+            if let remedy = problem.remedy {
+              Button(problem.actionTitle) { MeetingActions.fix(remedy, id, in: model) }
+                .buttonStyle(.spaces(.tertiary, size: .small))
             }
           }
-          Tabs(selection: $tab, options: MeetingTab.allCases, style: phone ? .segmented : .underline) {
-            $0.title
-          }
-          switch tab {
-          case .notes:
-            MeetingNotesTab(
-              meeting: meeting,
-              phase: phase,
-              thread: thread,
-              edit: edit,
-              onDeleteItem: { deletingItem = $0 },
-              onAskAgain: { entry in
-                Task { await questions.askAgain(entry, about: id, with: model.meetings) }
-              }
-            )
-          case .transcript:
-            MeetingTranscriptTab(
-              turns: turns,
-              phase: phase,
-              matches: matches,
-              currentMatch: matches.isEmpty ? nil : matches[matchIndex],
-              onRename: onRenameSpeaker
-            )
-          case .myNotes:
-            MeetingMyNotesTab(meeting: meeting)
-          }
         }
-      )
+        Tabs(selection: $tab, options: MeetingTab.allCases) {
+          $0.title
+        }
+        switch tab {
+        case .notes:
+          MeetingNotesTab(
+            meeting: meeting,
+            phase: phase,
+            thread: thread,
+            edit: edit,
+            onDeleteItem: { deletingItem = $0 },
+            onAskAgain: { entry in
+              Task { await questions.askAgain(entry, about: id, with: model.meetings) }
+            }
+          )
+        case .transcript:
+          MeetingTranscriptTab(
+            turns: turns,
+            phase: phase,
+            matches: matches,
+            currentMatch: matches.isEmpty ? nil : matches[matchIndex],
+            onRename: onRenameSpeaker
+          )
+        case .myNotes:
+          MeetingMyNotesTab(meeting: meeting)
+        }
+      }
+      .onBack(onClose)
       if tab == .notes, canAsk {
         MeetingAskBar(showsSuggestions: thread.isEmpty, isWaiting: questions.isWaiting(for: id)) { question in
           Task { await questions.ask(question, about: id, with: model.meetings) }
@@ -214,17 +204,6 @@ struct MeetingDetail: View {
     ) {
       MeetingActions.writeNotes(id, in: model)
     }
-    .dialog(isPresented: $isRenaming, title: "Rename this meeting") {
-      SpacesTextField(text: $newTitle, placeholder: "Meeting title", focusOnAppear: true)
-        .onSubmit(rename)
-    } footer: {
-      Button("Cancel") { isRenaming = false }
-        .buttonStyle(.spaces())
-      Button("Save", action: rename)
-        .buttonStyle(.spaces(.primary))
-        .keyboardShortcut(.defaultAction)
-        .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-    }
     .fileExporter(
       isPresented: $isExporting,
       // Written only while the save panel is open.
@@ -259,12 +238,6 @@ struct MeetingDetail: View {
     }
   }
 
-  /// Gives a page its back button, where this screen is the one that draws it.
-  private func framed<Toolbar: View, Content: View>(_ page: Page<Toolbar, Content>) -> Page<Toolbar, Content>
-  {
-    showsBack ? page.onBack(onClose) : page
-  }
-
   private func hasSomethingToAskAbout(_ meeting: Meeting) -> Bool {
     !meeting.segments.isEmpty || meeting.notes != nil || !meeting.userNotes.isEmpty
   }
@@ -274,14 +247,6 @@ struct MeetingDetail: View {
   private func edit(_ change: @escaping @Sendable (inout Meeting) -> Void) {
     let id = id
     model.run { _ = try await $0.library.updateMeeting(id, change) }
-  }
-
-  private func rename() {
-    let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-    // Return in the field can reach this twice: from the field and from the default button.
-    guard isRenaming, !title.isEmpty else { return }
-    isRenaming = false
-    edit { $0.title = title }
   }
 
   private var isRenamingSpeaker: Binding<Bool> {
@@ -310,19 +275,18 @@ struct MeetingDetail: View {
 
   @ViewBuilder
   private func toolbar(_ meeting: Meeting, phase: MeetingPhase) -> some View {
-    let phone = idiom == .phone
     if phase == .live {
-      if !phone { MeetingRecordingStamp(startedAt: meeting.startedAt) }
+      MeetingRecordingStamp(startedAt: meeting.startedAt)
       Button {
         isStopping = true
         Task { await model.meetings.stop() }
       } label: {
         Label("Stop", systemImage: "stop.fill")
       }
-      .buttonStyle(.spaces(.primary, size: phone ? .small : .regular))
+      .buttonStyle(.spaces(.primary))
       .disabled(isStopping)
       .accessibilityLabel("Stop recording")
-    } else if !phone {
+    } else {
       IconButton("doc.on.doc", label: "Copy the notes and transcript") { copyMarkdown(meeting) }
       ShareLink(item: MeetingShare(meeting: meeting), preview: SharePreview(meeting.title)) {
         Image(systemName: "square.and.arrow.up")
@@ -332,17 +296,7 @@ struct MeetingDetail: View {
       .accessibilityLabel("Share")
     }
     OverflowMenu {
-      if phone {
-        Button("Rename") {
-          newTitle = meeting.title
-          isRenaming = true
-        }
-        if phase != .live {
-          Button("Copy notes and transcript") { copyMarkdown(meeting) }
-          Button("Copy transcript only") { copyTranscript(meeting) }
-          ShareLink("Share", item: MeetingShare(meeting: meeting), preview: SharePreview(meeting.title))
-        }
-      } else if phase != .live {
+      if phase != .live {
         Button("Save as a file…") { isExporting = true }
       }
       if phase != .live {
@@ -363,13 +317,8 @@ struct MeetingDetail: View {
 
   private func header(_ meeting: Meeting, phase: MeetingPhase) -> some View {
     VStack(alignment: .leading, spacing: Spaces.Space.s) {
-      if idiom == .mac {
-        MeetingInlineText(text: meeting.title, style: .pageTitle, label: "Meeting title") { title in
-          edit { $0.title = title }
-        }
-      }
-      if idiom == .phone, phase == .live {
-        MeetingRecordingStamp(startedAt: meeting.startedAt)
+      MeetingInlineText(text: meeting.title, style: .pageTitle, label: "Meeting title") { title in
+        edit { $0.title = title }
       }
       Text(facts(meeting, phase: phase))
         .spacesText(.body, color: Spaces.Color.textSecondary)
@@ -390,11 +339,7 @@ struct MeetingDetail: View {
   }
 
   private func facts(_ meeting: Meeting, phase: MeetingPhase) -> String {
-    // The short forms keep it on one line on a phone.
-    let day =
-      idiom == .phone
-      ? meeting.startedAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).year())
-      : meeting.startedAt.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+    let day = meeting.startedAt.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
     let time = meeting.startedAt.formatted(date: .omitted, time: .shortened)
     let length = phase == .live ? nil : MeetingsLogic.length(meeting.duration)
     return [day, time, length].compactMap { $0 }.joined(separator: " · ")
@@ -463,9 +408,7 @@ private struct MeetingTagEditor<Leading: View>: View {
             if !focused, !startsEditing { close() }
           }
           .onAppear { isFocused = true }
-          #if os(macOS)
-            .onExitCommand(perform: close)
-          #endif
+          .onExitCommand(perform: close)
           .accessibilityLabel("New tag")
       } else {
         Button {
@@ -493,14 +436,13 @@ private struct MeetingTagEditor<Leading: View>: View {
 private struct MeetingChip: ViewModifier {
   let fill: SwiftUI.Color
   var border: SwiftUI.Color = .clear
-  @Environment(\.spacesIdiom) private var idiom
 
   func body(content: Content) -> some View {
     let shape = RoundedRectangle(cornerRadius: Spaces.Radius.small, style: .continuous)
     content
       .lineLimit(1)
       .padding(.horizontal, Spaces.Space.s)
-      .frame(minHeight: MeetingsMetrics.tagHeight(idiom))
+      .frame(minHeight: MeetingsMetrics.tagHeight)
       .background(fill, in: shape)
       .overlay { shape.strokeBorder(border, lineWidth: Spaces.Stroke.hairline) }
       .contentShape(shape)

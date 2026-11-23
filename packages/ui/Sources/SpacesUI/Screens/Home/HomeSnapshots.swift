@@ -9,14 +9,11 @@ enum HomeSnapshots {
     let long = longSample()
     return [
       SnapshotCase("home") { HomeScreen(preview: HomePreview(hoveredRow: 1)) },
-      SnapshotCase("home-phone", canvas: .phone) { HomeScreen() },
       SnapshotCase("home-narrow", canvas: .custom(width: 640, height: 720)) {
         HomeScreen().background(Spaces.Color.panel)
       },
       SnapshotCase("home-empty", model: { ScreenSamples.model() }) { HomeScreen() },
-      SnapshotCase("home-empty-phone", canvas: .phone, model: { ScreenSamples.model() }) { HomeScreen() },
       SnapshotCase("home-no-key", model: { .demo(hasAPIKey: false) }) { HomeScreen() },
-      SnapshotCase("home-no-key-phone", canvas: .phone, model: { .demo(hasAPIKey: false) }) { HomeScreen() },
       // A server of the person's own may not need a key: no warning.
       SnapshotCase(
         "home-server-no-key",
@@ -29,7 +26,6 @@ enum HomeSnapshots {
         }
       ) { HomeScreen() },
       SnapshotCase("home-search") { HomeScreen(preview: HomePreview(query: "review")) },
-      SnapshotCase("home-search-phone", canvas: .phone) { HomeScreen(preview: HomePreview(query: "review")) },
       SnapshotCase("home-no-results") { HomeScreen(preview: HomePreview(query: "giraffe")) },
       SnapshotCase("home-states", model: { ScreenSamples.model(dictations: states) }) {
         HomeScreen(
@@ -39,21 +35,10 @@ enum HomeSnapshots {
           )
         )
       },
-      SnapshotCase("home-states-phone", canvas: .phone, model: { ScreenSamples.model(dictations: states) }) {
-        HomeScreen(
-          preview: HomePreview(player: HomeAudioPlayer(showing: states[0].id, progress: 0.4, elapsed: 3))
-        )
-      },
       SnapshotCase("home-long", model: { ScreenSamples.model(dictations: long) }) {
         HomeScreen()
       },
-      SnapshotCase("home-long-phone", canvas: .phone, model: { ScreenSamples.model(dictations: long) }) {
-        HomeScreen()
-      },
       SnapshotCase("home-delete", model: { ScreenSamples.model(dictations: states) }) {
-        HomeScreen(preview: HomePreview(deleting: states[0]))
-      },
-      SnapshotCase("home-delete-phone", canvas: .phone, model: { ScreenSamples.model(dictations: states) }) {
         HomeScreen(preview: HomePreview(deleting: states[0]))
       },
       // Its server stopped a while ago: when it was last used, with an empty dot.
