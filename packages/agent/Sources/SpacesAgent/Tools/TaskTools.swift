@@ -12,6 +12,13 @@ extension Catalogue {
     "A day: 2026-11-24, \"today\", \"tomorrow\", \"yesterday\", or a number of days from today such as "
     + "+2 or -1."
 
+  private static let repeatParam = Param.choice(
+    "repeat",
+    ["never"] + TaskRepeat.allCases.map(\.rawValue),
+    "How often the task comes back once it is ticked off: never, daily, weekdays (Monday to Friday) or "
+      + "weekly (the same day of the week)."
+  )
+
   static let tasks: [Tool] = [
     Tool(
       path: ["tasks", "list"],
@@ -43,8 +50,10 @@ extension Catalogue {
         "Adds a task to the user's list for one day (today unless given), in a category (the first "
         + "category unless given; tasks_list shows them all). By default the task is staged: the user "
         + "sees it in the Tasks tab of the app and approves or rejects it. Pass staged=false to put it "
-        + "straight on the list, only when the user asked for this very task. Returns the task with its "
-        + "new ID.",
+        + "straight on the list, only when the user asked for this very task; when the user has turned "
+        + "on \"ask me before AI tools add tasks\" in Spaces, it is staged anyway. A task can repeat "
+        + "every day, every weekday or every week: when it is ticked off, the next one is added. Returns "
+        + "the task with its new ID.",
       params: [
         .text(
           "text",
@@ -64,6 +73,7 @@ extension Catalogue {
           "true (the default) to let the user approve the task first; false to add it straight to the list.",
           fallback: true
         ),
+        repeatParam,
       ],
       hints: .adds,
       example: "spaces tasks add \"Send the proposal\" --day tomorrow --category Gooseworks",
@@ -72,15 +82,17 @@ extension Catalogue {
     Tool(
       path: ["tasks", "update"],
       title: "Change a daily task",
-      summary: "Change the text, the day or the category of a task.",
+      summary: "Change the text, the day, the category or the repeat of a task.",
       description:
-        "Changes one task: its text, the day it is for (to move it to another day) or its category. Give "
-        + "only what should change. To tick a task off, use tasks_set_done instead.",
+        "Changes one task: its text, the day it is for (to move it to the end of another day), its "
+        + "category or how often it repeats (\"never\" stops it). Give only what should change. To tick a "
+        + "task off, use tasks_set_done instead.",
       params: [
         .text("task", taskHelp, required: true, positional: true),
         .text("text", "The new text, on one line.", limit: TaskList.textLimit),
         .text("day", "The new day. \(dayHelp)"),
         .text("category", "The new category. It must exist already.", limit: TaskList.categoryLimit),
+        repeatParam,
       ],
       hints: .destroys,
       aliases: [Alias(path: ["tasks", "edit"], summary: "The same as \"tasks update\".")],
@@ -92,7 +104,8 @@ extension Catalogue {
       title: "Tick a daily task off",
       summary: "Mark a task as done, or as open again.",
       description:
-        "Marks one task as done. Pass done=false to mark it as open again. A staged task cannot be "
+        "Marks one task as done. Pass done=false to mark it as open again. Ticking off a repeating task "
+        + "adds the next one, and the reply shows it; opening it again leaves the next one in place. A staged task cannot be "
         + "ticked off: it needs the user's OK in the app first.",
       params: [
         .text("task", taskHelp, required: true, positional: true),
@@ -169,6 +182,8 @@ extension Toolbox {
       "category": .string(task.category),
       "status": .string(task.status.rawValue),
       "added_by": .string(task.addedBy == .agent ? "ai_tool" : "user"),
+      "ai_tool": task.agent.map(JSONValue.string),
+      "repeat": task.repeats.map { .string($0.rawValue) },
     ]
   }
 
@@ -180,6 +195,7 @@ extension Toolbox {
       case .staged: "[?]"
       }
     return "\(box) \(short(task.id))  \(task.day.text)  \(oneLine(task.category)):  \(oneLine(task.text))"
+      + (task.repeats.map { "  (repeats \($0.rawValue))" } ?? "")
       + (task.status == .staged ? "  (waiting for the user's OK)" : "")
   }
 
@@ -267,15 +283,32 @@ extension Toolbox {
     let text = arguments.text("text")
     let day = try arguments.string("day").map { try taskDay(from: $0, argument: "day") } ?? TaskDay.today(now)
     let category = arguments.string("category")
-    let status: TaskStatus = arguments.bool("staged") ? .staged : .open
+    let askFirst = try await library.settings().agentTasksNeedOK
+    let status: TaskStatus = arguments.bool("staged") || askFirst ? .staged : .open
+    let repeats = arguments.string("repeat").flatMap(TaskRepeat.init(rawValue:))
     let now = self.now
+    let agent = self.agent
     let id = UUID()
     let list = try await library.updateTaskList { list in
-      try list.add(text, day: day, category: category, status: status, addedBy: .agent, id: id, now: now)
+      try list.add(
+        text,
+        day: day,
+        category: category,
+        status: status,
+        addedBy: .agent,
+        agent: agent,
+        repeats: repeats,
+        id: id,
+        now: now
+      )
     }
     guard let task = list.task(id) else { throw SpacesError.notFound("The new task") }
     let heading =
-      status == .staged ? "Added for the user to approve in the Tasks tab:" : "Added to the user's list:"
+      status == .open
+      ? "Added to the user's list:"
+      : !arguments.bool("staged")
+        ? "The user asks to approve every task an AI tool adds, so it waits in the Tasks tab:"
+        : "Added for the user to approve in the Tasks tab:"
     return ToolOutput(data: Toolbox.json(task), text: heading + "\n  " + Toolbox.line(for: task))
   }
 
@@ -283,21 +316,34 @@ extension Toolbox {
     let text = arguments.string("text")
     let day = try arguments.string("day").map { try taskDay(from: $0, argument: "day") }
     let category = arguments.string("category")
-    guard text != nil || day != nil || category != nil else {
-      throw AgentError.usage("Nothing to change. Give at least one of: text, day, category.")
+    let repeats: TaskRepeat?? = arguments.string("repeat").map { TaskRepeat(rawValue: $0) }
+    guard text != nil || day != nil || category != nil || repeats != nil else {
+      throw AgentError.usage("Nothing to change. Give at least one of: text, day, category, repeat.")
     }
     let task = try await changeTask(arguments.text("task")) { list, id in
-      try list.edit(id, text: text, day: day, category: category)
+      try list.edit(id, text: text, day: day, category: category, repeats: repeats)
     }
     return ToolOutput(data: Toolbox.json(task), text: "Updated:\n  " + Toolbox.line(for: task))
   }
 
   fileprivate func setTaskDone(_ arguments: Arguments) async throws -> ToolOutput {
     let done = arguments.bool("done")
-    let task = try await changeTask(arguments.text("task")) { list, id in try list.setDone(id, done) }
+    let today = TaskDay.today(now)
+    let before = try await library.taskList()
+    let task = try await changeTask(arguments.text("task")) { list, id in
+      try list.setDone(id, done, today: today)
+    }
+    var data = Toolbox.json(task)
+    var text = (done ? "Done:\n  " : "Open again:\n  ") + Toolbox.line(for: task)
+    if done, let nextID = task.repeatedAs, before.task(nextID) == nil,
+      let next = try await library.taskList().task(nextID)
+    {
+      data["next"] = .object(Toolbox.json(next))
+      text += "\nIt repeats, so the next one was added:\n  " + Toolbox.line(for: next)
+    }
     return ToolOutput(
-      data: Toolbox.json(task),
-      text: (done ? "Done:\n  " : "Open again:\n  ") + Toolbox.line(for: task)
+      data: data,
+      text: text
     )
   }
 

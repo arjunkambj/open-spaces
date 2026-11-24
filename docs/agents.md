@@ -11,8 +11,8 @@ tool where `spaces` is, and it can then use everything listed on this page.
 
 - **Sum up a day.** For one day: how much you dictated and where, the meetings you had, their action items,
   and everything still open.
-- **Plan your days.** List your daily tasks for any range of days, add tasks for a day and a category,
-  move them, tick them off, and add a category. A task an agent adds waits in the app's Tasks tab until you
+- **Plan your days.** List your daily tasks for any range of days, add tasks for a day and a category
+  (once, or repeating every day, weekday or week), move them, tick them off, and add a category. A task an agent adds waits in the app's Tasks tab until you
   approve it, unless you asked for that very task.
 - **Read meetings.** List them, read the summary, key points, decisions and action items, and read the
   transcript (all of it, or one part by time or by speaker).
@@ -225,8 +225,8 @@ ask you before it runs a tool that overwrites or deletes, or that saves a file o
 | MCP tool | Command | What it does | Effect |
 | --- | --- | --- | --- |
 | `tasks_list` | `spaces tasks list [--from FROM] [--to TO] [--status all\|staged\|open\|done] [--category CATEGORY] [--limit N]` | List the daily tasks on a range of days, and the categories. | Reads |
-| `tasks_add` | `spaces tasks add <text> [--day DAY] [--category CATEGORY] [--no-staged]` | Add a task for a day. It waits for the user's OK unless staged is false. | Adds |
-| `tasks_update` | `spaces tasks update <task> [--text TEXT] [--day DAY] [--category CATEGORY]` | Change the text, the day or the category of a task. | Overwrites or deletes |
+| `tasks_add` | `spaces tasks add <text> [--day DAY] [--category CATEGORY] [--no-staged] [--repeat never\|daily\|weekdays\|weekly]` | Add a task for a day. It waits for the user's OK unless staged is false. | Adds |
+| `tasks_update` | `spaces tasks update <task> [--text TEXT] [--day DAY] [--category CATEGORY] [--repeat never\|daily\|weekdays\|weekly]` | Change the text, the day, the category or the repeat of a task. | Overwrites or deletes |
 | `tasks_set_done` | `spaces tasks set-done <task> [--no-done]` | Mark a task as done, or as open again. | Adds or changes |
 | `tasks_remove` | `spaces tasks remove <task>` | Remove a task for good. | Overwrites or deletes |
 | `tasks_add_category` | `spaces tasks add-category <name>` | Add a category to sort daily tasks into. | Adds |
@@ -380,7 +380,9 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
   default: it waits in the Tasks tab until you add it to your list or reject it, and a staged task cannot
   be ticked off. An agent is told to add a task straight to your list only when you asked for that very
   task. This is a request to the agent, not a lock: it can add tasks straight to the list, or remove a
-  staged task, as it can any task.
+  staged task, as it can any task. To make it a lock for adding, turn on **Ask me before AI tools add
+  tasks** in Settings > Agents: then every task an agent adds is staged. The Tasks tab shows which tool
+  suggested each one.
 - Ask the app to start or stop a meeting recording.
 - Save a meeting as a new Markdown file.
 

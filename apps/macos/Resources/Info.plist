@@ -85,5 +85,19 @@
 	<!-- Never send details about this Mac along with a check. -->
 	<key>SUEnableSystemProfiling</key>
 	<false/>
+	<!-- A daily task being dragged inside the app. Only the Tasks tab takes it. -->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>dev.openspaces.task</string>
+			<key>UTTypeDescription</key>
+			<string>Spaces task</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

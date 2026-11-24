@@ -84,10 +84,12 @@ struct TaskBoard {
   var waiting: [DailyTask] = []
   /// Things not done from days before the range. Only when the range takes in today.
   var earlier: [(day: TaskDay, entry: TaskEntry)] = []
-  /// The days of the range that have something on them, in order.
+  /// The days of the range, in order. In a range of up to `TasksLogic.everyDayUpTo` days every
+  /// day is here, empty or not, so a task can be dragged onto it. In a longer one, only the days
+  /// that have something on them.
   var days: [DaySection] = []
 
-  var isEmpty: Bool { waiting.isEmpty && earlier.isEmpty && days.isEmpty }
+  var isEmpty: Bool { waiting.isEmpty && earlier.isEmpty && days.allSatisfy(\.entries.isEmpty) }
 }
 
 enum TasksLogic {
@@ -125,26 +127,36 @@ enum TasksLogic {
         .sorted { $0.day < $1.day }
     }
     let inRange = Dictionary(grouping: dated.filter { days.contains($0.day) }, by: \.day)
-    board.days = inRange.keys.sorted().map { day in
+    var shown = Set(inRange.keys)
+    var day = days.lowerBound
+    for _ in 0..<everyDayUpTo where day <= days.upperBound {
+      shown.insert(day)
+      day = day.adding(days: 1)
+    }
+    if day <= days.upperBound { shown = Set(inRange.keys) }
+    board.days = shown.sorted().map { day in
       TaskBoard.DaySection(day: day, entries: ordered(inRange[day]?.map(\.entry) ?? []))
     }
     return board
   }
 
-  /// Not done first, tasks before meeting action items, and otherwise the order they were made in.
+  /// The longest range in which every day is shown, empty or not.
+  static let everyDayUpTo = 31
+
+  /// Not done first, tasks before meeting action items, tasks in the day's own order (see
+  /// `DailyTask.dayOrder`), and action items as their meetings list them.
   private static func ordered(_ entries: [TaskEntry]) -> [TaskEntry] {
-    func rank(_ entry: TaskEntry) -> Int {
+    func group(_ entry: TaskEntry) -> Int {
       switch entry {
       case .task: entry.isDone ? 2 : 0
       case .action: entry.isDone ? 3 : 1
       }
     }
-    func made(_ entry: TaskEntry) -> Date {
-      if case .task(let task) = entry { return task.createdAt }
-      return .distantPast
-    }
     return entries.enumerated().sorted { a, b in
-      (rank(a.element), made(a.element), a.offset) < (rank(b.element), made(b.element), b.offset)
+      let (ga, gb) = (group(a.element), group(b.element))
+      if ga != gb { return ga < gb }
+      if case .task(let x) = a.element, case .task(let y) = b.element { return DailyTask.dayOrder(x, y) }
+      return a.offset < b.offset
     }.map(\.element)
   }
 
@@ -166,6 +178,15 @@ enum TasksLogic {
     let title = title(day, today: today)
     let near = [today.adding(days: -1), today, today.adding(days: 1)]
     return near.contains(day) ? title.lowercased() : title
+  }
+
+  /// How often a task repeats, for people: "Every weekday".
+  static func repeatTitle(_ repeats: TaskRepeat) -> String {
+    switch repeats {
+    case .daily: "Every day"
+    case .weekdays: "Every weekday"
+    case .weekly: "Every week"
+    }
   }
 
   /// "3 to-dos, 1 done".

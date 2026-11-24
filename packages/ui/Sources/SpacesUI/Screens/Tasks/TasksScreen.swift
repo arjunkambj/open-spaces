@@ -1,6 +1,7 @@
 import SpacesDomain
 import SpacesEngine
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Daily tasks: a to-do list for each day, sorted into categories, with the open action items
 /// from meetings beside them. Tasks an AI tool suggests wait at the top for the person's OK.
@@ -22,7 +23,7 @@ public struct TasksScreen: View {
   @State private var toast: Toast?
   private let now: Date?
 
-  private static let dialogWidth: CGFloat = 520
+  private static let dialogWidth: CGFloat = 640
 
   /// - openMeeting: shows a meeting, for an action item that came from one.
   public init(openMeeting: @escaping (Meeting.ID) -> Void = { _ in }) {
@@ -162,16 +163,32 @@ public struct TasksScreen: View {
       if !board.earlier.isEmpty {
         PageSection("Not done from earlier") {
           CardList(board.earlier.map(\.entry)) { entry in
-            row(entry, day: board.earlier.first { $0.entry.id == entry.id }?.day)
+            let day = board.earlier.first { $0.entry.id == entry.id }?.day ?? today
+            row(entry, on: day, among: [], showsDay: true, takesDrops: false)
           }
         }
       }
       ForEach(board.days) { section in
-        PageSection(TasksLogic.title(section.day, today: today)) {
-          CardList(section.entries) { entry in row(entry, day: nil) }
-        } trailing: {
-          Text(TasksLogic.count(section.entries)).spacesText(.caption)
+        let tasks = section.entries.compactMap { entry -> DailyTask.ID? in
+          if case .task(let task) = entry, !task.isDone { return task.id }
+          return nil
         }
+        PageSection(TasksLogic.title(section.day, today: today)) {
+          if section.entries.isEmpty {
+            Text("Nothing planned. Drag a task here to move it to this day.")
+              .spacesText(.caption, color: Spaces.Color.textTertiary)
+              .frame(maxWidth: .infinity, minHeight: ListRowMetrics.minHeight, alignment: .leading)
+          } else {
+            CardList(section.entries) { entry in
+              row(entry, on: section.day, among: tasks, showsDay: false, takesDrops: true)
+            }
+          }
+        } trailing: {
+          if !section.entries.isEmpty {
+            Text(TasksLogic.count(section.entries)).spacesText(.caption)
+          }
+        }
+        .modifier(TaskDrop(highlight: .area) { drop($0, on: section.day, before: nil) })
       }
     }
   }
@@ -204,18 +221,64 @@ public struct TasksScreen: View {
   }
 
   private func waitingDetail(_ task: DailyTask) -> String {
-    var parts = ["Suggested by an AI tool", "for \(TasksLogic.inSentence(task.day, today: today))"]
+    let tool = task.agent.map { AgentStatus.name(of: AgentClient(name: $0)) } ?? "an AI tool"
+    var parts = ["Suggested by \(tool)", "for \(TasksLogic.inSentence(task.day, today: today))"]
     if category == nil { parts.append(task.category) }
+    if let repeats = task.repeats { parts.append(TasksLogic.repeatTitle(repeats)) }
     return parts.joined(separator: " · ")
   }
 
-  /// - day: shown under the text, for things from another day than the section's.
-  private func row(_ entry: TaskEntry, day: TaskDay?) -> some View {
+  /// - day: the day the row is on. A task dropped on the row lands on it, just above the row.
+  /// - among: the open tasks of that day in their order, for moving a task up or down.
+  /// - showsDay: writes the day under the text, for a row outside its day's section.
+  /// - takesDrops: whether a task can be dropped on the row.
+  @ViewBuilder
+  private func row(
+    _ entry: TaskEntry,
+    on day: TaskDay,
+    among tasks: [DailyTask.ID],
+    showsDay: Bool,
+    takesDrops: Bool
+  ) -> some View {
+    let base = rowView(entry, showsDay ? day : nil)
+    // Done tasks and meeting action items are shown after the open tasks, so a task dropped on
+    // one of them goes after the open tasks, at the end of the day.
+    let before: DailyTask.ID? = if case .task(let task) = entry, !task.isDone { task.id } else { nil }
+    let drop = TaskDrop(highlight: .line, isEnabled: takesDrops) { self.drop($0, on: day, before: before) }
+    switch entry {
+    case .task(let task):
+      base
+        .modifier(TaskDrag(task: task))
+        .modifier(drop)
+        .accessibilityActions { moveActions(task, among: tasks) }
+    case .action:
+      base.modifier(drop)
+    }
+  }
+
+  /// What VoiceOver offers in place of a drag.
+  @ViewBuilder private func moveActions(_ task: DailyTask, among tasks: [DailyTask.ID]) -> some View {
+    if let index = tasks.firstIndex(of: task.id) {
+      if index > 0 {
+        Button("Move up") { move(task, to: task.day, before: tasks[index - 1]) }
+      }
+      if index < tasks.count - 1 {
+        Button("Move down") {
+          move(task, to: task.day, before: index + 2 < tasks.count ? tasks[index + 2] : nil)
+        }
+      }
+    }
+    Button("Move to the next day") { move(task, to: task.day.adding(days: 1), before: nil) }
+    Button("Move to the day before") { move(task, to: task.day.adding(days: -1), before: nil) }
+  }
+
+  private func rowView(_ entry: TaskEntry, _ day: TaskDay?) -> some View {
     var details: [String] = []
     if let day { details.append(TasksLogic.title(day, today: today)) }
     switch entry {
     case .task(let task):
       if category == nil { details.append(task.category) }
+      if let repeats = task.repeats { details.append(TasksLogic.repeatTitle(repeats)) }
     case .action(let item, _, let title):
       details.append("From the meeting “\(title)”")
       if let owner = item.owner, !owner.isEmpty { details.append(owner) }
@@ -290,9 +353,15 @@ public struct TasksScreen: View {
     let saved = editor.original == nil ? "Added for \(TasksLogic.inSentence(day, today: today))" : "Saved"
     change(saved) { list in
       if let original = editor.original {
-        try list.edit(original.id, text: editor.text, day: day, category: editor.category)
+        try list.edit(
+          original.id,
+          text: editor.text,
+          day: day,
+          category: editor.category,
+          repeats: .some(editor.repeats)
+        )
       } else {
-        try list.add(editor.text, day: day, category: editor.category)
+        try list.add(editor.text, day: day, category: editor.category, repeats: editor.repeats)
       }
     }
   }
@@ -317,7 +386,13 @@ public struct TasksScreen: View {
     switch entry {
     case .task(let task):
       let done = !task.isDone
-      change { try $0.setDone(task.id, done) }
+      let today = self.today
+      var message: String?
+      if done, let repeats = task.repeats, task.repeatedAs == nil {
+        let next = repeats.next(after: task.day, notBefore: today)
+        message = "Done. The next one is on \(TasksLogic.inSentence(next, today: today))."
+      }
+      change(message) { try $0.setDone(task.id, done, today: today) }
     case .action(let item, let meeting, _):
       model.run { model in
         try await model.library.updateMeeting(meeting) { meeting in
@@ -329,6 +404,19 @@ public struct TasksScreen: View {
         }
       }
     }
+  }
+
+  /// Handles a task dropped on a day: moves it there, just above `before` when that is given.
+  /// Returns false for anything that is not one of the tasks.
+  private func drop(_ items: [TaskDragItem], on day: TaskDay, before: DailyTask.ID?) -> Bool {
+    guard let id = items.first?.id, let task = list.task(id), id != before else { return false }
+    move(task, to: day, before: before)
+    return true
+  }
+
+  private func move(_ task: DailyTask, to day: TaskDay, before: DailyTask.ID?) {
+    let message = task.day == day ? nil : "Moved to \(TasksLogic.inSentence(day, today: today))"
+    change(message) { try $0.move(task.id, to: day, before: before) }
   }
 
   private func delete(_ task: DailyTask) {
@@ -449,6 +537,7 @@ struct TaskEditor: Equatable {
   var text = ""
   var day = Date()
   var category = ""
+  var repeats: TaskRepeat?
   /// The task being edited, or `nil` when adding.
   var original: DailyTask?
 
@@ -464,6 +553,7 @@ struct TaskEditor: Equatable {
     text = task.text
     day = task.day.start().addingTimeInterval(12 * 3_600)
     category = task.category
+    repeats = task.repeats
     original = task
   }
 
@@ -495,6 +585,15 @@ private struct TaskEditorFields: View {
       VStack(alignment: .leading, spacing: Spaces.Space.s) {
         Text("Category").spacesText(.captionStrong)
         Dropdown("Category", selection: $editor.category, options: options, title: { $0 })
+      }
+      VStack(alignment: .leading, spacing: Spaces.Space.s) {
+        Text("Repeat").spacesText(.captionStrong)
+        Dropdown(
+          "Repeat",
+          selection: $editor.repeats,
+          options: [nil] + TaskRepeat.allCases.map(Optional.some),
+          title: { $0.map(TasksLogic.repeatTitle) ?? "Never" }
+        )
       }
       Spacer(minLength: 0)
     }
@@ -546,4 +645,74 @@ struct TasksPreview {
   var editor: TaskEditor?
   var naming: CategoryNamer?
   var deletingCategory: String?
+}
+
+/// What travels when a task is dragged: its ID, as a type of its own, so only the Tasks tab
+/// takes it and it is never pasted into a text field. The app declares the type in its Info.plist.
+struct TaskDragItem: Codable, Transferable {
+  let id: DailyTask.ID
+
+  static var transferRepresentation: some TransferRepresentation {
+    CodableRepresentation(contentType: UTType(exportedAs: "dev.openspaces.task"))
+  }
+}
+
+/// Lets a task be dragged onto a day or another task.
+private struct TaskDrag: ViewModifier {
+  let task: DailyTask
+
+  func body(content: Content) -> some View {
+    content.draggable(TaskDragItem(id: task.id)) {
+      Text(task.text)
+        .spacesText(.body)
+        .lineLimit(1)
+        .padding(.horizontal, Spaces.Space.m)
+        .padding(.vertical, Spaces.Space.s)
+        .background(Spaces.Color.raised, in: RoundedRectangle(cornerRadius: Spaces.Radius.control))
+    }
+  }
+}
+
+/// Takes a dragged task. `onDrop` gets what was dropped and says whether it was a task.
+private struct TaskDrop: ViewModifier {
+  enum Highlight {
+    /// A line above the view: the task lands there.
+    case line
+    /// A soft fill behind the whole view: the task lands at the end.
+    case area
+  }
+
+  let highlight: Highlight
+  var isEnabled = true
+  let onDrop: ([TaskDragItem]) -> Bool
+  @State private var isTargeted = false
+
+  func body(content: Content) -> some View {
+    if isEnabled { target(content) } else { content }
+  }
+
+  private func target(_ content: Content) -> some View {
+    content
+      .background {
+        if isTargeted && highlight == .area {
+          RoundedRectangle(cornerRadius: Spaces.Radius.control, style: .continuous)
+            .fill(Spaces.Color.surfaceHover)
+            .padding(-Spaces.Space.s)
+        }
+      }
+      .overlay(alignment: .top) {
+        if isTargeted && highlight == .line {
+          Rectangle()
+            .fill(Spaces.Color.textPrimary)
+            .frame(height: Spaces.Stroke.focus)
+            .accessibilityHidden(true)
+        }
+      }
+      .dropDestination(for: TaskDragItem.self) { items, _ in
+        onDrop(items)
+      } isTargeted: {
+        isTargeted = $0
+      }
+      .animation(Spaces.Motion.quick, value: isTargeted)
+  }
 }

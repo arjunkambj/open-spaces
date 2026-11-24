@@ -66,6 +66,7 @@ The examples below were written by the app itself, from made-up data.
 
 ```json
 {
+  "agentTasksNeedOK" : false,
   "historyRetention" : "month",
   "keepDictationAudio" : true,
   "language" : "en",
@@ -136,6 +137,8 @@ The examples below were written by the app itself, from made-up data.
   your calendar starts, the app offers to record it, and a meeting recorded during a call
   takes the event's title and the names of the people invited. The calendar is read on the
   Mac itself; nothing from it is sent anywhere.
+- `agentTasksNeedOK` (off unless you turn it on, in Settings > Agents): every daily task an AI
+  tool adds waits for your OK, even when the tool asks to put it straight on your list.
 - `language` is a two-letter code such as `en`. It is left out when the language is to be
   worked out from the audio.
 - Other keys you may see: `microphoneID`, and `apiBaseURL`, the address of a different
@@ -209,12 +212,25 @@ All four keys are required.
   "tasks" : [
     {
       "addedBy" : "agent",
+      "agent" : "claude-code",
       "category" : "Gooseworks",
       "createdAt" : "2026-11-24T06:26:08.699Z",
       "day" : "2026-11-25",
       "id" : "00000000-0000-4000-8000-000000000004",
       "status" : "staged",
       "text" : "Send the proposal"
+    },
+    {
+      "addedBy" : "me",
+      "category" : "General",
+      "createdAt" : "2026-11-23T08:00:00Z",
+      "day" : "2026-11-24",
+      "id" : "00000000-0000-4000-8000-000000000005",
+      "rank" : 0,
+      "repeatedAs" : "00000000-0000-4000-8000-000000000006",
+      "repeats" : "weekdays",
+      "status" : "done",
+      "text" : "Check the support inbox"
     }
   ]
 }
@@ -234,7 +250,17 @@ Each task:
   `done`.
 - `addedBy`: `me` (added in the app) or `agent` (added through `spaces`).
 
-All the keys of a task are required.
+Those keys are required. These are optional:
+
+- `agent`: the AI tool that added the task, by the name it gave when it connected: a name for people
+  such as `Claude Code` when it gave one, otherwise its own short name such as `claude-code`. The app
+  shows a short name as a name for people.
+- `rank`: where the task sits among the tasks of its day, lowest first. Dragging tasks into an
+  order numbers every task of that day. Tasks with no `rank` come after the others, oldest first.
+- `repeats`: `daily`, `weekdays` (Monday to Friday) or `weekly` (the same day of the week). When a
+  repeating task is ticked off, the next one is added, on the first day it is due after this one's
+  day and not before today, and `repeatedAs` is set to its ID. Opening the task again leaves the next
+  one where it is, and ticking it off again adds no second one while the first is still there.
 
 ### dictations.json
 

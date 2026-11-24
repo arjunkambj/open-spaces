@@ -401,18 +401,19 @@ public enum SampleData {
     )
   }
 
-  /// A few tasks for yesterday, today and tomorrow, and two an AI tool suggested.
+  /// A few tasks for yesterday, today and tomorrow, two that repeat, and two an AI tool suggested.
   public static func tasks(now: Date = Date()) -> TaskList {
     let today = TaskDay.today(now)
-    let entries: [(String, Int, String, TaskStatus, TaskAuthor)] = [
-      ("Reply to Priya about the launch date", -1, "General", .open, .me),
-      ("Book the flight for the offsite", -1, "General", .done, .me),
-      ("Review the Gooseworks onboarding flow", 0, "Gooseworks", .open, .me),
-      ("Send the weekly update", 0, "General", .done, .me),
-      ("Write the release notes for 0.3", 0, "Gooseworks", .open, .me),
-      ("Follow up with Sam on the billing migration", 0, "Gooseworks", .staged, .agent),
-      ("Plan next week's interviews", 1, "General", .open, .me),
-      ("Draft the pricing page copy", 1, "Gooseworks", .staged, .agent),
+    let entries: [(String, Int, String, TaskStatus, String?, TaskRepeat?)] = [
+      ("Reply to Priya about the launch date", -1, "General", .open, nil, nil),
+      ("Book the flight for the offsite", -1, "General", .done, nil, nil),
+      ("Check the support inbox", 0, "Gooseworks", .open, nil, .weekdays),
+      ("Review the Gooseworks onboarding flow", 0, "Gooseworks", .open, nil, nil),
+      ("Send the weekly update", 0, "General", .open, nil, .weekly),
+      ("Write the release notes for 0.3", 0, "Gooseworks", .done, nil, nil),
+      ("Follow up with Sam on the billing migration", 0, "Gooseworks", .staged, "claude-code", nil),
+      ("Plan next week's interviews", 1, "General", .open, nil, nil),
+      ("Draft the pricing page copy", 1, "Gooseworks", .staged, "codex-mcp-client", nil),
     ]
     return TaskList(
       tasks: entries.enumerated().map { index, entry in
@@ -421,8 +422,10 @@ public enum SampleData {
           day: today.adding(days: entry.1),
           category: entry.2,
           status: entry.3,
-          addedBy: entry.4,
-          createdAt: now.addingTimeInterval(Double(index - entries.count) * 600)
+          addedBy: entry.4 == nil ? .me : .agent,
+          agent: entry.4,
+          createdAt: now.addingTimeInterval(Double(index - entries.count) * 600),
+          repeats: entry.5
         )
       }
     )

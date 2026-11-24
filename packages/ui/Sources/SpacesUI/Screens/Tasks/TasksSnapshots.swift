@@ -11,7 +11,11 @@ enum TasksSnapshots {
       SnapshotCase("tasks", model: { ScreenSamples.model(tasks: sample) }) {
         TasksScreen(preview: TasksPreview(now: now))
       },
-      SnapshotCase("tasks-week", model: { ScreenSamples.model(tasks: sample) }) {
+      SnapshotCase(
+        "tasks-week",
+        canvas: .custom(width: 1100, height: 2400),
+        model: { ScreenSamples.model(tasks: sample) }
+      ) {
         TasksScreen(preview: TasksPreview(now: now, range: .nextWeek))
       },
       SnapshotCase("tasks-category", model: { ScreenSamples.model(tasks: sample) }) {

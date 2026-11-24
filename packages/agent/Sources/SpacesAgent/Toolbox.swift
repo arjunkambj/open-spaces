@@ -23,6 +23,8 @@ struct AgentError: Error, Equatable {
 struct Toolbox: Sendable {
   let library: any Library
   let environment: SpacesAgent.Environment
+  /// The AI tool calling, as it names itself, when it is an MCP client that gave a name.
+  var agent: String?
 
   var now: Date { Date() }
 

@@ -57,6 +57,13 @@ actor AgentPresence {
     }
   }
 
+  /// The connected tool's name for people when it gave one, otherwise its name for itself.
+  func clientName() -> String? {
+    guard let client = session?.client else { return nil }
+    let name = [client.title, client.name].compactMap { $0 }.first { !$0.isEmpty }
+    return name
+  }
+
   /// The server is stopping: the session is saved as stopped now.
   func end() async {
     pending?.cancel()

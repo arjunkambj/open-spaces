@@ -464,6 +464,17 @@ struct AgentSettings: View {
     )
     if let path = model.host.agentToolPath {
       AgentConnections(tools: AgentStatus.list(model.agentSessions))
+      PageSection("Tasks") {
+        Card(padding: 0) {
+          ToggleRow(
+            "Ask me before AI tools add tasks",
+            description:
+              "Every task an AI tool adds waits in the Tasks tab for your OK, even when you asked for it. "
+              + "When this is off, a tool may put a task you asked for straight on your list.",
+            isOn: model.settingBinding(\.agentTasksNeedOK)
+          )
+        }
+      }
       PageSection("Claude Code") {
         VStack(alignment: .leading, spacing: Spaces.Space.s) {
           CopyBlock("Claude Code command", text: AgentSetup.claudeCommand(toolPath: path))
@@ -492,12 +503,13 @@ struct AgentSettings: View {
           SetupFact(
             "doc.text.magnifyingglass",
             title: "Read and search",
-            detail: "Meetings, transcripts, action items and your dictation history."
+            detail: "Meetings, transcripts, action items, daily tasks and your dictation history."
           )
           SetupFact(
             "square.and.pencil",
             title: "Update",
-            detail: "Add notes and action items, tick them off, change titles and tags, export a meeting."
+            detail:
+              "Add notes, action items and tasks, tick them off, change titles and tags, export a meeting."
           )
           SetupFact(
             "record.circle",

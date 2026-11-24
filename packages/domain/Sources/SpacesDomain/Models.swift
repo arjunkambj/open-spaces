@@ -41,6 +41,9 @@ public struct Settings: Codable, Sendable, Equatable {
   public var historyRetention: HistoryRetention
 
   public var meetings: MeetingSettings
+  /// When on, every task an AI tool adds waits for the person's OK, even when the tool asks to
+  /// put it straight on the list.
+  public var agentTasksNeedOK: Bool
 
   public init(
     userName: String = "",
@@ -58,7 +61,8 @@ public struct Settings: Codable, Sendable, Equatable {
     launchAtLogin: Bool = false,
     keepDictationAudio: Bool = true,
     historyRetention: HistoryRetention = .forever,
-    meetings: MeetingSettings = MeetingSettings()
+    meetings: MeetingSettings = MeetingSettings(),
+    agentTasksNeedOK: Bool = false
   ) {
     self.userName = userName
     self.onboardedAt = onboardedAt
@@ -76,6 +80,7 @@ public struct Settings: Codable, Sendable, Equatable {
     self.keepDictationAudio = keepDictationAudio
     self.historyRetention = historyRetention
     self.meetings = meetings
+    self.agentTasksNeedOK = agentTasksNeedOK
   }
 
   /// Writes the text while the person speaks, so it is ready about a second after they stop.
@@ -126,6 +131,7 @@ public struct Settings: Codable, Sendable, Equatable {
     case userName, onboardedAt, transcriptionModel, textModel, language, apiBaseURL, smartFormatting, styles
     case shortcuts
     case microphoneID, playSounds, showPill, launchAtLogin, keepDictationAudio, historyRetention, meetings
+    case agentTasksNeedOK
   }
 
   public init(from decoder: any Decoder) throws {
@@ -157,6 +163,7 @@ public struct Settings: Codable, Sendable, Equatable {
     historyRetention =
       try c.decodeIfPresent(HistoryRetention.self, forKey: .historyRetention) ?? d.historyRetention
     meetings = try c.decodeIfPresent(MeetingSettings.self, forKey: .meetings) ?? d.meetings
+    agentTasksNeedOK = try c.decodeIfPresent(Bool.self, forKey: .agentTasksNeedOK) ?? d.agentTasksNeedOK
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -184,6 +191,7 @@ public struct Settings: Codable, Sendable, Equatable {
     try c.encode(keepDictationAudio, forKey: .keepDictationAudio)
     try c.encode(historyRetention, forKey: .historyRetention)
     try c.encode(meetings, forKey: .meetings)
+    try c.encode(agentTasksNeedOK, forKey: .agentTasksNeedOK)
   }
 }
 
