@@ -46,6 +46,12 @@ public struct TaskDay: Sendable, Hashable, Comparable, Codable, CustomStringConv
 
   public var description: String { text }
 
+  /// The day of the week, 1 for Sunday through 7 for Saturday.
+  public var weekday: Int {
+    let calendar = TaskDay.calendar
+    return calendar.component(.weekday, from: start(calendar: calendar).addingTimeInterval(12 * 3_600))
+  }
+
   public static func < (a: TaskDay, b: TaskDay) -> Bool { a.text < b.text }
 
   public init(from decoder: any Decoder) throws {
@@ -90,6 +96,28 @@ public enum TaskStatus: String, Codable, Sendable, CaseIterable {
   case done
 }
 
+/// How often a task comes back once it is ticked off.
+public enum TaskRepeat: String, Codable, Sendable, CaseIterable {
+  case daily
+  /// Monday to Friday.
+  case weekdays
+  /// The same day of the week.
+  case weekly
+
+  /// The first day after `day` the task is due again, and not before `earliest`.
+  public func next(after day: TaskDay, notBefore earliest: TaskDay) -> TaskDay {
+    let step = self == .weekly ? 7 : 1
+    var candidate = day.adding(days: step)
+    // Ten years of steps at most, so a task from long ago can never keep this busy.
+    for _ in 0..<3_650 {
+      let due = self != .weekdays || !(candidate.weekday == 1 || candidate.weekday == 7)
+      if due && candidate >= earliest { return candidate }
+      candidate = candidate.adding(days: step)
+    }
+    return candidate
+  }
+}
+
 /// Who put a task on the list.
 public enum TaskAuthor: String, Codable, Sendable {
   /// The person, in the app.
@@ -108,7 +136,20 @@ public struct DailyTask: Codable, Sendable, Identifiable, Hashable {
   public var category: String
   public var status: TaskStatus
   public var addedBy: TaskAuthor
+  /// The AI tool that added the task, as it names itself (`claude-code`), when it gave a name.
+  public var agent: String?
   public var createdAt: Date
+  /// Where the task sits among the tasks of its day, lowest first. Tasks with none come after
+  /// the others, oldest first. Set when the person drags tasks into an order.
+  public var rank: Int?
+  /// How often the task comes back. `nil` for a task done once.
+  public var repeats: TaskRepeat?
+  /// The next one of a repeating task, made when this one was ticked off.
+  public var repeatedAs: UUID?
+  /// More about the task, in plain text or Markdown. Several lines are fine.
+  public var notes: String?
+  /// The meeting the task came from or belongs to.
+  public var meeting: Meeting.ID?
 
   public init(
     id: UUID = UUID(),
@@ -117,7 +158,13 @@ public struct DailyTask: Codable, Sendable, Identifiable, Hashable {
     category: String,
     status: TaskStatus = .open,
     addedBy: TaskAuthor = .me,
-    createdAt: Date = Date()
+    agent: String? = nil,
+    createdAt: Date = Date(),
+    rank: Int? = nil,
+    repeats: TaskRepeat? = nil,
+    repeatedAs: UUID? = nil,
+    notes: String? = nil,
+    meeting: Meeting.ID? = nil
   ) {
     self.id = id
     self.text = text
@@ -125,10 +172,21 @@ public struct DailyTask: Codable, Sendable, Identifiable, Hashable {
     self.category = category
     self.status = status
     self.addedBy = addedBy
+    self.agent = agent
     self.createdAt = createdAt
+    self.rank = rank
+    self.repeats = repeats
+    self.repeatedAs = repeatedAs
+    self.notes = notes
+    self.meeting = meeting
   }
 
   public var isDone: Bool { status == .done }
+
+  /// The order of tasks on one day: by `rank`, then oldest first.
+  public static func dayOrder(_ a: DailyTask, _ b: DailyTask) -> Bool {
+    (a.rank ?? Int.max, a.createdAt) < (b.rank ?? Int.max, b.createdAt)
+  }
 }
 
 // MARK: - List
@@ -150,6 +208,8 @@ public struct TaskList: Codable, Sendable, Hashable {
   public static let startingCategories = ["General", "Gooseworks"]
   /// The most characters a task's text may have.
   public static let textLimit = 500
+  /// The most characters a task's notes may have.
+  public static let notesLimit = 5_000
   /// The most characters a category name may have.
   public static let categoryLimit = 40
   /// The most categories and tasks the list holds.
@@ -188,7 +248,7 @@ public struct TaskList: Codable, Sendable, Hashable {
 
   public func task(_ id: DailyTask.ID) -> DailyTask? { tasks.first { $0.id == id } }
 
-  /// Tasks on the days from `first` through `last`, in day order, then oldest first.
+  /// Tasks on the days from `first` through `last`, in day order, then in each day's order.
   public func tasks(from first: TaskDay, through last: TaskDay) -> [DailyTask] {
     tasks.filter { $0.day >= first && $0.day <= last }.sorted(by: TaskList.order)
   }
@@ -206,6 +266,10 @@ public struct TaskList: Codable, Sendable, Hashable {
     category: String? = nil,
     status: TaskStatus = .open,
     addedBy: TaskAuthor = .me,
+    agent: String? = nil,
+    repeats: TaskRepeat? = nil,
+    notes: String? = nil,
+    meeting: Meeting.ID? = nil,
     id: UUID = UUID(),
     now: Date = Date()
   ) throws -> DailyTask {
@@ -221,37 +285,98 @@ public struct TaskList: Codable, Sendable, Hashable {
       category: try existing(category ?? defaultCategory),
       status: status,
       addedBy: addedBy,
-      createdAt: now
+      agent: agent.map(TaskList.oneLine).flatMap { $0.isEmpty ? nil : String($0.prefix(80)) },
+      createdAt: now,
+      repeats: repeats,
+      notes: try TaskList.checkedNotes(notes),
+      meeting: meeting
     )
     tasks.append(task)
     return task
   }
 
-  /// Changes one task and returns it as it is afterwards. Only what is given changes.
+  /// Changes one task and returns it as it is afterwards. Only what is given changes. A task
+  /// moved to another day goes to the end of that day. `.some(nil)` clears `repeats`, `notes` or
+  /// `meeting`.
   @discardableResult
   public mutating func edit(
     _ id: DailyTask.ID,
     text: String? = nil,
     day: TaskDay? = nil,
-    category: String? = nil
+    category: String? = nil,
+    repeats: TaskRepeat?? = nil,
+    notes: String?? = nil,
+    meeting: Meeting.ID?? = nil
   ) throws -> DailyTask {
     let index = try position(of: id)
     if let text { tasks[index].text = try TaskList.checkedText(text) }
-    if let day { tasks[index].day = day }
+    if let day, day != tasks[index].day {
+      tasks[index].day = day
+      tasks[index].rank = nil
+    }
     if let category { tasks[index].category = try existing(category) }
+    if let repeats { tasks[index].repeats = repeats }
+    if let notes { tasks[index].notes = try TaskList.checkedNotes(notes) }
+    if let meeting { tasks[index].meeting = meeting }
+    return tasks[index]
+  }
+
+  /// Moves a task to `day`, just before `other` (a task on that day), or to the end of the day
+  /// when `other` is `nil` or not on that day. The tasks of that day are numbered again in their
+  /// new order.
+  @discardableResult
+  public mutating func move(_ id: DailyTask.ID, to day: TaskDay, before other: DailyTask.ID?) throws
+    -> DailyTask
+  {
+    let index = try position(of: id)
+    tasks[index].day = day
+    var order = tasks.filter { $0.day == day && $0.id != id }.sorted(by: DailyTask.dayOrder).map(\.id)
+    order.insert(id, at: order.firstIndex { $0 == other } ?? order.endIndex)
+    for (rank, taskID) in order.enumerated() {
+      if let at = tasks.firstIndex(where: { $0.id == taskID }) { tasks[at].rank = rank }
+    }
     return tasks[index]
   }
 
   /// Ticks a task off, or opens it again. A staged task needs the person's OK first.
+  ///
+  /// Ticking off a repeating task adds the next one, with the same text, category, notes and
+  /// meeting, on the first day it is due after this
+  /// one's day and not before `today`, unless the next one is still there from an earlier tick.
+  /// Opening a task again changes nothing else: the next one stays.
   @discardableResult
-  public mutating func setDone(_ id: DailyTask.ID, _ done: Bool) throws -> DailyTask {
+  public mutating func setDone(_ id: DailyTask.ID, _ done: Bool, today: TaskDay = .today()) throws
+    -> DailyTask
+  {
     let index = try position(of: id)
-    guard tasks[index].status != .staged else {
+    let task = tasks[index]
+    guard task.status != .staged else {
       throw SpacesError.invalidInput(
         "This task still waits for approval in the Tasks tab of Spaces, so it cannot be ticked off yet."
       )
     }
+    let needsNext = done && task.repeats != nil && (task.repeatedAs.flatMap { self.task($0) } == nil)
+    if needsNext && tasks.count >= TaskList.mostTasks {
+      throw SpacesError.invalidInput(
+        "There are already \(TaskList.mostTasks) tasks, so the next one of this repeating task cannot be "
+          + "added. Delete some old tasks first."
+      )
+    }
     tasks[index].status = done ? .done : .open
+    if needsNext, let repeats = task.repeats {
+      let next = DailyTask(
+        text: task.text,
+        day: repeats.next(after: task.day, notBefore: today),
+        category: task.category,
+        addedBy: task.addedBy,
+        agent: task.agent,
+        repeats: repeats,
+        notes: task.notes,
+        meeting: task.meeting
+      )
+      tasks.append(next)
+      tasks[index].repeatedAs = next.id
+    }
     return tasks[index]
   }
 
@@ -310,7 +435,7 @@ public struct TaskList: Codable, Sendable, Hashable {
   // MARK: Inside
 
   private static func order(_ a: DailyTask, _ b: DailyTask) -> Bool {
-    (a.day, a.createdAt) < (b.day, b.createdAt)
+    a.day == b.day ? DailyTask.dayOrder(a, b) : a.day < b.day
   }
 
   private func position(of id: DailyTask.ID) throws -> Int {
@@ -333,6 +458,17 @@ public struct TaskList: Codable, Sendable, Hashable {
     guard !clean.isEmpty else { throw SpacesError.invalidInput("Write what the task is.") }
     guard clean.count <= textLimit else {
       throw SpacesError.invalidInput("A task can be at most \(textLimit) characters.")
+    }
+    return clean
+  }
+
+  /// Notes as stored: trimmed, and `nil` when nothing is left.
+  private static func checkedNotes(_ notes: String?) throws -> String? {
+    guard let clean = notes?.trimmingCharacters(in: .whitespacesAndNewlines), !clean.isEmpty else {
+      return nil
+    }
+    guard clean.count <= notesLimit else {
+      throw SpacesError.invalidInput("A task's notes can be at most \(notesLimit) characters.")
     }
     return clean
   }

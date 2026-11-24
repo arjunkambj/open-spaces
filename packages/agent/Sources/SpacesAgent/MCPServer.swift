@@ -358,6 +358,8 @@ actor MCPServer {
     default: throw RPCError.invalidParams("Invalid params: \"arguments\" must be a JSON object.")
     }
     await presence.noteUse(tool: tool.name)
+    var box = self.box
+    box.agent = await presence.clientName()
     do {
       let output = try await tool.call(arguments, in: box)
       // The text is the same JSON, for clients that only pass text on to the model.

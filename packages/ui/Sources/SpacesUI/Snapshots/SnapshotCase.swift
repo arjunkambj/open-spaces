@@ -45,8 +45,8 @@ public struct SnapshotCase {
 /// Every snapshot case in this package.
 public enum SnapshotRegistry {
   @MainActor public static var all: [SnapshotCase] {
-    DesignSnapshots.cases + HomeSnapshots.cases + TasksSnapshots.cases + DictionarySnapshots.cases
-      + SnippetsSnapshots.cases
+    DesignSnapshots.cases + HomeSnapshots.cases + TasksSnapshots.cases + TasksBoardSnapshots.cases
+      + DictionarySnapshots.cases + SnippetsSnapshots.cases
       + StyleSnapshots.cases + MeetingsSnapshots.cases + SettingsSnapshots.cases + OnboardingSnapshots.cases
   }
 }

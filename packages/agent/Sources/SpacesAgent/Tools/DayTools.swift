@@ -98,7 +98,7 @@ extension Toolbox {
       "date": .string(String(friendly(start).prefix(10))),
       "from": .string(iso(start)),
       "until": .string(iso(end)),
-      "tasks": .array(tasks.map { .object(Toolbox.json($0)) }),
+      "tasks": .array(tasks.map { .object(Toolbox.json($0, meetings: all)) }),
       "dictations": [
         "count": .int(dictations.count),
         "failed": .int(dictations.count - finished.count),

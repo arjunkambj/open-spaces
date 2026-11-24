@@ -12,6 +12,21 @@ extension Catalogue {
     "A day: 2026-11-24, \"today\", \"tomorrow\", \"yesterday\", or a number of days from today such as "
     + "+2 or -1."
 
+  private static let repeatParam = Param.choice(
+    "repeat",
+    ["never"] + TaskRepeat.allCases.map(\.rawValue),
+    "How often the task comes back once it is ticked off: never, daily, weekdays (Monday to Friday) or "
+      + "weekly (the same day of the week)."
+  )
+
+  private static func notesParam(_ help: String) -> Param {
+    .text(
+      "notes",
+      "More about the task, in plain text or Markdown. Several lines are fine. \(help)",
+      limit: TaskList.notesLimit
+    )
+  }
+
   static let tasks: [Tool] = [
     Tool(
       path: ["tasks", "list"],
@@ -20,10 +35,11 @@ extension Catalogue {
       description:
         "Lists the user's daily tasks on the days from \"from\" through \"to\" (both today unless given), "
         + "in day order, and every task category. Each task has its ID, its text, its day, its category, "
-        + "its status and who added it. Status is \"staged\" for a task an AI tool suggested that still "
-        + "waits for the user's OK in the app, \"open\" for a task to do, and \"done\". Use it to answer "
-        + "\"what do I have to do today?\" or \"what is planned this week?\". Action items from meetings "
-        + "are not daily tasks: use actions_list for those.",
+        + "its status and who added it, and its notes and the meeting it is linked to when it has them. "
+        + "Status is \"staged\" for a task an AI tool suggested that still waits for the user's OK in the "
+        + "app, \"open\" for a task to do, and \"done\". Use it to answer \"what do I have to do "
+        + "today?\" or \"what is planned this week?\". Action items from meetings are not daily tasks: "
+        + "use actions_list for those.",
       params: [
         .text("from", "The first day. \(dayHelp)"),
         .text("to", "The last day. The same as \"from\" unless given. \(dayHelp)"),
@@ -43,8 +59,11 @@ extension Catalogue {
         "Adds a task to the user's list for one day (today unless given), in a category (the first "
         + "category unless given; tasks_list shows them all). By default the task is staged: the user "
         + "sees it in the Tasks tab of the app and approves or rejects it. Pass staged=false to put it "
-        + "straight on the list, only when the user asked for this very task. Returns the task with its "
-        + "new ID.",
+        + "straight on the list, only when the user asked for this very task; when the user has turned "
+        + "on \"ask me before AI tools add tasks\" in Spaces, it is staged anyway. A task can repeat "
+        + "every day, every weekday or every week: when it is ticked off, the next one is added. A task "
+        + "can have notes of several lines, and can be linked to the meeting it came from or belongs to. "
+        + "Returns the task with its new ID.",
       params: [
         .text(
           "text",
@@ -64,6 +83,9 @@ extension Catalogue {
           "true (the default) to let the user approve the task first; false to add it straight to the list.",
           fallback: true
         ),
+        repeatParam,
+        notesParam("At most \(TaskList.notesLimit) characters."),
+        .text("meeting", "The meeting the task came from or belongs to. \(Catalogue.meetingHelp)"),
       ],
       hints: .adds,
       example: "spaces tasks add \"Send the proposal\" --day tomorrow --category Gooseworks",
@@ -72,15 +94,23 @@ extension Catalogue {
     Tool(
       path: ["tasks", "update"],
       title: "Change a daily task",
-      summary: "Change the text, the day or the category of a task.",
+      summary: "Change the text, the day, the category, the repeat, the notes or the meeting of a task.",
       description:
-        "Changes one task: its text, the day it is for (to move it to another day) or its category. Give "
-        + "only what should change. To tick a task off, use tasks_set_done instead.",
+        "Changes one task: its text, the day it is for (to move it to the end of another day), its "
+        + "category, how often it repeats (\"never\" stops it), its notes (replaced as a whole; empty "
+        + "clears them) or the meeting it is linked to (empty or \"none\" removes the link). Give only "
+        + "what should change. To tick a task off, use tasks_set_done instead.",
       params: [
         .text("task", taskHelp, required: true, positional: true),
         .text("text", "The new text, on one line.", limit: TaskList.textLimit),
         .text("day", "The new day. \(dayHelp)"),
         .text("category", "The new category. It must exist already.", limit: TaskList.categoryLimit),
+        repeatParam,
+        notesParam("Replaces what is there. An empty text clears them."),
+        .text(
+          "meeting",
+          "The meeting to link the task to. \(Catalogue.meetingHelp) An empty value or \"none\" removes the link."
+        ),
       ],
       hints: .destroys,
       aliases: [Alias(path: ["tasks", "edit"], summary: "The same as \"tasks update\".")],
@@ -92,7 +122,8 @@ extension Catalogue {
       title: "Tick a daily task off",
       summary: "Mark a task as done, or as open again.",
       description:
-        "Marks one task as done. Pass done=false to mark it as open again. A staged task cannot be "
+        "Marks one task as done. Pass done=false to mark it as open again. Ticking off a repeating task "
+        + "adds the next one, and the reply shows it; opening it again leaves the next one in place. A staged task cannot be "
         + "ticked off: it needs the user's OK in the app first.",
       params: [
         .text("task", taskHelp, required: true, positional: true),
@@ -161,7 +192,9 @@ extension Toolbox {
     )
   }
 
-  static func json(_ task: DailyTask) -> JSONObject {
+  /// The task as JSON. `meetings` gives the title of the meeting it is linked to, when that
+  /// meeting is among them.
+  static func json(_ task: DailyTask, meetings: [Meeting] = []) -> JSONObject {
     [
       "id": .string(task.id.uuidString),
       "text": .string(task.text),
@@ -169,6 +202,13 @@ extension Toolbox {
       "category": .string(task.category),
       "status": .string(task.status.rawValue),
       "added_by": .string(task.addedBy == .agent ? "ai_tool" : "user"),
+      "ai_tool": task.agent.map(JSONValue.string),
+      "repeat": task.repeats.map { .string($0.rawValue) },
+      "notes": task.notes.map(JSONValue.string),
+      "meeting_id": task.meeting.map { .string($0.uuidString) },
+      "meeting_title": task.meeting.flatMap { id in meetings.first { $0.id == id } }.map {
+        .string($0.title)
+      },
     ]
   }
 
@@ -180,6 +220,9 @@ extension Toolbox {
       case .staged: "[?]"
       }
     return "\(box) \(short(task.id))  \(task.day.text)  \(oneLine(task.category)):  \(oneLine(task.text))"
+      + (task.repeats.map { "  (repeats \($0.rawValue))" } ?? "")
+      + (task.meeting.map { "  (meeting \(short($0)))" } ?? "")
+      + (task.notes == nil ? "" : "  (has notes)")
       + (task.status == .staged ? "  (waiting for the user's OK)" : "")
   }
 
@@ -216,6 +259,20 @@ extension Toolbox {
     return after.task(before.id) ?? before
   }
 
+  /// The meeting named by the "meeting" argument: `nil` when it is not given, `.some(nil)`
+  /// when it is empty or "none".
+  private func taskMeeting(_ arguments: Arguments) async throws -> Meeting?? {
+    guard let reference = arguments.string("meeting") else { return nil }
+    let wanted = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+    if wanted.isEmpty || wanted.lowercased() == "none" { return .some(nil) }
+    return try await meeting(wanted)
+  }
+
+  /// Every meeting when one of `tasks` is linked to a meeting, for its title; none otherwise.
+  private func linkedMeetings(_ tasks: [DailyTask]) async throws -> [Meeting] {
+    tasks.contains { $0.meeting != nil } ? try await library.meetings() : []
+  }
+
   fileprivate func listTasks(_ arguments: Arguments) async throws -> ToolOutput {
     let from = try taskDay(from: arguments.string("from") ?? "today", argument: "from")
     let to = try arguments.string("to").map { try taskDay(from: $0, argument: "to") } ?? from
@@ -236,6 +293,7 @@ extension Toolbox {
       (category == nil || task.category == category) && (status == "all" || task.status.rawValue == status)
     }
     let shown = Array(found.prefix(arguments.int("limit") ?? 200))
+    let meetings = try await linkedMeetings(shown)
     let range = from == to ? from.text : "\(from.text) to \(to.text)"
     var lines = ["Tasks for \(range)" + (category.map { " in \(Toolbox.oneLine($0))" } ?? "") + ":"]
     if shown.isEmpty {
@@ -257,7 +315,7 @@ extension Toolbox {
         "open": .int(found.filter { $0.status == .open }.count),
         "done": .int(found.filter { $0.status == .done }.count),
         "returned": .int(shown.count),
-        "tasks": .array(shown.map { .object(Toolbox.json($0)) }),
+        "tasks": .array(shown.map { .object(Toolbox.json($0, meetings: meetings)) }),
       ],
       text: lines.joined(separator: "\n")
     )
@@ -267,43 +325,100 @@ extension Toolbox {
     let text = arguments.text("text")
     let day = try arguments.string("day").map { try taskDay(from: $0, argument: "day") } ?? TaskDay.today(now)
     let category = arguments.string("category")
-    let status: TaskStatus = arguments.bool("staged") ? .staged : .open
+    let askFirst = try await library.settings().agentTasksNeedOK
+    let status: TaskStatus = arguments.bool("staged") || askFirst ? .staged : .open
+    let repeats = arguments.string("repeat").flatMap(TaskRepeat.init(rawValue:))
+    let notes = arguments.string("notes").map(Toolbox.multiline)
+    let meeting = try await taskMeeting(arguments) ?? nil
+    let meetingID = meeting?.id
     let now = self.now
+    let agent = self.agent
     let id = UUID()
     let list = try await library.updateTaskList { list in
-      try list.add(text, day: day, category: category, status: status, addedBy: .agent, id: id, now: now)
+      try list.add(
+        text,
+        day: day,
+        category: category,
+        status: status,
+        addedBy: .agent,
+        agent: agent,
+        repeats: repeats,
+        notes: notes,
+        meeting: meetingID,
+        id: id,
+        now: now
+      )
     }
     guard let task = list.task(id) else { throw SpacesError.notFound("The new task") }
     let heading =
-      status == .staged ? "Added for the user to approve in the Tasks tab:" : "Added to the user's list:"
-    return ToolOutput(data: Toolbox.json(task), text: heading + "\n  " + Toolbox.line(for: task))
+      status == .open
+      ? "Added to the user's list:"
+      : !arguments.bool("staged")
+        ? "The user asks to approve every task an AI tool adds, so it waits in the Tasks tab:"
+        : "Added for the user to approve in the Tasks tab:"
+    return ToolOutput(
+      data: Toolbox.json(task, meetings: meeting.map { [$0] } ?? []),
+      text: heading + "\n  " + Toolbox.line(for: task)
+    )
   }
 
   fileprivate func updateTask(_ arguments: Arguments) async throws -> ToolOutput {
     let text = arguments.string("text")
     let day = try arguments.string("day").map { try taskDay(from: $0, argument: "day") }
     let category = arguments.string("category")
-    guard text != nil || day != nil || category != nil else {
-      throw AgentError.usage("Nothing to change. Give at least one of: text, day, category.")
+    let repeats: TaskRepeat?? = arguments.string("repeat").map { TaskRepeat(rawValue: $0) }
+    let notes: String?? = arguments.string("notes").map { Toolbox.multiline($0) }.map {
+      $0.isEmpty ? nil : $0
+    }
+    let meeting = try await taskMeeting(arguments)
+    let meetingID: Meeting.ID?? = meeting.map { $0?.id }
+    guard text != nil || day != nil || category != nil || repeats != nil || notes != nil || meeting != nil
+    else {
+      throw AgentError.usage(
+        "Nothing to change. Give at least one of: text, day, category, repeat, notes, meeting."
+      )
     }
     let task = try await changeTask(arguments.text("task")) { list, id in
-      try list.edit(id, text: text, day: day, category: category)
+      try list.edit(
+        id,
+        text: text,
+        day: day,
+        category: category,
+        repeats: repeats,
+        notes: notes,
+        meeting: meetingID
+      )
     }
-    return ToolOutput(data: Toolbox.json(task), text: "Updated:\n  " + Toolbox.line(for: task))
+    return ToolOutput(
+      data: Toolbox.json(task, meetings: try await linkedMeetings([task])),
+      text: "Updated:\n  " + Toolbox.line(for: task)
+    )
   }
 
   fileprivate func setTaskDone(_ arguments: Arguments) async throws -> ToolOutput {
     let done = arguments.bool("done")
-    let task = try await changeTask(arguments.text("task")) { list, id in try list.setDone(id, done) }
+    let today = TaskDay.today(now)
+    let before = try await library.taskList()
+    let task = try await changeTask(arguments.text("task")) { list, id in
+      try list.setDone(id, done, today: today)
+    }
+    var data = Toolbox.json(task, meetings: try await linkedMeetings([task]))
+    var text = (done ? "Done:\n  " : "Open again:\n  ") + Toolbox.line(for: task)
+    if done, let nextID = task.repeatedAs, before.task(nextID) == nil,
+      let next = try await library.taskList().task(nextID)
+    {
+      data["next"] = .object(Toolbox.json(next, meetings: try await linkedMeetings([next])))
+      text += "\nIt repeats, so the next one was added:\n  " + Toolbox.line(for: next)
+    }
     return ToolOutput(
-      data: Toolbox.json(task),
-      text: (done ? "Done:\n  " : "Open again:\n  ") + Toolbox.line(for: task)
+      data: data,
+      text: text
     )
   }
 
   fileprivate func removeTask(_ arguments: Arguments) async throws -> ToolOutput {
     let task = try await changeTask(arguments.text("task")) { list, id in try list.remove(id) }
-    var data = Toolbox.json(task)
+    var data = Toolbox.json(task, meetings: try await linkedMeetings([task]))
     data["removed"] = true
     return ToolOutput(data: data, text: "Removed:\n  " + Toolbox.line(for: task))
   }

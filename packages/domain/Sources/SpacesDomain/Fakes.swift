@@ -387,7 +387,8 @@ public struct FakeMeetingCalendar: MeetingCalendar {
 /// Made-up content for demos and snapshots. Nothing here is real user data.
 public enum SampleData {
   public static func library(now: Date = Date(), onboarded: Bool = true) -> InMemoryLibrary {
-    InMemoryLibrary(
+    let meetings = meetings(now: now)
+    return InMemoryLibrary(
       settings: Settings(
         userName: "Alex",
         onboardedAt: onboarded ? now.addingTimeInterval(-20 * 86_400) : nil
@@ -395,24 +396,37 @@ public enum SampleData {
       words: words(now: now),
       snippets: snippets(now: now),
       dictations: dictations(now: now),
-      meetings: meetings(now: now),
+      meetings: meetings,
       agents: agents(now: now),
-      tasks: tasks(now: now)
+      tasks: linkedTasks(now: now, meetings: meetings)
     )
   }
 
-  /// A few tasks for yesterday, today and tomorrow, and two an AI tool suggested.
+  /// The sample tasks, one of them tied to a sample meeting and carrying notes.
+  private static func linkedTasks(now: Date, meetings: [Meeting]) -> TaskList {
+    var list = tasks(now: now)
+    let sync = meetings.first { $0.title == "Weekly product sync" }
+    if let index = list.tasks.firstIndex(where: { $0.text.hasPrefix("Follow up with Sam") }) {
+      list.tasks[index].meeting = sync?.id
+      list.tasks[index].notes =
+        "Sam said the migration should finish on Thursday. Ask about the rollback plan."
+    }
+    return list
+  }
+
+  /// A few tasks for yesterday, today and tomorrow, two that repeat, and two an AI tool suggested.
   public static func tasks(now: Date = Date()) -> TaskList {
     let today = TaskDay.today(now)
-    let entries: [(String, Int, String, TaskStatus, TaskAuthor)] = [
-      ("Reply to Priya about the launch date", -1, "General", .open, .me),
-      ("Book the flight for the offsite", -1, "General", .done, .me),
-      ("Review the Gooseworks onboarding flow", 0, "Gooseworks", .open, .me),
-      ("Send the weekly update", 0, "General", .done, .me),
-      ("Write the release notes for 0.3", 0, "Gooseworks", .open, .me),
-      ("Follow up with Sam on the billing migration", 0, "Gooseworks", .staged, .agent),
-      ("Plan next week's interviews", 1, "General", .open, .me),
-      ("Draft the pricing page copy", 1, "Gooseworks", .staged, .agent),
+    let entries: [(String, Int, String, TaskStatus, String?, TaskRepeat?)] = [
+      ("Reply to Priya about the launch date", -1, "General", .open, nil, nil),
+      ("Book the flight for the offsite", -1, "General", .done, nil, nil),
+      ("Check the support inbox", 0, "Gooseworks", .open, nil, .weekdays),
+      ("Review the Gooseworks onboarding flow", 0, "Gooseworks", .open, nil, nil),
+      ("Send the weekly update", 0, "General", .open, nil, .weekly),
+      ("Write the release notes for 0.3", 0, "Gooseworks", .done, nil, nil),
+      ("Follow up with Sam on the billing migration", 0, "Gooseworks", .staged, "claude-code", nil),
+      ("Plan next week's interviews", 1, "General", .open, nil, nil),
+      ("Draft the pricing page copy", 1, "Gooseworks", .staged, "codex-mcp-client", nil),
     ]
     return TaskList(
       tasks: entries.enumerated().map { index, entry in
@@ -421,8 +435,10 @@ public enum SampleData {
           day: today.adding(days: entry.1),
           category: entry.2,
           status: entry.3,
-          addedBy: entry.4,
-          createdAt: now.addingTimeInterval(Double(index - entries.count) * 600)
+          addedBy: entry.4 == nil ? .me : .agent,
+          agent: entry.4,
+          createdAt: now.addingTimeInterval(Double(index - entries.count) * 600),
+          repeats: entry.5
         )
       }
     )
