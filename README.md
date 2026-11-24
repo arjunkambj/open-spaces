@@ -44,7 +44,7 @@ Spaces is an independent open-source project. It is not affiliated with Wispr Fl
 
 **Everything else**
 
-- **Daily tasks.** A to-do list for each day, sorted into categories you make. See today, this week or any dates you pick, with the open action items from your meetings beside your tasks. Drag a task to put it in order or move it to another day. A task can repeat every day, every weekday or every week. Tasks your AI agent suggests show which tool suggested them and wait for your OK before they join the list; you can make every task an agent adds wait.
+- **Daily tasks.** A to-do list for each day, sorted into categories you make. Three views: an Inbox of what needs you now (waiting, overdue and today), a List for today, this week or any dates you pick, and a Kanban board of your tasks by day, category or status. In the Inbox and the List, the open action items from your meetings sit beside your tasks. Drag a task to put it in order, move it to another day, or move it to another column. A task can repeat every day, every weekday or every week, have notes, and be linked to a meeting. Tasks your AI agent suggests show which tool suggested them and wait for your OK before they join the list; you can make every task an agent adds wait.
 - **Works with your AI agent.** A command-line tool and an MCP server let an agent such as Claude read your meetings and notes and add to them. (MCP is a common way for AI agents to use outside tools.)
 - **Use your own server.** Point it at any server that speaks the same language as OpenAI's, such as a proxy or a model running on your own machine.
 

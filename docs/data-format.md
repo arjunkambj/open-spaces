@@ -217,6 +217,7 @@ All four keys are required.
       "createdAt" : "2026-11-24T06:26:08.699Z",
       "day" : "2026-11-25",
       "id" : "00000000-0000-4000-8000-000000000004",
+      "notes" : "Use the prices we agreed on.\nAsk about the start date.",
       "status" : "staged",
       "text" : "Send the proposal"
     },
@@ -258,9 +259,14 @@ Those keys are required. These are optional:
 - `rank`: where the task sits among the tasks of its day, lowest first. Dragging tasks into an
   order numbers every task of that day. Tasks with no `rank` come after the others, oldest first.
 - `repeats`: `daily`, `weekdays` (Monday to Friday) or `weekly` (the same day of the week). When a
-  repeating task is ticked off, the next one is added, on the first day it is due after this one's
+  repeating task is ticked off, the next one is added, with the same text, category, notes and
+  meeting, on the first day it is due after this one's
   day and not before today, and `repeatedAs` is set to its ID. Opening the task again leaves the next
   one where it is, and ticking it off again adds no second one while the first is still there.
+- `notes`: more about the task, in plain text or Markdown, at most 5,000 characters. Several lines
+  are fine. The ends are trimmed, and empty notes are left out.
+- `meeting`: the ID of the meeting the task came from or belongs to (see `meetings/<ID>/`). If that
+  meeting is deleted, the ID stays and points at nothing.
 
 ### dictations.json
 

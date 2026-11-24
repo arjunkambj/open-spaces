@@ -18,6 +18,26 @@ enum TasksSnapshots {
       ) {
         TasksScreen(preview: TasksPreview(now: now, range: .nextWeek))
       },
+      SnapshotCase("tasks-inbox", model: { ScreenSamples.model(tasks: sample) }) {
+        TasksScreen(preview: TasksPreview(now: now, layout: .inbox))
+      },
+      SnapshotCase("tasks-inbox-empty", model: { ScreenSamples.model() }) {
+        TasksScreen(preview: TasksPreview(now: now, layout: .inbox))
+      },
+      SnapshotCase(
+        "tasks-board-screen",
+        canvas: .custom(width: 1500, height: 1000),
+        model: { ScreenSamples.model(tasks: sample) }
+      ) {
+        TasksScreen(preview: TasksPreview(now: now, layout: .board, range: .nextWeek))
+      },
+      SnapshotCase(
+        "tasks-board-screen-status",
+        canvas: .custom(width: 1500, height: 1000),
+        model: { ScreenSamples.model(tasks: sample) }
+      ) {
+        TasksScreen(preview: TasksPreview(now: now, layout: .board, grouping: .status, range: .nextWeek))
+      },
       SnapshotCase("tasks-category", model: { ScreenSamples.model(tasks: sample) }) {
         TasksScreen(preview: TasksPreview(now: now, category: "Gooseworks"))
       },

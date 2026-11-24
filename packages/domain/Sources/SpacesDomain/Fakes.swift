@@ -387,7 +387,8 @@ public struct FakeMeetingCalendar: MeetingCalendar {
 /// Made-up content for demos and snapshots. Nothing here is real user data.
 public enum SampleData {
   public static func library(now: Date = Date(), onboarded: Bool = true) -> InMemoryLibrary {
-    InMemoryLibrary(
+    let meetings = meetings(now: now)
+    return InMemoryLibrary(
       settings: Settings(
         userName: "Alex",
         onboardedAt: onboarded ? now.addingTimeInterval(-20 * 86_400) : nil
@@ -395,10 +396,22 @@ public enum SampleData {
       words: words(now: now),
       snippets: snippets(now: now),
       dictations: dictations(now: now),
-      meetings: meetings(now: now),
+      meetings: meetings,
       agents: agents(now: now),
-      tasks: tasks(now: now)
+      tasks: linkedTasks(now: now, meetings: meetings)
     )
+  }
+
+  /// The sample tasks, one of them tied to a sample meeting and carrying notes.
+  private static func linkedTasks(now: Date, meetings: [Meeting]) -> TaskList {
+    var list = tasks(now: now)
+    let sync = meetings.first { $0.title == "Weekly product sync" }
+    if let index = list.tasks.firstIndex(where: { $0.text.hasPrefix("Follow up with Sam") }) {
+      list.tasks[index].meeting = sync?.id
+      list.tasks[index].notes =
+        "Sam said the migration should finish on Thursday. Ask about the rollback plan."
+    }
+    return list
   }
 
   /// A few tasks for yesterday, today and tomorrow, two that repeat, and two an AI tool suggested.

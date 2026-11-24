@@ -146,6 +146,10 @@ public struct DailyTask: Codable, Sendable, Identifiable, Hashable {
   public var repeats: TaskRepeat?
   /// The next one of a repeating task, made when this one was ticked off.
   public var repeatedAs: UUID?
+  /// More about the task, in plain text or Markdown. Several lines are fine.
+  public var notes: String?
+  /// The meeting the task came from or belongs to.
+  public var meeting: Meeting.ID?
 
   public init(
     id: UUID = UUID(),
@@ -158,7 +162,9 @@ public struct DailyTask: Codable, Sendable, Identifiable, Hashable {
     createdAt: Date = Date(),
     rank: Int? = nil,
     repeats: TaskRepeat? = nil,
-    repeatedAs: UUID? = nil
+    repeatedAs: UUID? = nil,
+    notes: String? = nil,
+    meeting: Meeting.ID? = nil
   ) {
     self.id = id
     self.text = text
@@ -171,6 +177,8 @@ public struct DailyTask: Codable, Sendable, Identifiable, Hashable {
     self.rank = rank
     self.repeats = repeats
     self.repeatedAs = repeatedAs
+    self.notes = notes
+    self.meeting = meeting
   }
 
   public var isDone: Bool { status == .done }
@@ -200,6 +208,8 @@ public struct TaskList: Codable, Sendable, Hashable {
   public static let startingCategories = ["General", "Gooseworks"]
   /// The most characters a task's text may have.
   public static let textLimit = 500
+  /// The most characters a task's notes may have.
+  public static let notesLimit = 5_000
   /// The most characters a category name may have.
   public static let categoryLimit = 40
   /// The most categories and tasks the list holds.
@@ -258,6 +268,8 @@ public struct TaskList: Codable, Sendable, Hashable {
     addedBy: TaskAuthor = .me,
     agent: String? = nil,
     repeats: TaskRepeat? = nil,
+    notes: String? = nil,
+    meeting: Meeting.ID? = nil,
     id: UUID = UUID(),
     now: Date = Date()
   ) throws -> DailyTask {
@@ -275,21 +287,26 @@ public struct TaskList: Codable, Sendable, Hashable {
       addedBy: addedBy,
       agent: agent.map(TaskList.oneLine).flatMap { $0.isEmpty ? nil : String($0.prefix(80)) },
       createdAt: now,
-      repeats: repeats
+      repeats: repeats,
+      notes: try TaskList.checkedNotes(notes),
+      meeting: meeting
     )
     tasks.append(task)
     return task
   }
 
   /// Changes one task and returns it as it is afterwards. Only what is given changes. A task
-  /// moved to another day goes to the end of that day. `repeats` `.some(nil)` stops it repeating.
+  /// moved to another day goes to the end of that day. `.some(nil)` clears `repeats`, `notes` or
+  /// `meeting`.
   @discardableResult
   public mutating func edit(
     _ id: DailyTask.ID,
     text: String? = nil,
     day: TaskDay? = nil,
     category: String? = nil,
-    repeats: TaskRepeat?? = nil
+    repeats: TaskRepeat?? = nil,
+    notes: String?? = nil,
+    meeting: Meeting.ID?? = nil
   ) throws -> DailyTask {
     let index = try position(of: id)
     if let text { tasks[index].text = try TaskList.checkedText(text) }
@@ -299,6 +316,8 @@ public struct TaskList: Codable, Sendable, Hashable {
     }
     if let category { tasks[index].category = try existing(category) }
     if let repeats { tasks[index].repeats = repeats }
+    if let notes { tasks[index].notes = try TaskList.checkedNotes(notes) }
+    if let meeting { tasks[index].meeting = meeting }
     return tasks[index]
   }
 
@@ -321,7 +340,8 @@ public struct TaskList: Codable, Sendable, Hashable {
 
   /// Ticks a task off, or opens it again. A staged task needs the person's OK first.
   ///
-  /// Ticking off a repeating task adds the next one, on the first day it is due after this
+  /// Ticking off a repeating task adds the next one, with the same text, category, notes and
+  /// meeting, on the first day it is due after this
   /// one's day and not before `today`, unless the next one is still there from an earlier tick.
   /// Opening a task again changes nothing else: the next one stays.
   @discardableResult
@@ -350,7 +370,9 @@ public struct TaskList: Codable, Sendable, Hashable {
         category: task.category,
         addedBy: task.addedBy,
         agent: task.agent,
-        repeats: repeats
+        repeats: repeats,
+        notes: task.notes,
+        meeting: task.meeting
       )
       tasks.append(next)
       tasks[index].repeatedAs = next.id
@@ -436,6 +458,17 @@ public struct TaskList: Codable, Sendable, Hashable {
     guard !clean.isEmpty else { throw SpacesError.invalidInput("Write what the task is.") }
     guard clean.count <= textLimit else {
       throw SpacesError.invalidInput("A task can be at most \(textLimit) characters.")
+    }
+    return clean
+  }
+
+  /// Notes as stored: trimmed, and `nil` when nothing is left.
+  private static func checkedNotes(_ notes: String?) throws -> String? {
+    guard let clean = notes?.trimmingCharacters(in: .whitespacesAndNewlines), !clean.isEmpty else {
+      return nil
+    }
+    guard clean.count <= notesLimit else {
+      throw SpacesError.invalidInput("A task's notes can be at most \(notesLimit) characters.")
     }
     return clean
   }
