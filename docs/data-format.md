@@ -33,6 +33,7 @@ the app and the tool must be given the same value to see the same data.
   api-key.json                     your API keys (macOS only, see below)
   dictionary.json                  words to spell your way
   snippets.json                    voice shortcuts
+  tasks.json                       daily tasks and their categories
   dictations.json                  dictation history
   dictation-audio/<ID>.m4a         audio kept for one dictation
   meetings/<ID>/meeting.json       one meeting
@@ -196,6 +197,44 @@ The other keys are required.
 ```
 
 All four keys are required.
+
+### tasks.json
+
+```json
+{
+  "categories" : [
+    "General",
+    "Gooseworks"
+  ],
+  "tasks" : [
+    {
+      "addedBy" : "agent",
+      "category" : "Gooseworks",
+      "createdAt" : "2026-11-24T06:26:08.699Z",
+      "day" : "2026-11-25",
+      "id" : "00000000-0000-4000-8000-000000000004",
+      "status" : "staged",
+      "text" : "Send the proposal"
+    }
+  ]
+}
+```
+
+`categories` lists the category names in the order the app shows them. New tasks go into the first one
+unless another is named. With no file, or no `categories` key, the list is `General` and `Gooseworks`.
+Names are matched without regard to case, and each is used once.
+
+Each task:
+
+- `text`: one line, at most 500 characters.
+- `day`: the day the task is for, written `yyyy-MM-dd`, with no time or time zone. A task stays on its
+  day wherever the Mac is.
+- `category`: one of `categories`.
+- `status`: `staged` (an AI tool suggested it and it waits for your OK in the Tasks tab), `open` or
+  `done`.
+- `addedBy`: `me` (added in the app) or `agent` (added through `spaces`).
+
+All the keys of a task are required.
 
 ### dictations.json
 

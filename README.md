@@ -44,6 +44,7 @@ Spaces is an independent open-source project. It is not affiliated with Wispr Fl
 
 **Everything else**
 
+- **Daily tasks.** A to-do list for each day, sorted into categories you make. See today, this week or any dates you pick, with the open action items from your meetings beside your tasks. Tasks your AI agent suggests wait for your OK before they join the list.
 - **Works with your AI agent.** A command-line tool and an MCP server let an agent such as Claude read your meetings and notes and add to them. (MCP is a common way for AI agents to use outside tools.)
 - **Use your own server.** Point it at any server that speaks the same language as OpenAI's, such as a proxy or a model running on your own machine.
 

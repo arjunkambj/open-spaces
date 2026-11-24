@@ -8,10 +8,10 @@ extension Catalogue {
     Tool(
       path: ["day", "summary"],
       title: "Sum up a day",
-      summary: "One day at a glance: dictations, meetings and action items.",
+      summary: "One day at a glance: tasks, dictations, meetings and action items.",
       description:
         "Returns one day in the user's time zone, midnight to midnight (today unless date is given): "
-        + "how much the user dictated (count, words, minutes, the apps they dictated into most) with the "
+        + "the daily tasks for that day; how much the user dictated (count, words, minutes, the apps they dictated into most) with the "
         + "short text of each dictation, oldest first; the meetings that started that day with their time, "
         + "title and the first part of the summary; the action items from those meetings; and every "
         + "action item still open in any other meeting. Long text is cut short: use dictations_list, "
@@ -91,11 +91,14 @@ extension Toolbox {
       (meeting.notes?.actionItems ?? []).filter { !$0.done }.map { ($0, meeting) }
     }
     let openShown = Array(openElsewhere.prefix(Toolbox.mostOpenInDay))
+    let taskDay = TaskDay(start)
+    let tasks = try await library.taskList().tasks(from: taskDay, through: taskDay)
 
     let data: JSONObject = [
       "date": .string(String(friendly(start).prefix(10))),
       "from": .string(iso(start)),
       "until": .string(iso(end)),
+      "tasks": .array(tasks.map { .object(Toolbox.json($0)) }),
       "dictations": [
         "count": .int(dictations.count),
         "failed": .int(dictations.count - finished.count),
@@ -135,6 +138,14 @@ extension Toolbox {
     ]
 
     var lines = [heading, ""]
+    if tasks.isEmpty {
+      lines.append("Tasks: none.")
+    } else {
+      let done = tasks.filter(\.isDone).count
+      lines.append("Tasks: \(tasks.count) (\(done) done).")
+      lines += tasks.map { "  " + Toolbox.line(for: $0) }
+    }
+    lines.append("")
     if dictations.isEmpty {
       lines.append("Dictation: none.")
     } else {

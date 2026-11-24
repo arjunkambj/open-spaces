@@ -63,6 +63,18 @@ enum LibraryJSON {
     }
   }
 
+  /// A task list with only its unreadable tasks left out. Categories that cannot be read are
+  /// treated as missing. `nil` when the data is not a JSON object at all.
+  static func salvageTaskList(from data: Data) -> TaskList? {
+    guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+    var list = TaskList()
+    if let names = object["categories"] as? [String], !names.isEmpty { list.categories = names }
+    if let tasks = object["tasks"], let raw = try? JSONSerialization.data(withJSONObject: tasks) {
+      list.tasks = salvageArray(DailyTask.self, from: raw) ?? []
+    }
+    return list
+  }
+
   private struct Salvaged<Element: Decodable>: Decodable {
     var elements: [Element] = []
 

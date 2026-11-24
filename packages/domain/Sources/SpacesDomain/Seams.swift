@@ -77,13 +77,20 @@ public protocol Library: Sendable {
   /// Inserts or replaces by `id`. Only the `spaces mcp` server that a session describes saves it.
   func save(_ session: AgentSession) async throws
 
+  /// Daily tasks and their categories. A library with no tasks yet has the starting categories.
+  func taskList() async throws -> TaskList
+  /// Applies `change` to the stored task list in one step and returns the result: no other
+  /// writer can slip in between. When `change` throws, nothing is saved and the error is thrown.
+  @discardableResult
+  func updateTaskList(_ change: @Sendable (inout TaskList) throws -> Void) async throws -> TaskList
+
   /// A stream of what changed, from this process or another one. Each call
   /// returns an independent stream; it ends when the caller stops iterating.
   func changes() -> AsyncStream<LibraryChange>
 }
 
 public enum LibraryChange: Sendable, Hashable, CaseIterable {
-  case settings, words, snippets, dictations, meetings, agents
+  case settings, words, snippets, dictations, meetings, agents, tasks
 }
 
 extension Library {
@@ -461,6 +468,8 @@ public enum SpacesError: Error, Sendable, Equatable, LocalizedError {
   case invalidServerAddress
   /// The language model answered a command with far more text than could be meant.
   case replyTooLong
+  /// What was asked breaks a rule of the library, such as an empty task. The text says which.
+  case invalidInput(String)
   /// A request to Anthropic, for a Claude model, failed with this error. Worded for Anthropic.
   indirect case anthropic(SpacesError)
 
@@ -482,6 +491,7 @@ public enum SpacesError: Error, Sendable, Equatable, LocalizedError {
     case .invalidResponse(let detail): "OpenAI sent a reply that could not be read: \(detail)"
     case .invalidServerAddress: "The custom server address in Settings is not a valid web address."
     case .replyTooLong: "The reply was far longer than expected, so it was not typed. Try the command again."
+    case .invalidInput(let detail): detail
     case .anthropic(let error): SpacesError.anthropicMessage(error)
     }
   }

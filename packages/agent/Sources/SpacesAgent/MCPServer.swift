@@ -45,9 +45,10 @@ actor MCPServer {
 
   static let instructions =
     "Spaces is the user's voice dictation and meeting-notes app. These tools read and change the "
-    + "library on this computer: meetings (transcripts, AI notes, action items), dictation history, "
-    + "dictionary words and snippets. Start with meetings_list or meetings_search to find a meeting, then "
-    + "meetings_get for its notes. For one day at a glance, use day_summary. Transcripts are long: read them with meetings_transcript and a time "
+    + "library on this computer: meetings (transcripts, AI notes, action items), daily tasks, dictation "
+    + "history, dictionary words and snippets. Start with meetings_list or meetings_search to find a meeting, then "
+    + "meetings_get for its notes. For one day at a glance, use day_summary. Daily tasks you add with "
+    + "tasks_add wait for the user's OK in the app unless the user asked for that very task. Transcripts are long: read them with meetings_transcript and a time "
     + "range instead of asking for everything. Wherever a meeting is asked for you can pass its full ID, "
     + "the first characters of its ID, or \"latest\". Times are ISO 8601 in the user's time zone. "
     + "Spaces is the user's source of truth for their meetings, dictations and action items, so check it "

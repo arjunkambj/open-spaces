@@ -274,7 +274,7 @@ public struct ListRow<Leading: View, Trailing: View, HoverActions: View>: View {
       }
     }
     .padding(.vertical, Spaces.Space.m)
-    .frame(minHeight: 52)
+    .frame(minHeight: ListRowMetrics.minHeight)
     .rowChrome(isHighlighted: hovered && action != nil)
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
@@ -282,6 +282,11 @@ public struct ListRow<Leading: View, Trailing: View, HoverActions: View>: View {
     .animation(Spaces.Motion.quick, value: rowIsFocused || actionIsFocused)
     .modifier(RowAction(action: action))
   }
+}
+
+/// Sizes shared by `ListRow` and rows drawn to match it.
+enum ListRowMetrics {
+  static let minHeight: CGFloat = 52
 }
 
 /// Makes a row act as a button without swallowing the buttons inside it.

@@ -19,6 +19,7 @@ public actor FileLibrary: Library {
   private let wordsFile: JSONDocument<[DictionaryWord]>
   private let snippetsFile: JSONDocument<[Snippet]>
   private let dictationsFile: JSONDocument<[Dictation]>
+  private let tasksFile: JSONDocument<TaskList>
   private let meetingIndex: MeetingIndex
   private let agentFolder: AgentFolder
   /// What the agents folder held when it was last looked at, once somebody listens.
@@ -65,6 +66,12 @@ public actor FileLibrary: Library {
       lock: lock,
       empty: [],
       salvage: { LibraryJSON.salvageArray(Dictation.self, from: $0) }
+    )
+    tasksFile = JSONDocument(
+      url: layout.file(FolderLayout.tasks),
+      lock: lock,
+      empty: TaskList(),
+      salvage: { LibraryJSON.salvageTaskList(from: $0) }
     )
     meetingIndex = MeetingIndex(layout: layout, lock: lock)
     agentFolder = AgentFolder(layout: layout)
@@ -263,6 +270,17 @@ public actor FileLibrary: Library {
     try meetingIndex.audioFolder(id)
   }
 
+  // MARK: Tasks
+
+  public func taskList() throws -> TaskList {
+    try read(tasksFile, .tasks)
+  }
+
+  @discardableResult
+  public func updateTaskList(_ change: @Sendable (inout TaskList) throws -> Void) throws -> TaskList {
+    try write(.tasks) { try tasksFile.update(change) }
+  }
+
   // MARK: Agents
 
   public func agentSessions() -> [AgentSession] {
@@ -291,7 +309,10 @@ public actor FileLibrary: Library {
   public nonisolated func changes() -> AsyncStream<LibraryChange> {
     // What the folder looks like right now, so a write that lands before the watch is up
     // is still reported.
-    let files = [FolderLayout.settings, FolderLayout.words, FolderLayout.snippets, FolderLayout.dictations]
+    let files = [
+      FolderLayout.settings, FolderLayout.words, FolderLayout.snippets, FolderLayout.dictations,
+      FolderLayout.tasks,
+    ]
     let baseline = Baseline(
       moment: Date(),
       files: files.map { FileSignature.of(layout.file($0)) },
@@ -306,7 +327,7 @@ public actor FileLibrary: Library {
   /// The state of the folder at the moment somebody started to listen.
   private struct Baseline: Sendable {
     var moment: Date
-    /// Settings, words, snippets, dictations.
+    /// Settings, words, snippets, dictations, tasks.
     var files: [FileSignature?]
     var agents: [Int32: FileSignature]
   }
@@ -331,6 +352,7 @@ public actor FileLibrary: Library {
     wordsFile.adopt(earlier: baseline.files[1])
     snippetsFile.adopt(earlier: baseline.files[2])
     dictationsFile.adopt(earlier: baseline.files[3])
+    tasksFile.adopt(earlier: baseline.files[4])
     agentsSeen = agentsSeen ?? baseline.agents
     lookForChanges(since: baseline.moment)
   }
@@ -341,6 +363,7 @@ public actor FileLibrary: Library {
     if wordsFile.poll() { hub.send(.words) }
     if snippetsFile.poll() { hub.send(.snippets) }
     if dictationsFile.poll() { hub.send(.dictations) }
+    if tasksFile.poll() { hub.send(.tasks) }
     noteAgents()
     noteMeetingScan(meetingIndex.scan(since: moment))
   }

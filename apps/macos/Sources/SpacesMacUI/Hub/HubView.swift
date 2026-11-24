@@ -87,6 +87,7 @@ public struct HubView: View {
   @ViewBuilder private var screen: some View {
     switch navigation.section {
     case .home: HomeScreen(showAgents: { navigation.showSettings(.agents) })
+    case .tasks: TasksScreen(openMeeting: { navigation.show(meeting: $0) })
     case .meetings: MeetingsScreen(selection: $navigation.meeting)
     case .dictionary: DictionaryScreen()
     case .snippets: SnippetsScreen()
@@ -176,7 +177,7 @@ struct Sidebar: View {
           section.title,
           systemImage: section.symbol,
           isSelected: navigation.section == section,
-          badge: section == .meetings && model.meetings.isRecording ? "Live" : nil
+          badge: badge(for: section)
         ) {
           navigation.show(section)
         }
@@ -186,6 +187,17 @@ struct Sidebar: View {
     }
     .padding(.horizontal, Spaces.Space.s)
     .padding(.bottom, Spaces.Space.s)
+  }
+
+  /// "Live" while a meeting is recorded; the number of tasks waiting for an OK.
+  private func badge(for section: HubNavigation.Section) -> String? {
+    switch section {
+    case .meetings: return model.meetings.isRecording ? "Live" : nil
+    case .tasks:
+      let waiting = model.taskList.staged.count
+      return waiting > 0 ? "\(waiting)" : nil
+    default: return nil
+    }
   }
 }
 

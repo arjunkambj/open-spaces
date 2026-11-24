@@ -11,6 +11,9 @@ tool where `spaces` is, and it can then use everything listed on this page.
 
 - **Sum up a day.** For one day: how much you dictated and where, the meetings you had, their action items,
   and everything still open.
+- **Plan your days.** List your daily tasks for any range of days, add tasks for a day and a category,
+  move them, tick them off, and add a category. A task an agent adds waits in the app's Tasks tab until you
+  approve it, unless you asked for that very task.
 - **Read meetings.** List them, read the summary, key points, decisions and action items, and read the
   transcript (all of it, or one part by time or by speaker).
 - **Search.** Find where something was said or noted, across every meeting. It gets back short matching
@@ -153,6 +156,8 @@ the tool looks there before it answers a question about them.
 - "Start recording a meeting called Design review." Later: "Stop the recording."
 - "Add Kubernetes to my dictionary. It keeps getting written as cooper netties."
 - "What did I do today? Write me a short end-of-day note."
+- "Plan my day from my open action items and put the tasks in Spaces." The tasks wait in the Tasks tab
+  for your OK.
 - "Across all my meetings, what have we said about the launch date? Tell me which meeting each point is
   from."
 - "Post the notes of my last meeting to Slack #team." Your AI writes the update and posts it with your
@@ -213,7 +218,18 @@ ask you before it runs a tool that overwrites or deletes, or that saves a file o
 
 | MCP tool | Command | What it does | Effect |
 | --- | --- | --- | --- |
-| `day_summary` | `spaces day summary [date] [--limit N]` | One day at a glance: dictations, meetings and action items. | Reads |
+| `day_summary` | `spaces day summary [date] [--limit N]` | One day at a glance: tasks, dictations, meetings and action items. | Reads |
+
+### Daily tasks
+
+| MCP tool | Command | What it does | Effect |
+| --- | --- | --- | --- |
+| `tasks_list` | `spaces tasks list [--from FROM] [--to TO] [--status all\|staged\|open\|done] [--category CATEGORY] [--limit N]` | List the daily tasks on a range of days, and the categories. | Reads |
+| `tasks_add` | `spaces tasks add <text> [--day DAY] [--category CATEGORY] [--no-staged]` | Add a task for a day. It waits for the user's OK unless staged is false. | Adds |
+| `tasks_update` | `spaces tasks update <task> [--text TEXT] [--day DAY] [--category CATEGORY]` | Change the text, the day or the category of a task. | Overwrites or deletes |
+| `tasks_set_done` | `spaces tasks set-done <task> [--no-done]` | Mark a task as done, or as open again. | Adds or changes |
+| `tasks_remove` | `spaces tasks remove <task>` | Remove a task for good. | Overwrites or deletes |
+| `tasks_add_category` | `spaces tasks add-category <name>` | Add a category to sort daily tasks into. | Adds |
 
 ### Meetings
 
@@ -354,11 +370,17 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 
 **What an agent can do.**
 
-- Read meetings, notes, action items, dictations, dictionary words, snippets and a few settings.
+- Read meetings, notes, action items, daily tasks, dictations, dictionary words, snippets and a few
+  settings.
 - Change a meeting's title, notes, tags and action items, and delete a meeting.
 - Give a speaker in a meeting a name. That changes who a transcript line is shown as said by, never
   what it says.
 - Add and remove dictionary words and snippets.
+- Add daily tasks and task categories, and change, tick off or remove tasks. A task it adds is staged by
+  default: it waits in the Tasks tab until you add it to your list or reject it, and a staged task cannot
+  be ticked off. An agent is told to add a task straight to your list only when you asked for that very
+  task. This is a request to the agent, not a lock: it can add tasks straight to the list, or remove a
+  staged task, as it can any task.
 - Ask the app to start or stop a meeting recording.
 - Save a meeting as a new Markdown file.
 
@@ -366,6 +388,9 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 
 - Read your API key through `spaces`. It has no code that opens the key file. An agent that can also run
   its own commands on your Mac could read that file directly, as it could any of your files.
+- Approve a staged task: there is no tool for it. A staged task joins your list when you add it in the
+  Tasks tab.
+- Rename or delete a task category.
 - Change your settings, or the address of the server your audio is sent to.
 - Start dictation, or type anything into another app.
 - Run a command, read a file outside the Spaces data folder, or use the network.

@@ -117,7 +117,7 @@ extension SpacesError {
     case .invalidResponse(let detail):
       return "\(host) sent a reply that could not be read: \(detail)"
     case .invalidServerAddress, .replyTooLong, .noSpeech, .permissionDenied, .captureFailed,
-      .notFound, .storage, .anthropic:
+      .notFound, .storage, .invalidInput, .anthropic:
       return errorDescription ?? "Something went wrong."
     }
   }
