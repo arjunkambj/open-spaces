@@ -33,6 +33,7 @@ public actor InMemoryLibrary: Library {
   private var storedDictations: [Dictation]
   private var storedMeetings: [Meeting]
   private var storedAgents: [AgentSession]
+  private var storedTasks: TaskList
   private let scratch: URL
   private let broadcaster = Broadcaster<LibraryChange>()
 
@@ -42,8 +43,10 @@ public actor InMemoryLibrary: Library {
     snippets: [Snippet] = [],
     dictations: [Dictation] = [],
     meetings: [Meeting] = [],
-    agents: [AgentSession] = []
+    agents: [AgentSession] = [],
+    tasks: TaskList = TaskList()
   ) {
+    storedTasks = tasks
     storedSettings = settings
     storedWords = words
     storedSnippets = snippets
@@ -173,6 +176,19 @@ public actor InMemoryLibrary: Library {
     storedAgents.removeAll { $0.id == session.id }
     storedAgents.append(session)
     broadcaster.send(.agents)
+  }
+
+  public func taskList() -> TaskList { storedTasks }
+
+  @discardableResult
+  public func updateTaskList(_ change: @Sendable (inout TaskList) throws -> Void) throws -> TaskList {
+    var list = storedTasks
+    try change(&list)
+    if list != storedTasks {
+      storedTasks = list
+      broadcaster.send(.tasks)
+    }
+    return list
   }
 
   public nonisolated func changes() -> AsyncStream<LibraryChange> {
@@ -380,7 +396,35 @@ public enum SampleData {
       snippets: snippets(now: now),
       dictations: dictations(now: now),
       meetings: meetings(now: now),
-      agents: agents(now: now)
+      agents: agents(now: now),
+      tasks: tasks(now: now)
+    )
+  }
+
+  /// A few tasks for yesterday, today and tomorrow, and two an AI tool suggested.
+  public static func tasks(now: Date = Date()) -> TaskList {
+    let today = TaskDay.today(now)
+    let entries: [(String, Int, String, TaskStatus, TaskAuthor)] = [
+      ("Reply to Priya about the launch date", -1, "General", .open, .me),
+      ("Book the flight for the offsite", -1, "General", .done, .me),
+      ("Review the Gooseworks onboarding flow", 0, "Gooseworks", .open, .me),
+      ("Send the weekly update", 0, "General", .done, .me),
+      ("Write the release notes for 0.3", 0, "Gooseworks", .open, .me),
+      ("Follow up with Sam on the billing migration", 0, "Gooseworks", .staged, .agent),
+      ("Plan next week's interviews", 1, "General", .open, .me),
+      ("Draft the pricing page copy", 1, "Gooseworks", .staged, .agent),
+    ]
+    return TaskList(
+      tasks: entries.enumerated().map { index, entry in
+        DailyTask(
+          text: entry.0,
+          day: today.adding(days: entry.1),
+          category: entry.2,
+          status: entry.3,
+          addedBy: entry.4,
+          createdAt: now.addingTimeInterval(Double(index - entries.count) * 600)
+        )
+      }
     )
   }
 

@@ -110,6 +110,8 @@ public final class AppModel {
   public private(set) var snippets: [Snippet] = []
   public private(set) var dictations: [Dictation] = []
   public private(set) var meetingList: [Meeting] = []
+  /// Daily tasks and their categories.
+  public private(set) var taskList = TaskList()
   /// The AI tools using Spaces through `spaces mcp`, most recently used first. See
   /// `Library.agentSessions()`.
   public private(set) var agentSessions: [AgentSession] = []
@@ -314,6 +316,7 @@ public final class AppModel {
         dictations = history.filter { $0.id != dictation.unfinished }
       }
       if changes.contains(.meetings) { meetingList = try await library.meetings() }
+      if changes.contains(.tasks) { taskList = try await library.taskList() }
       if changes.contains(.agents) {
         let sessions = try await library.agentSessions()
         if sessions != agentSessions { agentSessions = sessions }

@@ -9,6 +9,7 @@ struct FolderLayout: Sendable {
   static let words = "dictionary.json"
   static let snippets = "snippets.json"
   static let dictations = "dictations.json"
+  static let tasks = "tasks.json"
   static let meetings = "meetings"
   static let meetingFile = "meeting.json"
   static let meetingNotes = "notes.md"

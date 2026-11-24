@@ -14,13 +14,14 @@ import SpacesUI
 public final class HubNavigation {
   /// A page of the hub, in sidebar order.
   public enum Section: String, CaseIterable, Sendable, Identifiable {
-    case home, meetings, dictionary, snippets, style
+    case home, tasks, meetings, dictionary, snippets, style
 
     public var id: String { rawValue }
 
     public var title: String {
       switch self {
       case .home: "Home"
+      case .tasks: "Tasks"
       case .meetings: "Meetings"
       case .dictionary: "Dictionary"
       case .snippets: "Snippets"
@@ -32,6 +33,7 @@ public final class HubNavigation {
     public var symbol: String {
       switch self {
       case .home: "house"
+      case .tasks: "checklist"
       case .meetings: "person.2"
       case .dictionary: "book.closed"
       case .snippets: "text.bubble"

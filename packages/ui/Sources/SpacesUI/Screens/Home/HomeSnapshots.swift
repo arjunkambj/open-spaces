@@ -174,7 +174,7 @@ enum HomeSnapshots {
   }
 }
 
-/// Made-up app models for the snapshot cases of the Home, Dictionary, Snippets and Style screens.
+/// Made-up app models for the snapshot cases of the Home, Tasks, Dictionary, Snippets and Style screens.
 @MainActor
 enum ScreenSamples {
   /// An app model with exactly the given content, on in-memory fakes.
@@ -184,6 +184,7 @@ enum ScreenSamples {
     snippets: [Snippet] = [],
     dictations: [Dictation] = [],
     agents: [AgentSession] = [],
+    tasks: TaskList = TaskList(),
     hasAPIKey: Bool = true
   ) -> AppModel {
     AppModel(
@@ -193,7 +194,8 @@ enum ScreenSamples {
           words: words,
           snippets: snippets,
           dictations: dictations,
-          agents: agents
+          agents: agents,
+          tasks: tasks
         ),
         secrets: InMemorySecretStore(apiKey: hasAPIKey ? "sk-demo" : nil),
         capture: FakeAudioCapture(),
