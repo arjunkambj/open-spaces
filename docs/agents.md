@@ -377,7 +377,10 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
   what it says.
 - Add and remove dictionary words and snippets.
 - Add daily tasks and task categories, and change, tick off or remove tasks. A task it adds is staged by
-  default: it waits in the Tasks tab until you approve it, and a staged task cannot be ticked off.
+  default: it waits in the Tasks tab until you add it to your list or reject it, and a staged task cannot
+  be ticked off. An agent is told to add a task straight to your list only when you asked for that very
+  task. This is a request to the agent, not a lock: it can add tasks straight to the list, or remove a
+  staged task, as it can any task.
 - Ask the app to start or stop a meeting recording.
 - Save a meeting as a new Markdown file.
 
@@ -385,7 +388,8 @@ something to obey. No warning can make an AI fully safe, so the limits below do 
 
 - Read your API key through `spaces`. It has no code that opens the key file. An agent that can also run
   its own commands on your Mac could read that file directly, as it could any of your files.
-- Approve a staged task. Only you can, in the app.
+- Approve a staged task: there is no tool for it. A staged task joins your list when you add it in the
+  Tasks tab.
 - Rename or delete a task category.
 - Change your settings, or the address of the server your audio is sent to.
 - Start dictation, or type anything into another app.
