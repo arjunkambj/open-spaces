@@ -74,7 +74,7 @@ public struct TasksScreen: View {
       Button(editor.original == nil ? "Add task" : "Save") { saveTask() }
         .buttonStyle(.spaces(.primary))
         .keyboardShortcut(.defaultAction)
-        .disabled(editor.trimmedText.isEmpty)
+        .disabled(editor.trimmedText.isEmpty || editor.problem != nil)
     }
     .dialog(
       isPresented: $isNaming,
@@ -283,27 +283,41 @@ public struct TasksScreen: View {
 
   private func saveTask() {
     // Return in a field can reach this twice: from the field and from the default button.
-    guard isEditing, !editor.trimmedText.isEmpty else { return }
+    guard isEditing, !editor.trimmedText.isEmpty, editor.problem == nil else { return }
     let editor = self.editor
     isEditing = false
     let day = TaskDay(editor.day)
-    model.run { model in
-      try await model.library.updateTaskList { list in
-        if let original = editor.original {
-          try list.edit(original.id, text: editor.text, day: day, category: editor.category)
-        } else {
-          try list.add(editor.text, day: day, category: editor.category)
-        }
+    let saved = editor.original == nil ? "Added for \(TasksLogic.inSentence(day, today: today))" : "Saved"
+    change(saved) { list in
+      if let original = editor.original {
+        try list.edit(original.id, text: editor.text, day: day, category: editor.category)
+      } else {
+        try list.add(editor.text, day: day, category: editor.category)
       }
     }
-    toast = Toast(editor.original == nil ? "Added for \(TasksLogic.inSentence(day, today: today))" : "Saved")
+  }
+
+  /// Changes the stored task list, and shows `message` once the change is saved. A change that
+  /// fails shows its error instead.
+  private func change(
+    _ message: String? = nil,
+    tone: NoticeTone = .success,
+    then done: @escaping @MainActor () -> Void = {},
+    _ work: @escaping @Sendable (inout TaskList) throws -> Void
+  ) {
+    Task {
+      let saved = await model.attempt { try await $0.library.updateTaskList(work) }
+      guard saved else { return }
+      if let message { toast = Toast(message, tone: tone) }
+      done()
+    }
   }
 
   private func toggle(_ entry: TaskEntry) {
     switch entry {
     case .task(let task):
       let done = !task.isDone
-      model.run { try await $0.library.updateTaskList { try $0.setDone(task.id, done) } }
+      change { try $0.setDone(task.id, done) }
     case .action(let item, let meeting, _):
       model.run { model in
         try await model.library.updateMeeting(meeting) { meeting in
@@ -318,34 +332,31 @@ public struct TasksScreen: View {
   }
 
   private func delete(_ task: DailyTask) {
-    model.run { try await $0.library.updateTaskList { try $0.remove(task.id) } }
-    toast = Toast("Deleted “\(task.text)”")
+    change("Deleted “\(task.text)”") { try $0.remove(task.id) }
   }
 
   private func approve(_ ids: Set<DailyTask.ID>) {
-    model.run { try await $0.library.updateTaskList { $0.approve(ids) } }
-    toast = Toast(ids.count == 1 ? "Added to your list" : "Added \(ids.count) tasks to your list")
+    change(ids.count == 1 ? "Added to your list" : "Added \(ids.count) tasks to your list") {
+      $0.approve(ids)
+    }
   }
 
   private func reject(_ task: DailyTask) {
-    model.run { try await $0.library.updateTaskList { try $0.remove(task.id) } }
-    toast = Toast("Rejected “\(task.text)”", tone: .info)
+    change("Rejected “\(task.text)”", tone: .info) { try $0.remove(task.id) }
   }
 
   private func saveCategory() {
     guard isNaming, !naming.trimmed.isEmpty, naming.problem(in: list) == nil else { return }
     let namer = naming
     isNaming = false
-    model.run { model in
-      try await model.library.updateTaskList { list in
-        if let original = namer.original {
-          try list.renameCategory(original, to: namer.name)
-        } else {
-          try list.addCategory(namer.name)
-        }
+    // The tab moves to the category once it is saved, so a failed save leaves the tabs as they were.
+    change(then: { category = namer.trimmed }) { list in
+      if let original = namer.original {
+        try list.renameCategory(original, to: namer.name)
+      } else {
+        try list.addCategory(namer.name)
       }
     }
-    category = namer.trimmed
   }
 
   private func askToDelete(_ name: String) {
@@ -357,7 +368,7 @@ public struct TasksScreen: View {
     isConfirmingCategoryDelete = false
     guard let name = deletingCategory else { return }
     category = nil
-    model.run { try await $0.library.updateTaskList { try $0.removeCategory(name) } }
+    change { try $0.removeCategory(name) }
   }
 }
 
@@ -409,7 +420,7 @@ private struct TaskRow: View {
     }
     .focused($isFocused)
     .padding(.vertical, Spaces.Space.s)
-    .frame(minHeight: 52)
+    .frame(minHeight: ListRowMetrics.minHeight)
     .rowChrome(isHighlighted: false)
     .contentShape(Rectangle())
     .onHover { isHovered = $0 }
@@ -457,6 +468,11 @@ struct TaskEditor: Equatable {
   }
 
   var trimmedText: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+  /// Why the text cannot be saved, or `nil` when it can. Empty text only disables the button.
+  var problem: String? {
+    trimmedText.count > TaskList.textLimit ? "A task can be at most \(TaskList.textLimit) characters." : nil
+  }
 }
 
 /// The fields of the add or edit dialog.
@@ -470,6 +486,7 @@ private struct TaskEditorFields: View {
       "Task",
       text: $editor.text,
       placeholder: "What do you want to get done?",
+      error: editor.problem,
       focusOnAppear: true
     )
     .onSubmit(onSubmit)
@@ -512,6 +529,9 @@ struct CategoryNamer: Equatable {
     }
     if let taken = list.category(named: trimmed), taken != original {
       return "There is already a category called “\(taken)”."
+    }
+    if original == nil, list.categories.count >= TaskList.mostCategories {
+      return "You can have up to \(TaskList.mostCategories) categories. Delete one first."
     }
     return nil
   }

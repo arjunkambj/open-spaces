@@ -71,7 +71,7 @@ public actor FileLibrary: Library {
       url: layout.file(FolderLayout.tasks),
       lock: lock,
       empty: TaskList(),
-      salvage: { LibraryJSON.salvageObject(TaskList.self, from: $0) }
+      salvage: { LibraryJSON.salvageTaskList(from: $0) }
     )
     meetingIndex = MeetingIndex(layout: layout, lock: lock)
     agentFolder = AgentFolder(layout: layout)

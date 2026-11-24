@@ -19,18 +19,23 @@ enum TaskRange: String, CaseIterable, Identifiable, Hashable {
   }
 
   /// The first and last day, both included. `picked` is used for `.pick`, put in order.
-  func days(today: TaskDay, picked: (TaskDay, TaskDay), calendar: Calendar = .current) -> ClosedRange<TaskDay>
-  {
+  /// `firstWeekday` is the day a week starts on, 1 for Sunday, as `Calendar.firstWeekday` gives it.
+  func days(
+    today: TaskDay,
+    picked: (TaskDay, TaskDay),
+    firstWeekday: Int = Calendar.current.firstWeekday
+  ) -> ClosedRange<TaskDay> {
     switch self {
     case .today: return today...today
     case .tomorrow: return today.adding(days: 1)...today.adding(days: 1)
     case .thisWeek:
-      // The week as this Mac counts it: Monday or Sunday first, by the region's custom.
-      var calendar = calendar
-      calendar.timeZone = .current
+      // The week as this Mac counts it: Monday or Sunday first, by the region's custom. The
+      // weekday comes from the Gregorian calendar the day is written in, whatever calendar the
+      // Mac shows.
+      let calendar = TaskDay.calendar
       let noon = today.start(calendar: calendar).addingTimeInterval(12 * 3_600)
       let weekday = calendar.component(.weekday, from: noon)
-      let back = (weekday - calendar.firstWeekday + 7) % 7
+      let back = (weekday - firstWeekday + 7) % 7
       let first = today.adding(days: -back)
       return first...first.adding(days: 6)
     case .nextWeek: return today...today.adding(days: 6)

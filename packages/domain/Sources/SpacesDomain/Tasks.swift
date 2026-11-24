@@ -141,7 +141,8 @@ public struct DailyTask: Codable, Sendable, Identifiable, Hashable {
 /// category is where new tasks go unless another is named. A broken rule throws
 /// `SpacesError.invalidInput` with a message for people.
 public struct TaskList: Codable, Sendable, Hashable {
-  /// In the order people see them. Never empty once the list has been changed through here.
+  /// In the order people see them. Never empty: a file with none does not load, and the last
+  /// one cannot be removed.
   public var categories: [String]
   public var tasks: [DailyTask]
 
@@ -164,12 +165,20 @@ public struct TaskList: Codable, Sendable, Hashable {
 
   public init(from decoder: any Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
+    // A missing key gets its default, as everywhere in the data folder.
     categories = try c.decodeIfPresent([String].self, forKey: .categories) ?? TaskList.startingCategories
+    guard !categories.isEmpty else {
+      throw DecodingError.dataCorruptedError(
+        forKey: .categories,
+        in: c,
+        debugDescription: "A task list needs at least one category."
+      )
+    }
     tasks = try c.decodeIfPresent([DailyTask].self, forKey: .tasks) ?? []
   }
 
   /// Where a new task goes when no category is named.
-  public var defaultCategory: String { categories.first ?? TaskList.startingCategories[0] }
+  public var defaultCategory: String { categories[0] }
 
   /// The stored name of a category, matched without regard to case. `nil` when there is none.
   public func category(named name: String) -> String? {
@@ -265,8 +274,8 @@ public struct TaskList: Codable, Sendable, Hashable {
   @discardableResult
   public mutating func addCategory(_ name: String) throws -> String {
     let clean = try TaskList.checkedCategory(name)
-    guard category(named: clean) == nil else {
-      throw SpacesError.invalidInput("There is already a category called “\(clean)”.")
+    if let taken = category(named: clean) {
+      throw SpacesError.invalidInput("There is already a category called “\(taken)”.")
     }
     guard categories.count < TaskList.mostCategories else {
       throw SpacesError.invalidInput("You can have up to \(TaskList.mostCategories) categories.")
